@@ -556,15 +556,24 @@ fn handle_room(
             println!("  {}You find {} gold!{}", ui::YELLOW, gold_bonus, ui::RESET);
             player.gold += gold_bonus;
 
-            for modifier in &item.stat_modifiers {
-                apply_stat_modifier(player, &modifier.stat, modifier.value);
+            println!();
+            let pick = ui::prompt(&format!(
+                "  {}[P] Pick up item  [any] Leave it  > {}",
+                ui::CYAN, ui::RESET
+            ));
+            if pick.trim().eq_ignore_ascii_case("p") {
+                for modifier in &item.stat_modifiers {
+                    apply_stat_modifier(player, &modifier.stat, modifier.value);
+                }
+                player.add_item(item);
+                println!(
+                    "  {}Item added to inventory! (Use [I#] in combat){}",
+                    ui::GREEN,
+                    ui::RESET
+                );
+            } else {
+                println!("  {}You leave the item behind.{}", ui::DIM, ui::RESET);
             }
-            player.add_item(item);
-            println!(
-                "  {}Item added to inventory! (Use [I#] in combat){}",
-                ui::GREEN,
-                ui::RESET
-            );
 
             // 25% chance to also find a spell scroll
             if seed.is_multiple_of(4) {
@@ -574,12 +583,21 @@ fn handle_room(
                 for line in spell.display_box() {
                     println!("  {}", line);
                 }
-                player.add_spell(spell);
-                println!(
-                    "  {}Spell learned! Use [S#] in combat.{}",
-                    ui::CYAN,
-                    ui::RESET
-                );
+                println!();
+                let pick_spell = ui::prompt(&format!(
+                    "  {}[L] Learn spell  [any] Leave it  > {}",
+                    ui::CYAN, ui::RESET
+                ));
+                if pick_spell.trim().eq_ignore_ascii_case("l") {
+                    player.add_spell(spell);
+                    println!(
+                        "  {}Spell learned! Use [S#] in combat.{}",
+                        ui::CYAN,
+                        ui::RESET
+                    );
+                } else {
+                    println!("  {}You leave the scroll behind.{}", ui::DIM, ui::RESET);
+                }
             }
 
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
