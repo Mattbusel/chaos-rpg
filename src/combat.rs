@@ -3,9 +3,12 @@
 //! Every attack, dodge, crit, and spell is determined by chaining
 //! mathematical algorithms. No dice. Pure chaos.
 
-use crate::chaos_pipeline::{biased_chaos_roll, chaos_roll_verbose, roll_damage, ChaosRollResult};
+use crate::chaos_pipeline::{
+    chaos_roll_verbose, corrupted_chaos_roll,
+    instability_chaos_roll, roll_damage, ChainStep, ChaosRollResult,
+};
 use crate::character::{Character, CharacterClass, StatBlock};
-use crate::enemy::Enemy;
+use crate::enemy::{Enemy, FloorAbility};
 use serde::{Deserialize, Serialize};
 
 // ─── COMBAT ACTIONS ──────────────────────────────────────────────────────────
@@ -137,8 +140,12 @@ pub struct CombatState {
     /// The enemy's chaos roll for their counterattack — shown in compact trace.
     pub enemy_last_roll: Option<ChaosRollResult>,
     pub seed: u64,
-    pub combo_streak: u32,     // consecutive attacks without interruption
-    pub is_first_attack: bool, // Physicist passive: first attack has no catastrophe
+    pub combo_streak: u32,
+    pub is_first_attack: bool,
+    /// EngineTheft: number of engines stolen from player's next roll chain.
+    pub engines_stolen: u32,
+    /// Cursed floor: ALL engine outputs are inverted this combat.
+    pub is_cursed: bool,
 }
 
 impl CombatState {
@@ -154,6 +161,8 @@ impl CombatState {
             seed,
             combo_streak: 0,
             is_first_attack: true,
+            engines_stolen: 0,
+            is_cursed: false,
         }
     }
 
@@ -163,6 +172,56 @@ impl CombatState {
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         self.seed
+    }
+}
+
+// ─── PLAYER ROLL HELPER ──────────────────────────────────────────────────────
+
+/// Produce a chaos roll for the player, applying all active modifiers:
+/// - Corruption mutation (corrupted_chaos_roll when kills > 0)
+/// - EngineTheft reduction (truncate chain by stolen count)
+/// - Cursed floor inversion (negate all outputs)
+/// - Instability zones (floor 75+: mid-chain engine injection/removal)
+/// - NullifyAura (first action of combat returns 0.0 — checked by caller)
+fn player_roll(input: f64, seed: u64, player: &Character, state: &CombatState) -> ChaosRollResult {
+    let mut result = if player.floor >= 75 {
+        instability_chaos_roll(input, seed, player.floor)
+    } else if player.kills > 0 {
+        corrupted_chaos_roll(input, seed, player.kills)
+    } else {
+        chaos_roll_verbose(input, seed)
+    };
+
+    // EngineTheft: remove stolen engines from the tail of the chain
+    if state.engines_stolen > 0 && result.chain.len() > state.engines_stolen as usize + 1 {
+        result.chain.truncate(result.chain.len() - state.engines_stolen as usize);
+        if let Some(last) = result.chain.last() {
+            result.final_value = last.output;
+            result.game_value = ((result.final_value + 1.0) / 2.0 * 100.0).round() as i64;
+        }
+    }
+
+    // Cursed floor: negate everything
+    if state.is_cursed {
+        for step in &mut result.chain { step.output = -step.output; }
+        result.final_value = -result.final_value;
+        result.game_value = ((result.final_value + 1.0) / 2.0 * 100.0).round() as i64;
+    }
+
+    result
+}
+
+/// Return a zero roll used by NullifyAura (first action suppressed to base stats).
+fn null_aura_roll(seed: u64) -> ChaosRollResult {
+    ChaosRollResult {
+        final_value: 0.0,
+        chain: vec![ChainStep {
+            engine_name: "\u{2726} NULLIFY AURA — engines suppressed (base stats only)",
+            input: 0.0,
+            output: 0.0,
+            seed_used: seed,
+        }],
+        game_value: 50,
     }
 }
 
@@ -205,9 +264,12 @@ pub fn resolve_action(
     // ── PALADIN PASSIVE: Divine Regen ─────────────────────────────────────────
     if player.class == CharacterClass::Paladin {
         let regen = (3 + player.stats.vitality / 20).max(1);
-        player.heal(regen);
+        player.heal_scaled(regen); // anti-heal scaling applies to regen
         events.push(CombatEvent::PlayerHealed { amount: regen });
     }
+
+    // ── NULLIFY AURA: first action suppressed (floor 60+ enemies) ────────────
+    let nullify_first = state.turn == 1 && enemy.floor_ability == FloorAbility::NullifyAura;
 
     // ── PLAYER TURN ──────────────────────────────────────────────────────────
     let is_attack_action = matches!(action, CombatAction::Attack | CombatAction::HeavyAttack);
@@ -217,18 +279,23 @@ pub fn resolve_action(
 
     match action {
         CombatAction::Attack => {
-            // Physicist passive: first attack has no catastrophe
-            let roll = if player.class == CharacterClass::Ranger && state.is_first_attack {
+            // NullifyAura: first action returns 0.0
+            let roll = if nullify_first {
+                events.push(CombatEvent::ChaosEvent {
+                    description: "NULLIFY AURA: engines suppressed — base stats only this round!".to_string(),
+                });
+                null_aura_roll(seed)
+            } else if player.class == CharacterClass::Ranger && state.is_first_attack {
+                // Ranger passive: first attack has no catastrophe
                 state.is_first_attack = false;
-                let r = chaos_roll_verbose(player.stats.force as f64 * 0.01, seed);
-                // Override catastrophe: treat as neutral roll
+                let r = player_roll(player.stats.force as f64 * 0.01, seed, player, state);
                 if r.is_catastrophe() {
-                    chaos_roll_verbose(player.stats.precision as f64 * 0.01, seed.wrapping_add(42))
+                    player_roll(player.stats.precision as f64 * 0.01, seed.wrapping_add(42), player, state)
                 } else {
                     r
                 }
             } else {
-                chaos_roll_verbose(player.stats.force as f64 * 0.01, seed)
+                player_roll(player.stats.force as f64 * 0.01, seed, player, state)
             };
 
             let is_crit = roll.is_critical();
@@ -274,7 +341,26 @@ pub fn resolve_action(
         }
 
         CombatAction::HeavyAttack => {
-            let roll = biased_chaos_roll(player.stats.force as f64 * 0.01, 0.3, seed);
+            let roll = if nullify_first {
+                events.push(CombatEvent::ChaosEvent {
+                    description: "NULLIFY AURA: engines suppressed — base stats only this round!".to_string(),
+                });
+                null_aura_roll(seed)
+            } else {
+                let r = player_roll(player.stats.force as f64 * 0.01, seed, player, state);
+                // Apply positive bias on top of corruption/cursed/instability result
+                if state.is_cursed {
+                    r // already inverted
+                } else {
+                    // blend toward positive (heavy attack has +0.3 bias normally)
+                    let blended_val = (r.final_value * 0.7 + 0.3).clamp(-1.0, 1.0);
+                    ChaosRollResult {
+                        final_value: blended_val,
+                        game_value: ((blended_val + 1.0) / 2.0 * 100.0).round() as i64,
+                        chain: r.chain,
+                    }
+                }
+            };
             let is_crit = roll.is_critical();
             let base_dmg = 12 + player.stats.force / 4;
             let mut damage = roll_damage(
@@ -326,9 +412,8 @@ pub fn resolve_action(
         }
 
         CombatAction::Flee => {
-            let flee_roll = chaos_roll_verbose(player.stats.luck as f64 * 0.01, seed);
+            let flee_roll = player_roll(player.stats.luck as f64 * 0.01, seed, player, state);
             let flee_chance = flee_roll.to_range(1, 100);
-            // Thief class gets bonus flee chance via CUNNING scaling
             let threshold = 40 + player.stats.cunning / 5;
             state.combo_streak = 0;
 
@@ -342,7 +427,7 @@ pub fn resolve_action(
         }
 
         CombatAction::Taunt => {
-            let taunt_roll = chaos_roll_verbose(player.stats.cunning as f64 * 0.01, seed);
+            let taunt_roll = player_roll(player.stats.cunning as f64 * 0.01, seed, player, state);
             state.combo_streak = 0;
             if taunt_roll.is_critical() {
                 state.enemy_stunned = true;
@@ -362,13 +447,28 @@ pub fn resolve_action(
                 let stat_val = get_stat_by_name(&player.stats, &spell.scaling_stat);
                 let mut damage = spell.calc_damage(stat_val);
 
-                // Chaos roll modifies effectiveness
-                let spell_roll = chaos_roll_verbose(player.stats.mana as f64 * 0.01, seed);
+                // Cursed floor: spell backfires become BENEFICIAL (inverted)
+                let spell_roll = if nullify_first {
+                    null_aura_roll(seed)
+                } else {
+                    player_roll(player.stats.mana as f64 * 0.01, seed, player, state)
+                };
                 state.last_roll = Some(spell_roll.clone());
 
                 let backfired = spell_roll.is_catastrophe();
-                if backfired {
-                    // Spell backfires: damage hits player
+                if backfired && state.is_cursed {
+                    // Cursed floor: backfire is INVERTED — becomes a massive heal!
+                    let cursed_heal = damage.abs();
+                    player.heal(cursed_heal); // bypass anti-heal: cursed reward
+                    player.spells_cast += 1;
+                    events.push(CombatEvent::ChaosEvent {
+                        description: format!(
+                            "CURSED BACKFIRE INVERTED — {} heals YOU for {}!",
+                            spell.name, cursed_heal
+                        ),
+                    });
+                } else if backfired {
+                    // Normal backfire: damage hits player
                     let self_damage = damage.abs().min(player.current_hp - 1).max(1);
                     player.take_damage(self_damage);
                     player.spells_cast += 1;
@@ -402,8 +502,8 @@ pub fn resolve_action(
                         enemy.hp = (enemy.hp - damage).max(0);
                         player.total_damage_dealt += damage;
                     } else {
-                        // Negative damage = heal self (chaotic spell)
-                        player.heal(damage.abs() / 4);
+                        // Negative damage = heal self (chaotic spell) — anti-heal applies
+                        player.heal_scaled(damage.abs() / 4);
                     }
                     player.spells_cast += 1;
                     events.push(CombatEvent::SpellCast {
@@ -471,7 +571,7 @@ pub fn resolve_action(
                         item.damage_or_defense.abs().max(0) / 5 + heal_amount.max(0),
                     );
                     if base_heal > 0 {
-                        player.heal(base_heal);
+                        player.heal_scaled(base_heal); // anti-heal scaling applies to potions
                         events.push(CombatEvent::PlayerHealed { amount: base_heal });
                     }
                 }
@@ -615,6 +715,16 @@ pub fn resolve_action(
                     });
                 }
             }
+            // EngineTheft: floor 40+ enemy steals 1 engine from player's next roll
+            if enemy.floor_ability == FloorAbility::EngineTheft {
+                state.engines_stolen = (state.engines_stolen + 1).min(4); // max 4 stolen
+                events.push(CombatEvent::ChaosEvent {
+                    description: format!(
+                        "ENGINE THEFT! The enemy tears an engine from your next roll. ({} stolen)",
+                        state.engines_stolen
+                    ),
+                });
+            }
         }
     } else {
         state.enemy_stunned = false;
@@ -629,7 +739,7 @@ pub fn resolve_action(
         let chaos_event = generate_chaos_event(player, enemy, &mut state.seed);
         // ChaosMath passive: Chaos Resonance — chaos events restore 15 HP
         if player.class == CharacterClass::VoidWalker {
-            player.heal(15);
+            player.heal_scaled(15); // anti-heal scaling applies to chaos heals
             events.push(CombatEvent::PlayerHealed { amount: 15 });
             events.push(CombatEvent::ChaosEvent {
                 description: "CHAOS RESONANCE: The math heals you!".to_string(),
@@ -669,7 +779,7 @@ fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u6
     match event_type {
         0 => {
             let heal = player.stats.luck / 5 + 5;
-            player.heal(heal);
+            player.heal_scaled(heal); // chaos event heals respect anti-heal scaling
             CombatEvent::PlayerHealed { amount: heal }
         }
         1 => {

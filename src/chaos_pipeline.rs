@@ -497,6 +497,175 @@ impl Default for ChaosPipeline {
     }
 }
 
+// ─── CORRUPTION / CURSED / INSTABILITY ROLLS ─────────────────────────────────
+
+/// Chaos roll with corruption mutation applied.
+/// Every 50 kills (one stage), three specific engines mutate permanently:
+/// - Lorenz sigma increases (more butterfly chaos)
+/// - Logistic r → 4.0 (full bifurcation chaos)
+/// - Mandelbrot zooms deeper into boundary
+/// At 400+ kills, has a chance to invert the final value (backfire for full damage).
+pub fn corrupted_chaos_roll(input: f64, seed: u64, kills: u32) -> ChaosRollResult {
+    let stage = (kills / 50).min(8) as usize;
+    let base_len = (seed % 5 + 4) as usize; // 4..=8
+    let chain_len = base_len + stage / 2;    // +1 engine per 2 stages
+    let mut chain = Vec::with_capacity(chain_len + 1);
+    let mut value = input;
+
+    for i in 0..chain_len {
+        let engine_idx = (seed
+            .wrapping_mul(2654435761)
+            .wrapping_add(i as u64 * 1234567891)) as usize
+            % ALL_ENGINES.len();
+        let engine_seed = seed
+            .wrapping_add(i as u64 * 9999991)
+            .wrapping_mul(6364136223846793005);
+        let name = ENGINE_NAMES[engine_idx];
+
+        let output = if stage > 0 {
+            match name {
+                "Lorenz Attractor" => lorenz_corrupted(value, engine_seed, stage),
+                "Logistic Map"     => logistic_corrupted(value, engine_seed, stage),
+                "Mandelbrot Escape"=> mandelbrot_corrupted(value, engine_seed, stage),
+                _                  => ALL_ENGINES[engine_idx](value, engine_seed),
+            }
+        } else {
+            ALL_ENGINES[engine_idx](value, engine_seed)
+        };
+
+        chain.push(ChainStep { engine_name: name, input: value, output, seed_used: engine_seed });
+        value = output;
+    }
+
+    // 400+ kills: backfire inversion chance (5%..20%)
+    if kills >= 400 {
+        let backfire_pct = ((kills - 400) / 50 * 3 + 5).min(20) as u64;
+        let backfire_roll = seed.wrapping_mul(0xdeadbeef).wrapping_add(kills as u64) % 100;
+        if backfire_roll < backfire_pct {
+            let bfv = -value.abs();
+            chain.push(ChainStep {
+                engine_name: "\u{2620} CORRUPTION BACKFIRE",
+                input: value, output: bfv, seed_used: seed,
+            });
+            value = bfv;
+        }
+    }
+
+    let game_value = ((value + 1.0) / 2.0 * 100.0).round() as i64;
+    ChaosRollResult { final_value: value, chain, game_value }
+}
+
+/// Lorenz with amplified sigma (higher butterfly chaos per corruption stage).
+fn lorenz_corrupted(input: f64, seed: u64, stage: usize) -> f64 {
+    use std::f64::consts::PI;
+    let sigma = 10.0 + stage as f64 * 3.0; // 10.0..=34.0
+    let rho = 28.0_f64;
+    let _beta = 8.0 / 3.0;
+    let dt = 0.01;
+    let seed_f = (seed as f64).sin() * 0.5 + 0.5;
+    let x = input * PI;
+    let y = seed_f * 20.0 - 10.0;
+    let z = seed_f * 30.0;
+    let nx = x + sigma * (y - x) * dt;
+    let ny = y + (x * (rho - z) - y) * dt;
+    let raw = nx + ny * 0.01;
+    (raw.sin() * 0.5 + (raw * 0.1).tanh() * 0.5).clamp(-1.0, 1.0)
+}
+
+/// Logistic map with r pushed toward 4.0 (full chaotic regime).
+fn logistic_corrupted(input: f64, seed: u64, stage: usize) -> f64 {
+    let r = (3.7 + stage as f64 * 0.037).min(3.9999);
+    let x0 = ((seed as f64 * 1.6180339887e-10).fract() + input.abs()) % 1.0;
+    let mut x = x0.clamp(0.001, 0.999);
+    for _ in 0..(50 + stage * 10) {
+        x = r * x * (1.0 - x);
+    }
+    (x * 2.0 - 1.0).clamp(-1.0, 1.0)
+}
+
+/// Mandelbrot with deeper zoom into the boundary region.
+fn mandelbrot_corrupted(input: f64, seed: u64, stage: usize) -> f64 {
+    let zoom = 1.0 + stage as f64 * 0.5;
+    let cx = -0.7269 + input * 0.1 / zoom;
+    let cy = 0.1889 + ((seed as f64 * 1e-13).fract() * 0.2 - 0.1) / zoom;
+    let max_iter = 64 + stage * 16;
+    let (mut zr, mut zi) = (0.0_f64, 0.0_f64);
+    let mut iter = 0usize;
+    while zr * zr + zi * zi < 4.0 && iter < max_iter {
+        let tmp = zr * zr - zi * zi + cx;
+        zi = 2.0 * zr * zi + cy;
+        zr = tmp;
+        iter += 1;
+    }
+    (iter as f64 / max_iter as f64 * 2.0 - 1.0).clamp(-1.0, 1.0)
+}
+
+/// Cursed floor roll — ALL engine outputs are negated.
+/// Positive becomes negative and negative becomes positive.
+/// Heavy attack that normally deals 3335 now heals the enemy for 3335.
+pub fn cursed_chaos_roll(input: f64, seed: u64) -> ChaosRollResult {
+    let mut result = chaos_roll_verbose(input, seed);
+    for step in &mut result.chain {
+        step.output = -step.output;
+    }
+    result.final_value = -result.final_value;
+    result.game_value = ((result.final_value + 1.0) / 2.0 * 100.0).round() as i64;
+    result
+}
+
+/// Mathematical Instability Zone roll. Floor 75+: engines may be injected or
+/// removed partway through the chain. The trace shows the insertion in real time.
+pub fn instability_chaos_roll(input: f64, seed: u64, floor: u32) -> ChaosRollResult {
+    let base_len = (seed % 5 + 4) as usize;
+    let mut chain = Vec::with_capacity(base_len + 5);
+    let mut value = input;
+    let instability_pct = (floor.saturating_sub(75) / 5 + 10).min(40) as u64;
+
+    for i in 0..base_len {
+        // Instability event fires at engine index 3 (mid-chain)
+        if i == 3 {
+            let instability_roll = seed.wrapping_mul(0xc0ffee).wrapping_add(floor as u64) % 100;
+            if instability_roll < instability_pct {
+                if instability_roll % 2 == 0 {
+                    // Inject 3 extra engines
+                    for j in 0..3usize {
+                        let eidx = (seed.wrapping_mul(0xfeedbeef).wrapping_add(j as u64 * 77777))
+                            as usize % ALL_ENGINES.len();
+                        let eseed = seed.wrapping_add(j as u64 * 13131313).wrapping_mul(0xdeadbeef);
+                        let out = ALL_ENGINES[eidx](value, eseed);
+                        chain.push(ChainStep {
+                            engine_name: ENGINE_NAMES[eidx], input: value, output: out, seed_used: eseed,
+                        });
+                        value = out;
+                    }
+                    chain.push(ChainStep {
+                        engine_name: "\u{26a1} INSTABILITY: +3 injected",
+                        input: value, output: value, seed_used: seed,
+                    });
+                } else if chain.len() >= 2 {
+                    // Remove last 2 engines
+                    chain.truncate(chain.len() - 2);
+                    value = chain.last().map(|s| s.output).unwrap_or(input);
+                    chain.push(ChainStep {
+                        engine_name: "\u{26a1} INSTABILITY: -2 removed",
+                        input: value, output: value, seed_used: seed,
+                    });
+                }
+            }
+        }
+
+        let eidx = (seed.wrapping_mul(2654435761).wrapping_add(i as u64 * 1234567891))
+            as usize % ALL_ENGINES.len();
+        let eseed = seed.wrapping_add(i as u64 * 9999991).wrapping_mul(6364136223846793005);
+        let out = ALL_ENGINES[eidx](value, eseed);
+        chain.push(ChainStep { engine_name: ENGINE_NAMES[eidx], input: value, output: out, seed_used: eseed });
+        value = out;
+    }
+
+    let game_value = ((value + 1.0) / 2.0 * 100.0).round() as i64;
+    ChaosRollResult { final_value: value, chain, game_value }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

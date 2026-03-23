@@ -676,6 +676,19 @@ pub fn show_character_sheet(c: &Character) {
         "  {}║  Floor {}  Gold {}  Kills {}  XP {}{}  {}║{}",
         col, c.floor, c.gold, c.kills, c.xp, DIM, col, RESET
     );
+    if c.corruption_stage() > 0 {
+        let next_milestone = ((c.kills / 50) + 1) * 50;
+        println!(
+            "  {}║  Corruption: {} — Stage {}/8  (next: {} kills){}  {}║{}",
+            col,
+            c.corruption_label(),
+            c.corruption_stage(),
+            next_milestone,
+            DIM,
+            col,
+            RESET
+        );
+    }
     if !c.status_effects.is_empty() {
         println!(
             "  {}║  Status: {}  {}║{}",

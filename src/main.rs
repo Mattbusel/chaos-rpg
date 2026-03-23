@@ -1,9 +1,11 @@
 use chaos_rpg::{
+    bosses::{boss_name, random_unique_boss, run_unique_boss, BossOutcome},
     chaos_pipeline::chaos_roll_verbose,
     character::{Character, CharacterClass, Difficulty as GameDifficulty},
     combat::{resolve_action, CombatAction, CombatOutcome, CombatState},
-    enemy::Enemy,
+    enemy::{generate_enemy, Enemy, FloorAbility},
     items::Item,
+    nemesis::{load_nemesis, save_nemesis, NemesisRecord},
     npcs::shop_npc,
     scoreboard::{save_score, ScoreEntry},
     skill_checks::{perform_skill_check, Difficulty, SkillType},
@@ -143,6 +145,9 @@ fn run_game(mode: GameMode) {
     };
     let mut last_roll: Option<chaos_rpg::chaos_pipeline::ChaosRollResult> = None;
     let mut floor_seed = seed;
+    // Load any nemesis from a previous run
+    let mut nemesis_record = load_nemesis();
+    let mut nemesis_spawned = false;
 
     'game: loop {
         floor_seed = floor_seed
@@ -150,6 +155,22 @@ fn run_game(mode: GameMode) {
             .wrapping_add(player.floor as u64 * 31337);
 
         let mut floor = generate_floor(player.floor, floor_seed);
+        let is_cursed_floor = player.floor > 0 && player.floor % 25 == 0;
+
+        // ── Item Volatility: every 20 floors, re-roll a random item ──────────
+        if player.floor > 0 && player.floor % 20 == 0 && !player.inventory.is_empty() {
+            let vol_idx = (floor_seed % player.inventory.len() as u64) as usize;
+            let old_name = player.inventory[vol_idx].name.clone();
+            player.inventory[vol_idx] = Item::generate(floor_seed.wrapping_add(0x766F6C6174696C65));
+            let new_name = player.inventory[vol_idx].name.clone();
+            println!();
+            println!("  {}⚡ ITEM VOLATILITY ⚡{}", ui::RED, ui::RESET);
+            println!("  The math reshapes your gear.");
+            println!("  {} → {}", old_name, new_name);
+            println!("  (Floor {} volatility tick)", player.floor);
+            println!();
+            ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+        }
 
         ui::clear_screen();
         ui::show_floor_header(player.floor, &mode);
@@ -158,11 +179,42 @@ fn run_game(mode: GameMode) {
             println!();
         }
 
+        // ── Cursed floor warning ──────────────────────────────────────────────
+        if is_cursed_floor {
+            println!("  {}╔══════════════════════════════════════════╗{}", ui::RED, ui::RESET);
+            println!("  {}║        ☠  CURSED FLOOR ☠                ║{}", ui::RED, ui::RESET);
+            println!("  {}║  ALL engine outputs INVERTED this floor  ║{}", ui::RED, ui::RESET);
+            println!("  {}║  Your strengths work against you.        ║{}", ui::RED, ui::RESET);
+            println!("  {}║  Backfired spells become your best tool. ║{}", ui::RED, ui::RESET);
+            println!("  {}╚══════════════════════════════════════════╝{}", ui::RED, ui::RESET);
+            println!();
+        }
+
         if mode == GameMode::Story {
             if let Some(event) = ui::story_event(player.floor, floor_seed) {
                 println!("{}", event);
                 println!();
             }
+        }
+
+        // Corruption status
+        if player.corruption_stage() > 0 {
+            println!(
+                "  {}Corruption:{} {} [{}/{} kills to next mutation]",
+                ui::RED, ui::RESET,
+                player.corruption_label(),
+                player.kills % 50,
+                50
+            );
+        }
+
+        // The Hunger warning (floor 50+)
+        if player.floor >= 50 && player.rooms_without_kill >= 3 {
+            let rooms_left = 5u32.saturating_sub(player.rooms_without_kill);
+            println!(
+                "  {}THE HUNGER: {} room(s) without a kill. {} more and you lose 5% max HP permanently.{}",
+                ui::RED, player.rooms_without_kill, rooms_left, ui::RESET
+            );
         }
 
         println!(
@@ -286,12 +338,46 @@ fn run_game(mode: GameMode) {
                     break 'rooms;
                 }
                 _ => {
+                    let room_seed = floor_seed.wrapping_add(floor.current_room as u64 * 9973);
+                    let kills_before = player.kills;
+
                     let outcome = handle_room(
                         &room,
                         &mut player,
-                        floor_seed.wrapping_add(floor.current_room as u64 * 9973),
+                        room_seed,
                         &mut last_roll,
+                        is_cursed_floor,
+                        &nemesis_record,
+                        &mut nemesis_spawned,
                     );
+
+                    // ── The Hunger: track rooms without a kill (floor 50+) ───
+                    if player.floor >= 50 {
+                        if player.kills > kills_before {
+                            player.rooms_without_kill = 0;
+                        } else {
+                            player.rooms_without_kill += 1;
+                            if player.rooms_without_kill >= 5 {
+                                let loss = (player.max_hp / 20).max(1);
+                                player.max_hp = (player.max_hp - loss).max(1);
+                                if player.current_hp > player.max_hp {
+                                    player.current_hp = player.max_hp;
+                                }
+                                player.rooms_without_kill = 0;
+                                println!();
+                                println!("  {}THE HUNGER CLAIMS {} MAX HP (now {}).{}", ui::RED, loss, player.max_hp, ui::RESET);
+                                println!("  {}5 rooms without a kill. Feed the hunger.{}", ui::DIM, ui::RESET);
+                                if !player.is_alive() {
+                                    println!("  {}THE HUNGER KILLS YOU.{}", ui::RED, ui::RESET);
+                                    ui::show_game_over(&player);
+                                    save_nemesis_on_death(&player, "THE HUNGER", player.floor, &mut nemesis_record);
+                                    end_game_score(&player);
+                                    return;
+                                }
+                                ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+                            }
+                        }
+                    }
 
                     match outcome {
                         RoomOutcome::PlayerDied => {
@@ -347,26 +433,111 @@ enum RoomOutcome {
 
 // ─── ROOM DISPATCHER ─────────────────────────────────────────────────────────
 
+fn save_nemesis_on_death(
+    player: &Character,
+    killer_name: &str,
+    floor: u32,
+    nemesis_record: &mut Option<NemesisRecord>,
+) {
+    let kill_method = if player.spells_cast > player.kills * 2 {
+        "spell"
+    } else {
+        "physical"
+    };
+    let class_name = player.class.name().to_string();
+    if let Some(ref mut existing) = nemesis_record {
+        if existing.enemy_name == killer_name {
+            existing.escalate();
+            save_nemesis(existing);
+            return;
+        }
+    }
+    let new_nemesis = NemesisRecord::new(
+        killer_name.to_string(),
+        floor,
+        20 + floor as i64 * 3,
+        class_name,
+        kill_method,
+    );
+    save_nemesis(&new_nemesis);
+    *nemesis_record = Some(new_nemesis);
+}
+
 fn handle_room(
     room: &Room,
     player: &mut Character,
     seed: u64,
     last_roll: &mut Option<chaos_rpg::chaos_pipeline::ChaosRollResult>,
+    is_cursed: bool,
+    nemesis_record: &Option<NemesisRecord>,
+    nemesis_spawned: &mut bool,
 ) -> RoomOutcome {
     match room.room_type {
         RoomType::Combat => {
+            // Nemesis spawn: check if nemesis should appear
+            if !*nemesis_spawned {
+                if let Some(ref nemesis) = nemesis_record {
+                    let spawn_roll = seed.wrapping_mul(0x6E656D65_73697300) % 100;
+                    // Spawn chance: 20% after floor 3, guaranteed if at nemesis floor
+                    let spawn_chance = if player.floor >= nemesis.floor_killed_at { 40 } else { 20 };
+                    if player.floor >= 3 && spawn_roll < spawn_chance {
+                        *nemesis_spawned = true;
+                        return do_nemesis_encounter(player, nemesis, seed, last_roll, is_cursed);
+                    }
+                }
+            }
+
+            // After floor 50: 20% chance any combat becomes a unique boss
+            // After floor 100: every 3rd room is a boss
+            let unique_boss_roll = seed.wrapping_mul(0x756E6971_75650000) % 100;
+            let spawn_unique = (player.floor >= 100 && player.rooms_cleared % 3 == 0)
+                || (player.floor >= 50 && unique_boss_roll < 20);
+
+            if spawn_unique {
+                if let Some(boss_id) = random_unique_boss(player.floor, seed) {
+                    return do_unique_boss_encounter(player, boss_id, seed, last_roll);
+                }
+            }
+
             let mut enemy = room_enemy(room);
-            do_combat_encounter(player, &mut enemy, seed, last_roll, false)
+            // StatMirror: HP = player's highest stat
+            if enemy.floor_ability == FloorAbility::StatMirror {
+                let (stat_name, stat_val) = player.highest_stat();
+                enemy.hp = stat_val.max(1);
+                enemy.max_hp = enemy.hp;
+                println!("  {}⚠ STAT MIRROR: This enemy copied your {} ({}) as its HP!{}",
+                    ui::RED, stat_name, stat_val, ui::RESET);
+            }
+            do_combat_encounter(player, &mut enemy, seed, last_roll, false, is_cursed)
         }
 
         RoomType::Boss => {
+            // Every 10 floors: gauntlet (3 fights back-to-back, no healing)
+            let is_gauntlet = player.floor % 10 == 0;
+
+            // Boss every 5 floors: check for unique boss
+            let use_unique = player.floor % 5 == 0;
+            if use_unique {
+                if let Some(boss_id) = random_unique_boss(player.floor, seed) {
+                    if is_gauntlet {
+                        return do_boss_gauntlet(player, seed, last_roll, is_cursed, Some(boss_id));
+                    }
+                    return do_unique_boss_encounter(player, boss_id, seed, last_roll);
+                }
+            }
+
             let mut enemy = room_enemy(room);
             enemy.hp = (enemy.hp as f64 * 2.5) as i64;
             enemy.max_hp = enemy.hp;
             enemy.base_damage = (enemy.base_damage as f64 * 1.8) as i64;
             enemy.xp_reward *= 3;
             enemy.gold_reward *= 3;
-            do_combat_encounter(player, &mut enemy, seed, last_roll, true)
+
+            if is_gauntlet {
+                do_boss_gauntlet(player, seed, last_roll, is_cursed, None)
+            } else {
+                do_combat_encounter(player, &mut enemy, seed, last_roll, true, is_cursed)
+            }
         }
 
         RoomType::Treasure => {
@@ -471,7 +642,7 @@ fn handle_room(
                 if trimmed.eq_ignore_ascii_case("h") {
                     if player.gold >= heal_cost {
                         player.gold -= heal_cost;
-                        player.heal(40);
+                        player.heal_scaled(40); // potions respect anti-heal scaling (floor 50+)
                         println!("  {}You drink the potion. +40 HP.{}", ui::GREEN, ui::RESET);
                     } else {
                         println!(
@@ -701,7 +872,7 @@ fn handle_room(
                 }
                 3 => {
                     let heal = player.max_hp / 3;
-                    player.heal(heal);
+                    player.heal_scaled(heal); // chaos blessings respect anti-heal
                     println!("  {}CHAOS BLESSING: +{} HP!{}", ui::GREEN, heal, ui::RESET);
                 }
                 4 => {
@@ -1044,16 +1215,157 @@ fn do_crafting_bench(
 
 // ─── COMBAT ──────────────────────────────────────────────────────────────────
 
+// ─── UNIQUE BOSS / NEMESIS / GAUNTLET DISPATCHERS ────────────────────────────
+
+fn do_unique_boss_encounter(
+    player: &mut Character,
+    boss_id: u8,
+    seed: u64,
+    last_roll: &mut Option<chaos_rpg::chaos_pipeline::ChaosRollResult>,
+) -> RoomOutcome {
+    ui::clear_screen();
+    println!("\n  {}╔══════════════════════════════════╗{}", ui::RED, ui::RESET);
+    println!("  {}║   ★  UNIQUE BOSS ENCOUNTER  ★   ║{}", ui::RED, ui::RESET);
+    println!("  {}╚══════════════════════════════════╝{}", ui::RED, ui::RESET);
+    println!();
+    println!("  {}{}{}  approaches.", ui::RED, boss_name(boss_id), ui::RESET);
+    println!();
+    ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+
+    match run_unique_boss(boss_id, player, seed, last_roll) {
+        BossOutcome::PlayerWon { xp: _, gold: _ } => {
+            println!("  {}★ Boss defeated!{}", ui::YELLOW, ui::RESET);
+            ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+            RoomOutcome::Continue
+        }
+        BossOutcome::PlayerDied => RoomOutcome::PlayerDied,
+        BossOutcome::Escaped => RoomOutcome::Continue,
+    }
+}
+
+fn do_nemesis_encounter(
+    player: &mut Character,
+    nemesis: &NemesisRecord,
+    seed: u64,
+    last_roll: &mut Option<chaos_rpg::chaos_pipeline::ChaosRollResult>,
+    is_cursed: bool,
+) -> RoomOutcome {
+    ui::clear_screen();
+    println!("\n  {}☠  NEMESIS RETURNS  ☠{}", ui::RED, ui::RESET);
+    println!();
+    println!("  {} remembers you.", nemesis.enemy_name);
+    println!("  Killed {} {} time(s). Floor {}.", nemesis.killed_player_class, nemesis.times_killed_player, nemesis.floor_killed_at);
+    println!("  {}HP +{}%  Damage +{}%{}", ui::RED, nemesis.hp_bonus_pct, nemesis.damage_bonus_pct, ui::RESET);
+    println!("  {}{}{}", ui::DIM, nemesis.resistance_label(), ui::RESET);
+    println!();
+    ui::press_enter(&format!("  {}[ENTER] to face your past...{}", ui::DIM, ui::RESET));
+
+    let base_floor = nemesis.floor_killed_at;
+    let mut nemesis_enemy = generate_enemy(base_floor.max(1), seed);
+    nemesis_enemy.name = format!("★ {}", nemesis.enemy_name);
+    // Apply nemesis bonuses
+    nemesis_enemy.hp = (nemesis_enemy.hp * (100 + nemesis.hp_bonus_pct as i64) / 100).max(1);
+    nemesis_enemy.max_hp = nemesis_enemy.hp;
+    nemesis_enemy.base_damage = (nemesis_enemy.base_damage * (100 + nemesis.damage_bonus_pct as i64) / 100).max(1);
+    nemesis_enemy.xp_reward *= 5;
+    nemesis_enemy.gold_reward *= 3;
+
+    let result = do_combat_encounter(player, &mut nemesis_enemy, seed, last_roll, true, is_cursed);
+    if matches!(result, RoomOutcome::Continue) {
+        // Nemesis killed! Clear it.
+        chaos_rpg::nemesis::clear_nemesis();
+        println!("  {}Your Nemesis is defeated. The grudge is settled.{}", ui::YELLOW, ui::RESET);
+        let (_, stat_name) = player.highest_stat();
+        println!("  {}Bonus loot: highest stat ({}) +50{}", ui::CYAN, stat_name, ui::RESET);
+        // Reward: boost highest stat
+        let (sname, _) = player.highest_stat();
+        match sname {
+            "Vitality"  => player.stats.vitality  += 50,
+            "Force"     => player.stats.force      += 50,
+            "Mana"      => player.stats.mana       += 50,
+            "Cunning"   => player.stats.cunning    += 50,
+            "Precision" => player.stats.precision  += 50,
+            "Entropy"   => player.stats.entropy    += 50,
+            _           => player.stats.luck       += 50,
+        }
+        ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+    }
+    result
+}
+
+fn do_boss_gauntlet(
+    player: &mut Character,
+    seed: u64,
+    last_roll: &mut Option<chaos_rpg::chaos_pipeline::ChaosRollResult>,
+    is_cursed: bool,
+    final_boss_id: Option<u8>,
+) -> RoomOutcome {
+    ui::clear_screen();
+    println!("\n  {}╔══════════════════════════════════╗{}", ui::RED, ui::RESET);
+    println!("  {}║      FLOOR BOSS GAUNTLET         ║{}", ui::RED, ui::RESET);
+    println!("  {}║  Three fights. No healing.       ║{}", ui::RED, ui::RESET);
+    println!("  {}║  HP carries over between fights. ║{}", ui::RED, ui::RESET);
+    println!("  {}╚══════════════════════════════════╝{}", ui::RED, ui::RESET);
+    println!();
+    ui::press_enter(&format!("  {}[ENTER] to enter the gauntlet...{}", ui::DIM, ui::RESET));
+
+    // Fight 1: regular strong enemy
+    let mut e1 = generate_enemy(player.floor, seed.wrapping_add(1));
+    e1.hp = (e1.hp as f64 * 2.0) as i64;
+    e1.max_hp = e1.hp;
+    println!("  {}GAUNTLET: Fight 1/3{}", ui::YELLOW, ui::RESET);
+    match do_combat_encounter(player, &mut e1, seed.wrapping_add(1), last_roll, false, is_cursed) {
+        RoomOutcome::PlayerDied => return RoomOutcome::PlayerDied,
+        _ => {}
+    }
+
+    // Fight 2: stronger enemy
+    let mut e2 = generate_enemy(player.floor, seed.wrapping_add(2));
+    e2.hp = (e2.hp as f64 * 3.0) as i64;
+    e2.max_hp = e2.hp;
+    e2.base_damage = (e2.base_damage as f64 * 1.5) as i64;
+    println!("  {}GAUNTLET: Fight 2/3{}", ui::YELLOW, ui::RESET);
+    match do_combat_encounter(player, &mut e2, seed.wrapping_add(2), last_roll, false, is_cursed) {
+        RoomOutcome::PlayerDied => return RoomOutcome::PlayerDied,
+        _ => {}
+    }
+
+    // Fight 3: boss with destiny roll
+    println!("  {}GAUNTLET: Fight 3/3 — THE BOSS{}", ui::RED, ui::RESET);
+    if let Some(boss_id) = final_boss_id {
+        return do_unique_boss_encounter(player, boss_id, seed.wrapping_add(3), last_roll);
+    }
+    let mut boss = generate_enemy(player.floor, seed.wrapping_add(3));
+    let destiny = chaos_rpg::chaos_pipeline::destiny_roll(0.5, seed.wrapping_add(31337));
+    let power_mult = (destiny.final_value + 1.5).max(0.5);
+    boss.hp = ((boss.hp as f64 * 4.0 * power_mult) as i64).max(1);
+    boss.max_hp = boss.hp;
+    boss.base_damage = ((boss.base_damage as f64 * 2.0 * power_mult) as i64).max(1);
+    boss.xp_reward *= 5;
+    boss.gold_reward *= 5;
+    println!("  {}Destiny roll: {:.3} — power multiplier: {:.2}x{}", ui::MAGENTA, destiny.final_value, power_mult, ui::RESET);
+    do_combat_encounter(player, &mut boss, seed.wrapping_add(3), last_roll, true, is_cursed)
+}
+
 fn do_combat_encounter(
     player: &mut Character,
     enemy: &mut Enemy,
     seed: u64,
     last_roll: &mut Option<chaos_rpg::chaos_pipeline::ChaosRollResult>,
     is_boss: bool,
+    is_cursed: bool,
 ) -> RoomOutcome {
     if is_boss {
         println!("  {}B O S S  E N C O U N T E R{}", ui::RED, ui::RESET);
         println!();
+    }
+
+    // NullifyAura announcement
+    if enemy.floor_ability == FloorAbility::NullifyAura {
+        println!("  {}⚠ NULLIFY AURA: Your first action will return 0.0 from all engines!{}", ui::RED, ui::RESET);
+    }
+    if enemy.floor_ability == FloorAbility::EngineTheft {
+        println!("  {}⚠ ENGINE THEFT: Each hit will steal 1 engine from your roll chain!{}", ui::YELLOW, ui::RESET);
     }
 
     ui::println_color(
@@ -1065,6 +1377,7 @@ fn do_combat_encounter(
     ui::press_enter(&format!("  {}[ENTER] to fight...{}", ui::DIM, ui::RESET));
 
     let mut state = CombatState::new(seed);
+    state.is_cursed = is_cursed;
     let level_before = player.level;
 
     loop {
@@ -1180,7 +1493,20 @@ fn do_combat_encounter(
                 return RoomOutcome::Continue;
             }
             CombatOutcome::PlayerDied => {
+                // Save nemesis: the enemy that just killed the player
+                let kill_method = if player.spells_cast > player.kills * 2 { "spell" } else { "physical" };
+                let nemesis = NemesisRecord::new(
+                    enemy.name.clone(),
+                    player.floor,
+                    enemy.base_damage,
+                    player.class.name().to_string(),
+                    kill_method,
+                );
+                save_nemesis(&nemesis);
                 ui::show_game_over(player);
+                println!();
+                println!("  {}☠ {} is now your Nemesis.{}", ui::RED, enemy.name, ui::RESET);
+                println!("  {}It will appear in your next run — stronger and ready.{}", ui::DIM, ui::RESET);
                 println!();
                 for line in player.run_summary() {
                     println!("{}", line);

@@ -836,6 +836,10 @@ pub struct Character {
     pub allocated_nodes: Vec<u32>,
     // Faction reputation
     pub faction_rep: crate::factions::FactionRep,
+    // Chaos Corruption — every kill adds a stack; every 50 mutates engines permanently
+    pub corruption: u32,
+    // The Hunger — rooms without a kill (floor 50+: every 5 → lose 5% max HP)
+    pub rooms_without_kill: u32,
 }
 
 impl Character {
@@ -931,6 +935,8 @@ impl Character {
             skill_points: 0,
             allocated_nodes: Vec::new(),
             faction_rep: crate::factions::FactionRep::default(),
+            corruption: 0,
+            rooms_without_kill: 0,
         }
     }
 
@@ -1177,6 +1183,72 @@ impl Character {
         if amount > 0 {
             self.body.heal_all_pct(0.05);
         }
+    }
+
+    /// Heal that respects anti-heal scaling (floor 50+: -2% per floor, 0% at 100+).
+    /// Use for potions, regen, spell heals, and passive regeneration.
+    /// Shrines, Death Drain, and on-kill effects should use heal() directly (bypass).
+    pub fn heal_scaled(&mut self, amount: i64) {
+        let eff = self.heal_effectiveness_pct();
+        let scaled = (amount * eff / 100).max(0);
+        if scaled > 0 {
+            self.heal(scaled);
+        }
+    }
+
+    /// Returns healing effectiveness as a percentage (0–100).
+    pub fn heal_effectiveness_pct(&self) -> i64 {
+        if self.floor < 50 {
+            return 100;
+        }
+        (100i64 - (self.floor as i64 - 50) * 2).max(0)
+    }
+
+    // ── Corruption system ─────────────────────────────────────────────────────
+
+    /// Current corruption stage (0–8). One stage per 50 kills.
+    /// Stage 0 = clean; stage 8 = maximum mutation (400+ kills).
+    pub fn corruption_stage(&self) -> u32 {
+        (self.kills / 50).min(8)
+    }
+
+    /// Backfire chance on normal attacks at 400+ kills (0–20%).
+    pub fn corruption_backfire_pct(&self) -> u64 {
+        if self.kills < 400 {
+            return 0;
+        }
+        ((self.kills - 400) / 50 * 3 + 5).min(20) as u64
+    }
+
+    /// Corruption label for display ("Clean", "Tainted", "Corrupted", "Unraveling", "DESTABILIZED").
+    pub fn corruption_label(&self) -> &'static str {
+        match self.corruption_stage() {
+            0 => "Clean",
+            1 => "Tainted",
+            2 => "Corrupted",
+            3 => "Corrupted",
+            4 => "Unraveling",
+            5 => "Unraveling",
+            6 => "DESTABILIZED",
+            7 => "DESTABILIZED",
+            _ => "CHAOS INCARNATE",
+        }
+    }
+
+    // ── Stat helpers ──────────────────────────────────────────────────────────
+
+    /// Returns (name, value) of the player's highest stat.
+    pub fn highest_stat(&self) -> (&'static str, i64) {
+        let stats: &[(&str, i64)] = &[
+            ("Vitality",  self.stats.vitality),
+            ("Force",     self.stats.force),
+            ("Mana",      self.stats.mana),
+            ("Cunning",   self.stats.cunning),
+            ("Precision", self.stats.precision),
+            ("Entropy",   self.stats.entropy),
+            ("Luck",      self.stats.luck),
+        ];
+        stats.iter().max_by_key(|(_, v)| *v).copied().unwrap_or(("Vitality", 1))
     }
 
     /// Necromancer passive: drain HP on enemy kill

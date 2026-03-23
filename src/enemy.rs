@@ -61,7 +61,19 @@ impl EnemyTier {
 
 // ─── ENEMY STRUCT ────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Floor-based enemy ability that counters player power sources.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FloorAbility {
+    /// No special ability.
+    None,
+    /// Floor 20+: HP is set to the player's highest stat value at encounter time.
+    StatMirror,
+    /// Floor 40+: each successful hit steals 1 engine from the player's next roll chain.
+    EngineTheft,
+    /// Floor 60+: player's first action each combat returns 0.0 from all engines — base stats only.
+    NullifyAura,
+}
+
 pub struct Enemy {
     pub name: String,
     pub tier: EnemyTier,
@@ -75,6 +87,7 @@ pub struct Enemy {
     pub ascii_sprite: &'static str,
     pub seed: u64,
     pub special_ability: Option<&'static str>,
+    pub floor_ability: FloorAbility,
 }
 
 impl Enemy {
@@ -191,7 +204,15 @@ const SPRITE_ABOMINATION: &str = "##############\n# [UNDEFINED] #\n# (x_INFINITY
 
 pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
     let tier = determine_tier(floor, seed);
-    let floor_scale = 1.0 + (floor as f64 - 1.0) * 0.18;
+
+    // After floor 10: exponential compound scaling kicks in (15% per floor).
+    // Before floor 10: linear +18% per floor.
+    let floor_scale = if floor <= 10 {
+        1.0 + (floor as f64 - 1.0) * 0.18
+    } else {
+        let base = 1.0 + 9.0 * 0.18; // 2.62 at floor 10
+        base * 1.15_f64.powf((floor - 10) as f64)
+    };
 
     let base_hp = roll_stat(15, 50, seed.wrapping_add(20));
     let base_dmg = roll_stat(3, 15, seed.wrapping_add(10));
@@ -207,6 +228,17 @@ pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
     let (name, ascii_sprite) = pick_name_sprite(&tier, seed);
     let special_ability = pick_ability(&tier, seed);
 
+    // Assign floor ability — priority: NullifyAura > EngineTheft > StatMirror
+    let floor_ability = if floor >= 60 {
+        FloorAbility::NullifyAura
+    } else if floor >= 40 {
+        FloorAbility::EngineTheft
+    } else if floor >= 20 {
+        FloorAbility::StatMirror
+    } else {
+        FloorAbility::None
+    };
+
     Enemy {
         name,
         tier,
@@ -220,6 +252,7 @@ pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
         ascii_sprite,
         seed,
         special_ability,
+        floor_ability,
     }
 }
 

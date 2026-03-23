@@ -1,4 +1,6 @@
 pub mod atlas;
+pub mod bosses;
+pub mod nemesis;
 pub mod body;
 pub mod chaos_pipeline;
 pub mod character;
@@ -25,3 +27,5 @@ pub mod world_map;
 pub mod recipes;
 pub mod dialogue;
 pub mod faction_system;
+pub mod loot_system;
+pub mod achievement_system;
