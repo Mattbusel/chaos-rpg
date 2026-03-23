@@ -1607,26 +1607,64 @@ impl State {
             ctx.print_color(32, 20, dim, bg, &room_prog);
         }
 
-        // ── Actions bar ───────────────────────────────────────────────────────
-        draw_separator(ctx, 1, 38, 77, &t);
-        let y = 39i32;
-        print_hint(ctx, 2, y,   "E",  " Enter  ", &t);
-        print_hint(ctx, 15, y,  "C",  " Sheet  ", &t);
-        print_hint(ctx, 27, y,  "B",  " Body   ", &t);
-        print_hint(ctx, 39, y,  "Z",  " Auto   ", &t);
-        print_hint(ctx, 51, y,  "S",  " Scores ", &t);
-        print_hint(ctx, 63, y,  "Q",  " Quit", &t);
-        // Auto mode indicator text on second line
+        // ── Chaos / Misery alert row ──────────────────────────────────────────
+        if pmisery >= 50.0 || pcorruption > 5 {
+            let pulse = (self.frame / 20) % 2 == 0;
+            let alert_c = if pulse { RGB::from_u8(t.warn.0, t.warn.1, t.warn.2) }
+                          else { RGB::from_u8(t.warn.0/2, t.warn.1/2, t.warn.2/2) };
+            let msg = if pmisery >= 200.0 { "⚠ COSMIC JOKE IMMINENT — Misery critical" }
+                      else if pmisery >= 100.0 { "☠ SPITE MODE ACTIVE — enemies empowered" }
+                      else if pcorruption > 20 { "✖ HIGH CORRUPTION — chaos rolls destabilizing" }
+                      else { "~ Chaos levels rising — watch misery meter" };
+            ctx.print_color(2, 38, alert_c, bg, msg);
+        }
+
+        // ── Systems access bar ────────────────────────────────────────────────
+        draw_separator(ctx, 1, 39, 77, &t);
+        let sy = 40i32;
+
+        // Skill point alert: flash if unspent
+        let (sp_col, sp_label) = if let Some(ref p) = self.player {
+            if p.skill_points > 0 {
+                let pulse = (self.frame / 12) % 2 == 0;
+                let c = if pulse { RGB::from_u8(t.gold.0, t.gold.1, t.gold.2) }
+                        else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+20, 10) };
+                (c, format!("[C] Sheet  ★ {} pts", p.skill_points))
+            } else {
+                (RGB::from_u8(t.accent.0, t.accent.1, t.accent.2), "[C] Sheet".to_string())
+            }
+        } else {
+            (RGB::from_u8(t.accent.0, t.accent.1, t.accent.2), "[C] Sheet".to_string())
+        };
+        ctx.print_color(2, sy, sp_col, bg, &sp_label);
+
+        // Body health teaser
+        let body_summary_col = if let Some(ref p) = self.player {
+            let worst_pct = p.body.parts.values()
+                .map(|s| s.current_hp as f32 / s.max_hp.max(1) as f32)
+                .fold(1.0f32, f32::min);
+            if worst_pct < 0.3 { RGB::from_u8(t.danger.0, t.danger.1, t.danger.2) }
+            else if worst_pct < 0.6 { RGB::from_u8(200, 130, 40) }
+            else { RGB::from_u8(t.success.0, t.success.1, t.success.2) }
+        } else { RGB::from_u8(t.dim.0, t.dim.1, t.dim.2) };
+        ctx.print_color(22, sy, body_summary_col, bg, "[B] Body Chart");
+
+        print_hint(ctx, 40, sy, "[E]", " Enter Room", &t);
+        print_hint(ctx, 55, sy, "[Z]", " Auto", &t);
+        print_hint(ctx, 64, sy, "[S]", " Scores", &t);
+        print_hint(ctx, 74, sy, "[Q]", " Quit", &t);
+
+        let y = sy + 1;
         if self.auto_mode {
             let auto_c = (80u8, 220u8, 80u8);
-            ctx.print_color(2, y + 1, RGB::from_u8(auto_c.0, auto_c.1, auto_c.2), bg,
-                "  AUTO PILOT ACTIVE — pauses at item rooms, shop, craft  [Z] to stop");
+            ctx.print_color(2, y, RGB::from_u8(auto_c.0, auto_c.1, auto_c.2), bg,
+                "AUTO PILOT ACTIVE — pauses at item/shop/craft  [Z] to stop");
         } else if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
-            ctx.print_color(2, y + 1, gld, bg, "  [ D ] Descend to next floor  ▼");
+            ctx.print_color(2, y, gld, bg, "[ D ] Descend to next floor  ▼");
         }
         draw_separator(ctx, 1, 43, 77, &t);
-        ctx.print_color(2, 44, dim, bg, "[×]=Combat [★]=Treasure [$]=Shop [~]=Shrine [!]=Trap");
-        ctx.print_color(2, 45, dim, bg, "[B]=Boss   [^]=Portal   [∞]=Rift [⚒]=Craft");
+        ctx.print_color(2, 44, dim, bg, "[×]=Fight [★]=Loot [$]=Shop [~]=Shrine [!]=Trap [^]=Portal [⚒]=Craft [∞]=Rift");
+        ctx.print_color(2, 45, dim, bg, "Tip: Press [C] to manage passives — unspent points boost your stats automatically");
     }
 
     // ── ROOM VIEW ─────────────────────────────────────────────────────────────
@@ -2204,10 +2242,23 @@ impl State {
                 &format!("    {}mp  ×{:.1}", spell.mana_cost, spell.scaling_factor.abs()));
         }
 
-        // Hint
-        draw_separator(ctx, 1, 46, 77, &t);
-        print_hint(ctx, 2, 47, "Esc / C", " Back to floor", &t);
-        print_hint(ctx, 28, 47, "B", " Body Chart", &t);
+        // ── Passive Tree summary ──
+        draw_subpanel(ctx, 1, 43, 77, 4, "PASSIVE TREE", &t);
+        let sp = p.skill_points;
+        if sp > 0 {
+            let pulse = (self.frame / 12) % 2 == 0;
+            let pc = if pulse { RGB::from_u8(t.gold.0, t.gold.1, t.gold.2) }
+                     else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+20, 10) };
+            ctx.print_color(3, 44, pc, bg, &format!("★ {} SKILL POINT{} AVAILABLE — Press [N] to auto-allocate",
+                sp, if sp == 1 { "" } else { "S" }));
+        } else {
+            ctx.print_color(3, 44, dim, bg, "All skill points spent.");
+        }
+        let node_count = p.allocated_nodes.len();
+        ctx.print_color(3, 45, dim, bg, &format!("{} nodes allocated  |  class: {}", node_count, p.class.passive_name()));
+        print_hint(ctx, 3, 46, "[N]", " Auto-allocate  ", &t);
+        print_hint(ctx, 22, 46, "[B]", " Body Chart  ", &t);
+        print_hint(ctx, 38, 46, "[Esc]", " Back to floor", &t);
     }
 
     // ── BODY CHART ────────────────────────────────────────────────────────────
@@ -2231,39 +2282,59 @@ impl State {
         let summary = p.body.combat_summary();
         ctx.print_color(2, 3, if summary.contains("CRITICAL") || summary.contains("SEVERED") { dng } else { dim }, bg, &summary.chars().take(75).collect::<String>());
 
+        // Two-column body part display with visual HP bars
         draw_subpanel(ctx, 1, 5, 77, 36, "BODY PARTS", &t);
 
-        // Strip ANSI codes and render body display lines
-        let raw_lines = p.body.display_lines();
-        for (i, line) in raw_lines.iter().take(30).enumerate() {
-            // Strip ANSI escape codes (bracket-lib doesn't interpret them)
-            let clean: String = {
-                let mut out = String::new();
-                let mut chars = line.chars().peekable();
-                while let Some(c) = chars.next() {
-                    if c == '\x1b' {
-                        // skip until 'm'
-                        for nc in chars.by_ref() { if nc == 'm' { break; } }
-                    } else {
-                        out.push(c);
+        use chaos_rpg_core::body::BodyPart;
+        let col_parts: &[&[BodyPart]] = &[
+            &[BodyPart::Head, BodyPart::Torso, BodyPart::Neck,
+              BodyPart::LeftArm, BodyPart::RightArm,
+              BodyPart::LeftHand, BodyPart::RightHand],
+            &[BodyPart::LeftLeg, BodyPart::RightLeg,
+              BodyPart::LeftFoot, BodyPart::RightFoot,
+              BodyPart::LeftEye, BodyPart::RightEye],
+        ];
+        for (col, parts) in col_parts.iter().enumerate() {
+            let cx = 3 + col as i32 * 38;
+            for (row, &part) in parts.iter().enumerate() {
+                let ry = 7 + row as i32 * 4;
+                let state = p.body.parts.get(&part);
+                let (cur, max_hp, sev) = state
+                    .map(|s| (s.current_hp, s.max_hp, s.injury.as_ref().map(|i| i.name())))
+                    .unwrap_or((10, 10, None));
+                let pct = if max_hp > 0 { cur as f32 / max_hp as f32 } else { 0.0 };
+                let bar_col = t.hp_color(pct.clamp(0.0, 1.0));
+                let sev_lbl = sev.unwrap_or("Healthy");
+                let fg = if pct <= 0.0 { dng }
+                         else if pct < 0.35 { dng }
+                         else if pct < 0.65 { RGB::from_u8(200, 130, 40) }
+                         else { suc };
+                // Part name + HP numbers
+                let name_str = part.name();
+                ctx.print_color(cx, ry,     hd,  bg, &format!("{:<12}", name_str));
+                ctx.print_color(cx + 12, ry, fg, bg, &format!("{}/{}", cur, max_hp));
+                // Severity label
+                ctx.print_color(cx + 22, ry, fg, bg, sev_lbl);
+                // HP bar (width 32)
+                draw_bar_gradient(ctx, cx, ry + 1, 32, cur.max(0), max_hp.max(1), bar_col, t.muted, &t);
+                // Armor note if equipped
+                if let Some(state) = p.body.parts.get(&part) {
+                    if state.armor_defense > 0 {
+                        ctx.print_color(cx + 20, ry + 2, dim, bg,
+                            &format!("DEF+{}", state.armor_defense));
                     }
                 }
-                out
-            };
-
-            // Color based on health keywords
-            let fg = if clean.contains("SEVERED") || clean.contains("MISSING") { dng }
-                     else if clean.contains("CRITICAL") || clean.contains("Broken") { dng }
-                     else if clean.contains("Wounded") || clean.contains("Bruised") { RGB::from_u8(200, 120, 40) }
-                     else if clean.contains("Healthy") || clean.contains("OK") { suc }
-                     else { hd };
-
-            ctx.print_color(3, 7 + i as i32, fg, bg, &clean.chars().take(73).collect::<String>());
+            }
         }
 
         draw_separator(ctx, 1, 44, 77, &t);
-        print_hint(ctx, 2, 45, "Esc / B", " Back to floor", &t);
-        print_hint(ctx, 28, 45, "C", " Character Sheet", &t);
+        print_hint(ctx, 2, 45, "[Esc]", " Back to floor", &t);
+        print_hint(ctx, 18, 45, "[C]", " Character Sheet", &t);
+        // Overall warning
+        let summary = p.body.combat_summary();
+        if summary.contains("CRITICAL") || summary.contains("SEVERED") {
+            ctx.print_color(42, 45, dng, bg, &format!("⚠ {}", &summary.chars().take(34).collect::<String>()));
+        }
     }
 
     // ── GAME OVER ─────────────────────────────────────────────────────────────
