@@ -693,6 +693,8 @@ fn do_combat_encounter(
         ui::show_combat_menu(player, enemy, state.turn + 1);
 
         let action = ui::read_combat_action();
+        // Capture display name before action is moved into resolve_action
+        let action_label = combat_action_label(&action);
 
         let (events, outcome) = resolve_action(player, enemy, action, &mut state);
 
@@ -701,6 +703,24 @@ fn do_combat_encounter(
         }
 
         ui::display_combat_events(&events);
+        println!();
+
+        // ── CHAOS ENGINE TRACE ──────────────────────────────────────────────
+        // Always show the chain that produced this result. This is the entire
+        // personality of the game — "the Lorenz Attractor conspired with
+        // Euler's Totient to produce this outcome."
+        let player_outcome = events_to_outcome_str(&events);
+        if let Some(ref roll) = state.last_roll {
+            for line in roll.combat_trace_lines(&action_label, &player_outcome) {
+                println!("{}", line);
+            }
+        }
+
+        // Show enemy's chain as a compact line (their counterattack roll)
+        if let Some(ref roll) = state.enemy_last_roll {
+            let enemy_outcome = events_to_enemy_outcome_str(&events, &enemy.name);
+            println!("{}", roll.enemy_trace_line(&enemy.name, &enemy_outcome));
+        }
         println!();
 
         match outcome {
@@ -786,6 +806,78 @@ fn apply_stat_modifier(player: &mut Character, stat: &str, value: i64) {
         "luck" => player.stats.luck += value,
         _ => {}
     }
+}
+
+/// Returns a display label for the action — used as the trace header.
+fn combat_action_label(action: &CombatAction) -> String {
+    match action {
+        CombatAction::Attack => "Attack Roll".to_string(),
+        CombatAction::HeavyAttack => "Heavy Attack Roll".to_string(),
+        CombatAction::Defend => "Defend Roll".to_string(),
+        CombatAction::Flee => "Flee Roll".to_string(),
+        CombatAction::Taunt => "Taunt Roll".to_string(),
+        CombatAction::UseSpell(i) => format!("Spell Cast #{}", i + 1),
+        CombatAction::UseItem(i) => format!("Item Use #{}", i + 1),
+    }
+}
+
+/// Derive a short outcome string from combat events for the player trace footer.
+fn events_to_outcome_str(events: &[chaos_rpg::combat::CombatEvent]) -> String {
+    use chaos_rpg::combat::CombatEvent;
+    for event in events {
+        match event {
+            CombatEvent::PlayerAttack { damage, is_crit } => {
+                return if *is_crit {
+                    format!("dealt {} damage (CRITICAL)", damage)
+                } else {
+                    format!("dealt {} damage", damage)
+                };
+            }
+            CombatEvent::SpellCast { name, damage, backfired } => {
+                return if *backfired {
+                    format!("{} BACKFIRED — took {} self-damage", name, damage)
+                } else {
+                    format!("{} — dealt {} damage", name, damage)
+                };
+            }
+            CombatEvent::PlayerFled => return "escaped into the chaos".to_string(),
+            CombatEvent::PlayerFleeFailed => return "flee failed — math won't allow it".to_string(),
+            CombatEvent::PlayerDefend { damage_reduced } => {
+                return format!("defending — {} damage absorbed", damage_reduced);
+            }
+            CombatEvent::StatusApplied { name } => {
+                return format!("applied {}", name);
+            }
+            _ => {}
+        }
+    }
+    "roll complete".to_string()
+}
+
+/// Derive a short outcome string from combat events for the enemy trace line.
+fn events_to_enemy_outcome_str(
+    events: &[chaos_rpg::combat::CombatEvent],
+    enemy_name: &str,
+) -> String {
+    use chaos_rpg::combat::CombatEvent;
+    for event in events {
+        if let CombatEvent::EnemyAttack { damage, is_crit } = event {
+            return if *is_crit {
+                format!("CRIT — {} damage to you", damage)
+            } else {
+                format!("{} damage to you", damage)
+            };
+        }
+    }
+    // Stunned or other case
+    for event in events {
+        if let CombatEvent::ChaosEvent { description } = event {
+            if description.contains("stunned") || description.contains("Stunned") {
+                return format!("{} is stunned — skips turn", enemy_name);
+            }
+        }
+    }
+    "acted".to_string()
 }
 
 fn end_game_score(player: &Character) {

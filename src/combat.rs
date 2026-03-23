@@ -132,7 +132,10 @@ pub struct CombatState {
     pub enemy_stunned: bool,
     pub chaos_events: u32,
     pub log: Vec<CombatEvent>,
+    /// The player's chaos roll for the most recent action — shown in the trace.
     pub last_roll: Option<ChaosRollResult>,
+    /// The enemy's chaos roll for their counterattack — shown in compact trace.
+    pub enemy_last_roll: Option<ChaosRollResult>,
     pub seed: u64,
 }
 
@@ -145,6 +148,7 @@ impl CombatState {
             chaos_events: 0,
             log: Vec::new(),
             last_roll: None,
+            enemy_last_roll: None,
             seed,
         }
     }
@@ -395,6 +399,7 @@ pub fn resolve_action(
         let enemy_seed = state.next_seed();
         let enemy_roll = chaos_roll_verbose(enemy.chaos_level, enemy_seed);
         let is_crit = enemy_roll.is_critical();
+        state.enemy_last_roll = Some(enemy_roll.clone()); // stored for trace display
 
         let base = enemy.base_damage + enemy.attack_modifier;
         let mut enemy_dmg = roll_damage(base, base, enemy_seed);

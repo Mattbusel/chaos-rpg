@@ -60,6 +60,98 @@ impl ChaosRollResult {
         self.final_value < -0.8
     }
 
+    /// Inline combat trace — shows the engine chain with narrative flavor.
+    /// Printed automatically after every combat action so players always see
+    /// *which algorithms conspired to produce this result*.
+    pub fn combat_trace_lines(&self, action: &str, outcome: &str) -> Vec<String> {
+        let w = 56usize; // inner width
+        let reset = "\x1b[0m";
+        let dim = "\x1b[2m";
+
+        // Pick border color from result
+        let border = if self.is_critical() {
+            "\x1b[93m" // bright yellow
+        } else if self.is_catastrophe() {
+            "\x1b[91m" // bright red
+        } else if self.final_value > 0.0 {
+            "\x1b[32m" // green
+        } else {
+            "\x1b[37m" // white
+        };
+
+        let result_icon = if self.is_critical() {
+            "★ CRITICAL"
+        } else if self.is_catastrophe() {
+            "☠ CATASTROPHE"
+        } else if self.is_success() {
+            "✓ SUCCESS"
+        } else {
+            "✗ FAILURE"
+        };
+
+        // Header line: ┌─ ACTION (N engines) ──────┐
+        let engine_count = self.chain.len();
+        let header_label = format!(" {} ({} engines) ", action, engine_count);
+        let dash_right = w.saturating_sub(header_label.len() + 2);
+        let mut lines = Vec::new();
+        lines.push(format!(
+            "  {}┌─{}{}─┐{}",
+            border, header_label, "─".repeat(dash_right), reset
+        ));
+
+        for step in &self.chain {
+            // Bar: 14-char filled/empty
+            let bar_fill = ((step.output.clamp(-1.0, 1.0) + 1.0) / 2.0 * 14.0) as usize;
+            let bar = format!("[{}{}]", "█".repeat(bar_fill), "░".repeat(14 - bar_fill));
+            let sign = if step.output >= 0.0 { "+" } else { "" };
+            let val_str = format!("{}{:.4}", sign, step.output);
+
+            // Engine line
+            let engine_line = format!(
+                "  {}│  {:<24} {}  {}  {}│{}",
+                border, step.engine_name, val_str, bar,
+                " ".repeat(w.saturating_sub(24 + val_str.len() + 16 + 6)),
+                reset
+            );
+            lines.push(engine_line);
+
+            // Flavor line — narrative explanation, dimmed
+            let flavor = engine_combat_flavor(step.engine_name, step.output);
+            lines.push(format!("  {}{}│   ↳ {:<width$}│{}", dim, border, flavor, reset, width = w.saturating_sub(6)));
+        }
+
+        // Separator + outcome
+        lines.push(format!("  {}├{}┤{}", border, "─".repeat(w + 2), reset));
+
+        let outcome_line = format!("{} — {}", result_icon, outcome);
+        lines.push(format!(
+            "  {}│  {:<width$}│{}",
+            border, outcome_line, reset,
+            width = w
+        ));
+        lines.push(format!("  {}└{}┘{}", border, "─".repeat(w + 2), reset));
+
+        lines
+    }
+
+    /// Compact single-line summary of the chain for enemy rolls.
+    /// "Lorenz→Logistic→Prime (+0.42) dealt 14 damage"
+    pub fn enemy_trace_line(&self, enemy_name: &str, outcome: &str) -> String {
+        let reset = "\x1b[0m";
+        let dim = "\x1b[2m";
+        let chain_str: String = self
+            .chain
+            .iter()
+            .map(|s| engine_short_name(s.engine_name))
+            .collect::<Vec<_>>()
+            .join("→");
+        let sign = if self.final_value >= 0.0 { "+" } else { "" };
+        format!(
+            "  {}⚡ {} [{}{}  {:.3}] {}{}",
+            dim, enemy_name, chain_str, reset, self.final_value, outcome, reset
+        )
+    }
+
     /// Generate verbose display lines for skill check UI
     pub fn display_lines(&self) -> Vec<String> {
         let mut lines = Vec::new();
@@ -97,6 +189,81 @@ impl ChaosRollResult {
         ));
         lines.push("  ╚═══════════════════════════════════════════╝".to_string());
         lines
+    }
+}
+
+/// Narrative flavor text for each engine based on its output value.
+/// These are shown in the combat trace to explain what each algorithm did.
+fn engine_combat_flavor(name: &str, output: f64) -> &'static str {
+    match name {
+        "Lorenz Attractor" => {
+            if output > 0.6 { "butterfly cascades — tiny input became enormous output" }
+            else if output < -0.6 { "butterfly reverses — attractor pulls toward negative basin" }
+            else { "Lorenz orbit stabilizes near the saddle point" }
+        }
+        "Fourier Harmonic" => {
+            if output > 0.6 { "harmonics align constructively — wave peaks reinforce" }
+            else if output < -0.6 { "destructive interference — harmonics cancel to near zero" }
+            else { "mixed harmonics — partial cancellation, partial amplification" }
+        }
+        "Prime Density Sieve" => {
+            if output > 0.5 { "prime-dense window — actual density exceeds Li(x) prediction" }
+            else if output < -0.5 { "prime desert — gap exceeds PNT prediction, density low" }
+            else { "prime density near logarithmic integral — average region" }
+        }
+        "Riemann Zeta Partial" => {
+            if output > 0.5 { "zeta oscillation peaks — far from a nontrivial zero" }
+            else if output < -0.5 { "near a Riemann zero — the critical line destabilizes" }
+            else { "zeta partial sum in mid-oscillation — moderate chaos" }
+        }
+        "Fibonacci Golden Spiral" => {
+            if output > 0.5 { "golden angle aligns — φ spiral constructive phase" }
+            else if output < -0.5 { "irrational rotation inverts — φ² gap produces minimum" }
+            else { "golden ratio distributes evenly — no clustering, no void" }
+        }
+        "Mandelbrot Escape" => {
+            if output > 0.5 { "boundary region — high escape velocity, outside the set" }
+            else if output < -0.5 { "INSIDE THE SET — orbit never escapes, cursed outcome" }
+            else { "seahorse valley boundary — fractal edge, maximum sensitivity" }
+        }
+        "Logistic Map" => {
+            if output > 0.5 { "bifurcation cascade — period-doubling amplifies" }
+            else if output < -0.5 { "chaotic orbit collapses to low attractor" }
+            else { "logistic map at r≈3.9 — fully chaotic, unpredictable" }
+        }
+        "Euler's Totient" => {
+            if output > 0.5 { "prime n — φ(n)/n near 1, maximum coprime ratio" }
+            else if output < -0.5 { "highly composite n — many small primes, minimum ratio" }
+            else { "mixed factorization — φ(n)/n near the 6/π² average" }
+        }
+        "Collatz Chain" => {
+            if output > 0.5 { "short stopping time — rapid convergence to 1" }
+            else if output < -0.5 { "long Collatz path — 27-type orbit, thousands of steps" }
+            else { "moderate chain length — neither cursed nor blessed" }
+        }
+        "Modular Exp Hash" => {
+            if output > 0.5 { "cryptographic avalanche locks high — a^b mod p peaks" }
+            else if output < -0.5 { "hash avalanche collapses — discrete log pulls toward zero" }
+            else { "modular exponentiation distributes uniformly" }
+        }
+        _ => "unknown engine produces chaos"
+    }
+}
+
+/// Abbreviated engine names for the compact enemy trace line.
+fn engine_short_name(name: &str) -> &'static str {
+    match name {
+        "Lorenz Attractor"        => "Lorenz",
+        "Fourier Harmonic"        => "Fourier",
+        "Prime Density Sieve"     => "Prime",
+        "Riemann Zeta Partial"    => "Riemann",
+        "Fibonacci Golden Spiral" => "Fibonacci",
+        "Mandelbrot Escape"       => "Mandelbrot",
+        "Logistic Map"            => "Logistic",
+        "Euler's Totient"         => "Totient",
+        "Collatz Chain"           => "Collatz",
+        "Modular Exp Hash"        => "ModExp",
+        _                         => "??",
     }
 }
 

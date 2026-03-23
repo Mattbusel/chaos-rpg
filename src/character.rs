@@ -14,6 +14,9 @@ pub enum CharacterClass {
     Berserker,
     Ranger,
     Thief,
+    ChaosMath,    // Chaos Mathematician — bends the math engines themselves
+    Necromancer,  // Death math — Euler's mortality equation made flesh
+    Physicist,    // Heisenberg combat — first strike is always "observed"
 }
 
 impl CharacterClass {
@@ -23,6 +26,9 @@ impl CharacterClass {
             CharacterClass::Berserker => "Berserker",
             CharacterClass::Ranger => "Ranger",
             CharacterClass::Thief => "Thief",
+            CharacterClass::ChaosMath => "Chaos Mathematician",
+            CharacterClass::Necromancer => "Necromancer",
+            CharacterClass::Physicist => "Physicist",
         }
     }
 
@@ -40,15 +46,39 @@ impl CharacterClass {
             CharacterClass::Thief => {
                 "Exploits the logistic map's chaotic phase transitions. Master of CUNNING and LUCK."
             }
+            CharacterClass::ChaosMath => {
+                "Rewrites the mathematical rules mid-battle. Chaos events heal you. Maximum ENTROPY."
+            }
+            CharacterClass::Necromancer => {
+                "Channels death equations. Killing grants HP shields. Euler's formula is a weapon."
+            }
+            CharacterClass::Physicist => {
+                "Applies Heisenberg's uncertainty to combat. First strike is always 'observed' — no catastrophes."
+            }
+        }
+    }
+
+    pub fn passive_description(&self) -> &'static str {
+        match self {
+            CharacterClass::Mage => "ARCANE SURGE: Critical rolls amplify next spell by 50%.",
+            CharacterClass::Berserker => "BLOOD RAGE: Below 30% HP, automatically enter ENRAGED state.",
+            CharacterClass::Ranger => "PRIME SIGHT: Combo chains deal +10% more per hit (stacks).",
+            CharacterClass::Thief => "SHADOW KILL: One-shot kills grant double gold.",
+            CharacterClass::ChaosMath => "CHAOS RESONANCE: Every chaos event in combat restores 15 HP.",
+            CharacterClass::Necromancer => "DEATH HARVEST: Killing an enemy grants a shield = 30% of their max HP.",
+            CharacterClass::Physicist => "UNCERTAINTY PRINCIPLE: First attack each combat is 'observed' — guaranteed to connect.",
         }
     }
 
     pub fn ascii_art(&self) -> &'static str {
         match self {
-            CharacterClass::Mage => "  /\\ \n (∞) \n  ||",
-            CharacterClass::Berserker => "  ><  \n [RAGE]\n  \\/ ",
-            CharacterClass::Ranger => "  />\\\n  |||  \n  vvv",
-            CharacterClass::Thief => "  .~~.\n  {~} \n  /|\\",
+            CharacterClass::Mage =>       "   /\\ \n  (∞) \n   ||",
+            CharacterClass::Berserker =>  "  ><  \n [RAGE]\n  \\/ ",
+            CharacterClass::Ranger =>     "  />\\ \n  ||| \n  vvv",
+            CharacterClass::Thief =>      "  .~~.\n  {~} \n  /|\\",
+            CharacterClass::ChaosMath =>  "  ∑∫∂ \n  |Σ| \n  ∞∇π",
+            CharacterClass::Necromancer => "  /†\\ \n  |☠| \n  ≡≡≡",
+            CharacterClass::Physicist =>  "  ℏ∇² \n  ψ|φ \n  ⟨ψ|",
         }
     }
 
@@ -90,6 +120,33 @@ impl CharacterClass {
                 precision: 70,
                 entropy: 65,
                 luck: 85,
+            },
+            CharacterClass::ChaosMath => StatBlock {
+                vitality: 40,
+                force: 30,
+                mana: 85,
+                cunning: 70,
+                precision: 60,
+                entropy: 100, // highest entropy of all classes
+                luck: 55,
+            },
+            CharacterClass::Necromancer => StatBlock {
+                vitality: 65,
+                force: 35,
+                mana: 95, // highest mana of all classes
+                cunning: 55,
+                precision: 40,
+                entropy: 75,
+                luck: 50,
+            },
+            CharacterClass::Physicist => StatBlock {
+                vitality: 55,
+                force: 50,
+                mana: 60,
+                cunning: 85,
+                precision: 95, // highest precision of all classes
+                entropy: 70,
+                luck: 65,
             },
         }
     }
@@ -292,6 +349,154 @@ impl PowerTier {
     }
 }
 
+// ─── DIFFICULTY ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Difficulty {
+    Novice,    // +30% HP, enemies weakened
+    Standard,  // balanced
+    Chaotic,   // harder, bigger rewards
+    Nightmare, // mathematical certainty of suffering
+}
+
+impl Difficulty {
+    pub fn name(self) -> &'static str {
+        match self {
+            Difficulty::Novice => "Novice",
+            Difficulty::Standard => "Standard",
+            Difficulty::Chaotic => "Chaotic",
+            Difficulty::Nightmare => "NIGHTMARE",
+        }
+    }
+
+    pub fn color_code(self) -> &'static str {
+        match self {
+            Difficulty::Novice => "\x1b[32m",
+            Difficulty::Standard => "\x1b[37m",
+            Difficulty::Chaotic => "\x1b[33m",
+            Difficulty::Nightmare => "\x1b[91m",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Difficulty::Novice    => "+30% HP  |  Enemies: -25% HP/DMG  |  Rewards: -20%",
+            Difficulty::Standard  => "Balanced chaos. As the algorithms intended.",
+            Difficulty::Chaotic   => "-15% HP  |  Enemies: +30% HP/DMG  |  Rewards: +50%",
+            Difficulty::Nightmare => "-35% HP  |  Enemies: 2× HP/DMG    |  Rewards: 3×",
+        }
+    }
+
+    pub fn player_hp_mult(self) -> f64 {
+        match self {
+            Difficulty::Novice    => 1.30,
+            Difficulty::Standard  => 1.00,
+            Difficulty::Chaotic   => 0.85,
+            Difficulty::Nightmare => 0.65,
+        }
+    }
+
+    pub fn enemy_power_mult(self) -> f64 {
+        match self {
+            Difficulty::Novice    => 0.75,
+            Difficulty::Standard  => 1.00,
+            Difficulty::Chaotic   => 1.30,
+            Difficulty::Nightmare => 2.00,
+        }
+    }
+
+    pub fn reward_mult(self) -> f64 {
+        match self {
+            Difficulty::Novice    => 0.80,
+            Difficulty::Standard  => 1.00,
+            Difficulty::Chaotic   => 1.50,
+            Difficulty::Nightmare => 3.00,
+        }
+    }
+}
+
+// ─── BOONS ───────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Boon {
+    BloodPact,       // +50 max HP, take 2 dmg per room
+    ChaosBlessing,   // chaos rolls biased luckier (+0.15)
+    GoldVein,        // start with 200 gold
+    ScholarGift,     // 3 extra starting spells
+    WarriorBlessing, // +20 Force, +15 Vitality
+    LuckyBirth,      // +30 Luck, +5 gold per room cleared
+    EntropicSoul,    // 2× Entropy + Mana, 0.5× Vitality
+    CrystalSkin,     // start with 80 HP shield
+    MathSavant,      // all spells deal 1.75× damage
+    VoidTouched,     // all stats ×1.5 — chaos events affect you too
+    PrimeBlood,      // every kill permanently +1 to highest stat
+    ShadowStart,     // start at 50% HP, but 3× XP from all kills
+}
+
+impl Boon {
+    pub fn name(self) -> &'static str {
+        match self {
+            Boon::BloodPact       => "Blood Pact",
+            Boon::ChaosBlessing   => "Chaos Blessing",
+            Boon::GoldVein        => "Gold Vein",
+            Boon::ScholarGift     => "Scholar's Gift",
+            Boon::WarriorBlessing => "Warrior's Blessing",
+            Boon::LuckyBirth      => "Lucky Birth",
+            Boon::EntropicSoul    => "Entropic Soul",
+            Boon::CrystalSkin     => "Crystal Skin",
+            Boon::MathSavant      => "Math Savant",
+            Boon::VoidTouched     => "Void Touched",
+            Boon::PrimeBlood      => "Prime Blood",
+            Boon::ShadowStart     => "Shadow Start",
+        }
+    }
+
+    pub fn description(self) -> &'static str {
+        match self {
+            Boon::BloodPact       => "+50 max HP. Take 2 HP damage entering each room.",
+            Boon::ChaosBlessing   => "All chaos rolls biased +0.15. The math likes you.",
+            Boon::GoldVein        => "Start with 200 gold. Someone's loss is your gain.",
+            Boon::ScholarGift     => "Start with 3 extra chaos-generated spells.",
+            Boon::WarriorBlessing => "+20 Force, +15 Vitality. Mathematically swole.",
+            Boon::LuckyBirth      => "+30 Luck. Gain 5 gold every room you clear.",
+            Boon::EntropicSoul    => "2× Entropy + Mana, half Vitality. High risk, higher chaos.",
+            Boon::CrystalSkin     => "Begin with an 80 HP shield. The math loves you (for now).",
+            Boon::MathSavant      => "All spell damage ×1.75. The equations submit to your will.",
+            Boon::VoidTouched     => "All stats ×1.5. Chaos events also affect you (they're bigger).",
+            Boon::PrimeBlood      => "Each kill: +1 to your highest stat. Growth is inevitable.",
+            Boon::ShadowStart     => "Start at 50% HP. All XP gained ×3. Death is the best teacher.",
+        }
+    }
+
+    pub fn color_code(self) -> &'static str {
+        match self {
+            Boon::BloodPact | Boon::ShadowStart => "\x1b[31m",
+            Boon::ChaosBlessing | Boon::EntropicSoul | Boon::VoidTouched => "\x1b[35m",
+            Boon::GoldVein | Boon::LuckyBirth => "\x1b[33m",
+            Boon::ScholarGift | Boon::MathSavant => "\x1b[36m",
+            Boon::WarriorBlessing | Boon::PrimeBlood => "\x1b[32m",
+            Boon::CrystalSkin => "\x1b[34m",
+        }
+    }
+
+    /// Pick 3 unique random boons from the full set.
+    pub fn random_three(seed: u64) -> [Boon; 3] {
+        use Boon::*;
+        const ALL: [Boon; 12] = [
+            BloodPact, ChaosBlessing, GoldVein, ScholarGift, WarriorBlessing,
+            LuckyBirth, EntropicSoul, CrystalSkin, MathSavant, VoidTouched,
+            PrimeBlood, ShadowStart,
+        ];
+        let a = (seed % 12) as usize;
+        let b = ((seed.wrapping_mul(31337)) % 12) as usize;
+        let c = ((seed.wrapping_mul(99991)) % 12) as usize;
+        // Ensure uniqueness
+        let b = if b == a { (b + 1) % 12 } else { b };
+        let c = if c == a || c == b { (c + 2) % 12 } else { c };
+        [ALL[a], ALL[b], ALL[c]]
+    }
+}
+
 // ─── STATUS EFFECTS ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -383,6 +588,13 @@ pub struct Character {
     pub inventory: Vec<crate::items::Item>,
     pub known_spells: Vec<crate::spells::Spell>,
     pub status_effects: Vec<StatusEffect>,
+    // Game settings applied at creation
+    pub difficulty: Difficulty,
+    pub boon: Option<Boon>,
+    // Passive state
+    pub passive_ready: bool,  // Physicist first-attack, Mage crit-amplify, etc.
+    pub spell_damage_mult: f64, // MathSavant boon or Mage crit buff
+    pub xp_mult: f64,          // ShadowStart boon
     // Run statistics
     pub total_damage_dealt: i64,
     pub total_damage_taken: i64,
@@ -430,15 +642,15 @@ impl Character {
         // HP can be very low for cursed rolls — minimum 1 to stay alive
         let max_hp = (50 + stats.vitality * 3 + stats.force).max(1);
 
-        // Starting spells for Mage class
-        let known_spells = if class == CharacterClass::Mage {
-            vec![
-                crate::spells::Spell::generate(seed.wrapping_add(10001)),
-                crate::spells::Spell::generate(seed.wrapping_add(10002)),
-            ]
-        } else {
-            vec![crate::spells::Spell::generate(seed.wrapping_add(10001))]
+        // Starting spells — class-based starting count
+        let spell_count = match class {
+            CharacterClass::Mage | CharacterClass::ChaosMath => 2,
+            CharacterClass::Necromancer => 2,
+            _ => 1,
         };
+        let known_spells: Vec<crate::spells::Spell> = (0..spell_count)
+            .map(|i| crate::spells::Spell::generate(seed.wrapping_add(10001 + i as u64)))
+            .collect();
 
         Character {
             name,
@@ -456,6 +668,11 @@ impl Character {
             inventory: Vec::new(),
             known_spells,
             status_effects: Vec::new(),
+            difficulty: Difficulty::Standard,
+            boon: None,
+            passive_ready: true, // Physicist first-attack starts ready
+            spell_damage_mult: 1.0,
+            xp_mult: 1.0,
             total_damage_dealt: 0,
             total_damage_taken: 0,
             spells_cast: 0,
@@ -560,11 +777,108 @@ impl Character {
     }
 
     pub fn gain_xp(&mut self, xp: u64) {
-        self.xp += xp;
+        let scaled = (xp as f64 * self.xp_mult) as u64;
+        self.xp += scaled;
         let xp_needed = (self.level as u64 * 100) * (self.level as u64 + 1) / 2;
         if self.xp >= xp_needed {
             self.level_up_and_learn_spell();
         }
+    }
+
+    /// Apply difficulty multipliers to HP after character creation.
+    pub fn apply_difficulty(&mut self, difficulty: Difficulty) {
+        self.difficulty = difficulty;
+        let mult = difficulty.player_hp_mult();
+        self.max_hp = ((self.max_hp as f64 * mult) as i64).max(1);
+        self.current_hp = self.max_hp;
+    }
+
+    /// Apply a starting boon's effects to the character.
+    pub fn apply_boon(&mut self, boon: Boon) {
+        use Boon::*;
+        self.boon = Some(boon);
+        match boon {
+            BloodPact => {
+                self.max_hp += 50;
+                self.current_hp = self.max_hp;
+            }
+            ChaosBlessing => {
+                // Stored for later use in chaos rolls (flavor — noted in passive_ready)
+                self.stats.luck += 10;
+            }
+            GoldVein => {
+                self.gold += 200;
+            }
+            ScholarGift => {
+                for i in 0..3u64 {
+                    let spell = crate::spells::Spell::generate(
+                        self.seed.wrapping_add(88888 + i * 31337),
+                    );
+                    self.known_spells.push(spell);
+                }
+            }
+            WarriorBlessing => {
+                self.stats.force += 20;
+                self.stats.vitality += 15;
+                self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+                self.current_hp = self.max_hp;
+            }
+            LuckyBirth => {
+                self.stats.luck += 30;
+            }
+            EntropicSoul => {
+                self.stats.entropy *= 2;
+                self.stats.mana *= 2;
+                self.stats.vitality /= 2;
+                self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+                self.current_hp = self.max_hp;
+            }
+            CrystalSkin => {
+                self.add_status(StatusEffect::Shielded(80));
+            }
+            MathSavant => {
+                self.spell_damage_mult = 1.75;
+            }
+            VoidTouched => {
+                self.stats.vitality = (self.stats.vitality as f64 * 1.5) as i64;
+                self.stats.force = (self.stats.force as f64 * 1.5) as i64;
+                self.stats.mana = (self.stats.mana as f64 * 1.5) as i64;
+                self.stats.cunning = (self.stats.cunning as f64 * 1.5) as i64;
+                self.stats.precision = (self.stats.precision as f64 * 1.5) as i64;
+                self.stats.entropy = (self.stats.entropy as f64 * 1.5) as i64;
+                self.stats.luck = (self.stats.luck as f64 * 1.5) as i64;
+                self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+                self.current_hp = self.max_hp;
+            }
+            PrimeBlood => {
+                // Effect happens on kill — tracked via boon field
+            }
+            ShadowStart => {
+                self.current_hp = (self.max_hp / 2).max(1);
+                self.xp_mult = 3.0;
+            }
+        }
+    }
+
+    /// Called by PrimeBlood boon when an enemy is killed.
+    pub fn prime_blood_tick(&mut self) {
+        // +1 to highest stat
+        let max_val = [
+            self.stats.vitality, self.stats.force, self.stats.mana,
+            self.stats.cunning, self.stats.precision, self.stats.entropy, self.stats.luck,
+        ]
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(0);
+
+        if max_val == self.stats.vitality { self.stats.vitality += 1; self.max_hp += 3; }
+        else if max_val == self.stats.force { self.stats.force += 1; }
+        else if max_val == self.stats.mana { self.stats.mana += 1; }
+        else if max_val == self.stats.cunning { self.stats.cunning += 1; }
+        else if max_val == self.stats.precision { self.stats.precision += 1; }
+        else if max_val == self.stats.entropy { self.stats.entropy += 1; }
+        else { self.stats.luck += 1; }
     }
 
     fn level_up(&mut self) {
@@ -612,7 +926,12 @@ impl Character {
     }
 
     pub fn run_summary(&self) -> Vec<String> {
+        let boon_str = self.boon
+            .map(|b| format!("{}", b.name()))
+            .unwrap_or_else(|| "None".to_string());
         vec![
+            format!("  Difficulty:       {}{}\x1b[0m", self.difficulty.color_code(), self.difficulty.name()),
+            format!("  Starting boon:    {}", boon_str),
             format!("  Floor reached:    {}", self.floor),
             format!("  Enemies slain:    {}", self.kills),
             format!("  Rooms cleared:    {}", self.rooms_cleared),
@@ -622,8 +941,8 @@ impl Character {
             format!("  Items used:       {}", self.items_used),
             format!("  Gold collected:   {}", self.gold),
             format!("  Final level:      {}", self.level),
-            format!("  Power tier:       {}{}{}\x1b[0m",
-                self.power_tier().color_code(), self.power_tier().name(), ""),
+            format!("  Power tier:       {}{}\x1b[0m",
+                self.power_tier().color_code(), self.power_tier().name()),
         ]
     }
 
