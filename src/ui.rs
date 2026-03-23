@@ -571,21 +571,66 @@ pub fn show_combat_menu(
 ) {
     let log: Vec<String> = Vec::new();
     draw_combat_screen(player, enemy, &log, player.floor);
-    println!("  Round {}", round);
+    println!("  {}Round {}{}  |  HP: {}/{}  |  Status: {}{}{}",
+        YELLOW, round, RESET,
+        player.current_hp, player.max_hp,
+        CYAN,
+        if player.status_effects.is_empty() {
+            "None".to_string()
+        } else {
+            player.status_effects.iter().map(|e| e.name()).collect::<Vec<_>>().join(", ")
+        },
+        RESET,
+    );
+    println!();
+    println!("  {}[A]{}ttack  {}[H]{}eavy  {}[D]{}efend  {}[T]{}aunt  {}[F]{}lee",
+        YELLOW, RESET, YELLOW, RESET, YELLOW, RESET, YELLOW, RESET, YELLOW, RESET);
+
+    // Spells
+    if !player.known_spells.is_empty() {
+        print!("  Spells: ");
+        for (i, spell) in player.known_spells.iter().enumerate() {
+            let short = spell.name.chars().take(20).collect::<String>();
+            print!("{}[S{}]{} {} (dmg:{})  ",
+                CYAN, i + 1, RESET, short, spell.damage);
+        }
+        println!();
+    }
+
+    // Inventory items
+    if !player.inventory.is_empty() {
+        print!("  Items:  ");
+        for (i, item) in player.inventory.iter().enumerate().take(4) {
+            let short = item.name.chars().take(16).collect::<String>();
+            print!("{}[I{}]{} {}  ", MAGENTA, i + 1, RESET, short);
+        }
+        println!();
+    }
+    println!();
 }
 
 pub fn read_combat_action() -> crate::combat::CombatAction {
     use crate::combat::CombatAction;
     loop {
         let s = prompt("Action >");
-        match s.to_lowercase().trim() {
+        let trimmed = s.trim().to_lowercase();
+        match trimmed.as_str() {
             "a" | "attack" => return CombatAction::Attack,
             "h" | "heavy" => return CombatAction::HeavyAttack,
             "d" | "defend" => return CombatAction::Defend,
             "t" | "taunt" => return CombatAction::Taunt,
             "f" | "flee" => return CombatAction::Flee,
-            "s" | "spell" => return CombatAction::UseSpell(0),
-            _ => println!("  {}a/h/d/t/f/s{}", DIM, RESET),
+            s if s.starts_with('s') => {
+                // S1, S2, S3... spell selection
+                let idx: usize = s[1..].parse().unwrap_or(1);
+                return CombatAction::UseSpell(idx.saturating_sub(1));
+            }
+            s if s.starts_with('i') => {
+                // I1, I2... item selection
+                let idx: usize = s[1..].parse().unwrap_or(1);
+                return CombatAction::UseItem(idx.saturating_sub(1));
+            }
+            _ => println!("  {}[A]ttack [H]eavy [D]efend [T]aunt [F]lee [S#]pell [I#]tem{}", DIM, RESET),
         }
     }
 }

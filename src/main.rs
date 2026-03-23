@@ -189,6 +189,11 @@ fn run_game(mode: GameMode) {
                     player.floor += 1;
                     if player.floor > max_floor {
                         ui::show_victory(&player);
+                        println!();
+                        for line in player.run_summary() {
+                            println!("{}", line);
+                        }
+                        println!();
                         end_game_score(&player);
                         return;
                     }
@@ -205,19 +210,31 @@ fn run_game(mode: GameMode) {
                     match outcome {
                         RoomOutcome::PlayerDied => {
                             ui::show_game_over(&player);
+                            println!();
+                            for line in player.run_summary() {
+                                println!("{}", line);
+                            }
+                            println!();
                             end_game_score(&player);
                             return;
                         }
                         RoomOutcome::PortalTaken => {
+                            player.rooms_cleared += 1;
                             player.floor += 1;
                             if player.floor > max_floor {
                                 ui::show_victory(&player);
+                                println!();
+                                for line in player.run_summary() {
+                                    println!("{}", line);
+                                }
+                                println!();
                                 end_game_score(&player);
                                 return;
                             }
                             break 'rooms;
                         }
                         RoomOutcome::Continue => {
+                            player.rooms_cleared += 1;
                             if floor.rooms_remaining() > 0 {
                                 floor.advance();
                             }
@@ -279,15 +296,22 @@ fn handle_room(
             println!("  {}You find {} gold!{}", ui::YELLOW, gold_bonus, ui::RESET);
             player.gold += gold_bonus;
 
-            if !item.stat_modifiers.is_empty() {
-                for modifier in &item.stat_modifiers {
-                    apply_stat_modifier(player, &modifier.stat, modifier.value);
+            for modifier in &item.stat_modifiers {
+                apply_stat_modifier(player, &modifier.stat, modifier.value);
+            }
+            player.add_item(item);
+            println!("  {}Item added to inventory! (Use [I#] in combat){}", ui::GREEN, ui::RESET);
+
+            // 25% chance to also find a spell scroll
+            if seed % 4 == 0 {
+                let spell = chaos_rpg::spells::Spell::generate(seed.wrapping_add(54321));
+                println!();
+                println!("  {}+ SPELL SCROLL FOUND +{}", ui::CYAN, ui::RESET);
+                for line in spell.display_box() {
+                    println!("  {}", line);
                 }
-                println!(
-                    "  {}Item effects applied to your stats!{}",
-                    ui::GREEN,
-                    ui::RESET
-                );
+                player.add_spell(spell);
+                println!("  {}Spell learned! Use [S#] in combat.{}", ui::CYAN, ui::RESET);
             }
 
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));

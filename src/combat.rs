@@ -4,7 +4,7 @@
 //! mathematical algorithms. No dice. Pure chaos.
 
 use crate::chaos_pipeline::{biased_chaos_roll, chaos_roll_verbose, roll_damage, ChaosRollResult};
-use crate::character::{Character, CharacterClass};
+use crate::character::{Character, CharacterClass, StatBlock};
 use crate::enemy::Enemy;
 use serde::{Deserialize, Serialize};
 
@@ -280,12 +280,102 @@ pub fn resolve_action(
             }
         }
 
-        CombatAction::UseSpell(_) | CombatAction::UseItem(_) => {
-            // Handled by game loop with access to spell/item lists
-            // Return a placeholder chaos event
-            events.push(CombatEvent::ChaosEvent {
-                description: "Chaos energy crackles through the air...".to_string(),
-            });
+        CombatAction::UseSpell(idx) => {
+            if let Some(spell) = player.known_spells.get(idx).cloned() {
+                let stat_val = get_stat_by_name(&player.stats, &spell.scaling_stat);
+                let mut damage = spell.calc_damage(stat_val);
+
+                // Chaos roll modifies effectiveness
+                let spell_roll = chaos_roll_verbose(player.stats.mana as f64 * 0.01, seed);
+                state.last_roll = Some(spell_roll.clone());
+
+                let backfired = spell_roll.is_catastrophe();
+                if backfired {
+                    // Spell backfires: damage hits player
+                    let self_damage = damage.abs().min(player.current_hp - 1).max(1);
+                    player.take_damage(self_damage);
+                    player.spells_cast += 1;
+                    events.push(CombatEvent::SpellCast {
+                        name: spell.name.clone(),
+                        damage: self_damage,
+                        backfired: true,
+                    });
+                } else {
+                    if spell_roll.is_critical() {
+                        damage = (damage as f64 * 1.5) as i64;
+                    }
+                    // Negative damage heals the enemy (chaotic spells)
+                    if damage >= 0 {
+                        enemy.hp = (enemy.hp - damage).max(0);
+                        player.total_damage_dealt += damage;
+                    } else {
+                        // Negative damage = heal self
+                        player.heal(damage.abs() / 4);
+                    }
+                    player.spells_cast += 1;
+                    events.push(CombatEvent::SpellCast {
+                        name: spell.name.clone(),
+                        damage: damage.abs(),
+                        backfired: false,
+                    });
+
+                    // Side effect: apply status based on spell side effect text
+                    if spell.side_effect.contains("burning") || spell.side_effect.contains("fire") {
+                        player.add_status(crate::character::StatusEffect::Blessed(2));
+                        events.push(CombatEvent::StatusApplied { name: "BLESSED (2 turns)".to_string() });
+                    }
+                }
+            } else {
+                events.push(CombatEvent::ChaosEvent {
+                    description: "No spell at that index. The void laughs at you.".to_string(),
+                });
+            }
+        }
+
+        CombatAction::UseItem(idx) => {
+            if let Some(item) = player.use_item(idx) {
+                // Items used in combat: apply stat modifiers and/or heal
+                let mut heal_amount = 0i64;
+                for modifier in &item.stat_modifiers {
+                    match modifier.stat.to_lowercase().as_str() {
+                        "vitality" => {
+                            player.stats.vitality += modifier.value;
+                            player.max_hp = 50 + player.stats.vitality * 3 + player.stats.force;
+                            heal_amount += modifier.value * 3;
+                        }
+                        "force" => {
+                            player.stats.force += modifier.value;
+                            player.max_hp = 50 + player.stats.vitality * 3 + player.stats.force;
+                        }
+                        "mana" => player.stats.mana += modifier.value,
+                        "cunning" => player.stats.cunning += modifier.value,
+                        "precision" => player.stats.precision += modifier.value,
+                        "entropy" => player.stats.entropy += modifier.value,
+                        "luck" => player.stats.luck += modifier.value,
+                        _ => {}
+                    }
+                }
+                // Weapons deal damage; non-weapons heal
+                if item.is_weapon {
+                    let weapon_dmg = item.damage_or_defense.abs().max(1);
+                    enemy.hp = (enemy.hp - weapon_dmg).max(0);
+                    player.total_damage_dealt += weapon_dmg;
+                    events.push(CombatEvent::PlayerAttack { damage: weapon_dmg, is_crit: false });
+                } else {
+                    let base_heal = item.damage_or_defense.abs().max(0) / 5 + heal_amount.max(0);
+                    if base_heal > 0 {
+                        player.heal(base_heal);
+                        events.push(CombatEvent::PlayerHealed { amount: base_heal });
+                    }
+                }
+                events.push(CombatEvent::ChaosEvent {
+                    description: format!("Used {}! ({})", item.name, item.special_effect),
+                });
+            } else {
+                events.push(CombatEvent::ChaosEvent {
+                    description: "No item at that index. Your pockets are empty.".to_string(),
+                });
+            }
         }
     }
 
@@ -348,6 +438,19 @@ pub fn resolve_action(
     }
 
     (events, CombatOutcome::Ongoing)
+}
+
+fn get_stat_by_name(stats: &StatBlock, name: &str) -> i64 {
+    match name.to_lowercase().as_str() {
+        "vitality" => stats.vitality,
+        "force" => stats.force,
+        "mana" => stats.mana,
+        "cunning" => stats.cunning,
+        "precision" => stats.precision,
+        "entropy" => stats.entropy,
+        "luck" => stats.luck,
+        _ => 50, // fallback
+    }
 }
 
 fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u64) -> CombatEvent {
