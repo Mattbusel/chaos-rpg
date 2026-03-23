@@ -21,14 +21,10 @@ Pre-built binaries are attached to every [GitHub Release](https://github.com/Mat
 | **Graphical** (OpenGL window) | Windows | Double-click `chaos-rpg-graphical-windows.exe` |
 | **Graphical** (OpenGL window) | Linux | `chmod +x chaos-rpg-graphical-linux && ./chaos-rpg-graphical-linux` |
 | **Graphical** (OpenGL window) | macOS | `chmod +x chaos-rpg-graphical-macos && ./chaos-rpg-graphical-macos` |
-| **Web/Native** (macroquad) | Windows | `chaos-rpg-web-windows.exe` |
-| **Web** (WASM) | Browser | Serve `chaos-rpg-web.wasm` + `index.html` via any HTTP server |
 
-> **Windows tip:** Use [Windows Terminal](https://aka.ms/terminal) for the best color experience on the TUI frontend. The old `cmd.exe` works but looks worse.
+> **Windows tip:** Use [Windows Terminal](https://aka.ms/terminal) for the best color experience on the TUI frontend.
 
 > **macOS tip:** If you get "unidentified developer", right-click → Open, or run `xattr -d com.apple.quarantine ./chaos-rpg-terminal-macos`.
-
-A legacy single-binary is also kept at `dist/chaos-rpg.exe` in the repo for quick access.
 
 ---
 
@@ -47,7 +43,7 @@ git clone https://github.com/Mattbusel/chaos-rpg
 cd chaos-rpg
 ```
 
-#### Terminal frontend (ratatui TUI — recommended)
+#### Terminal frontend (ratatui TUI)
 
 ```bash
 cargo run --release -p chaos-rpg
@@ -57,20 +53,6 @@ cargo run --release -p chaos-rpg
 
 ```bash
 cargo run --release -p chaos-rpg-graphical
-```
-
-#### Web / macroquad frontend (native)
-
-```bash
-cargo run --release -p chaos-rpg-web
-```
-
-#### Web frontend → WASM
-
-```bash
-rustup target add wasm32-unknown-unknown
-cargo build --release -p chaos-rpg-web --target wasm32-unknown-unknown
-# Then serve target/wasm32-unknown-unknown/release/chaos-rpg-web.wasm + an index.html
 ```
 
 #### Build everything at once
@@ -98,11 +80,23 @@ Same seed → same character stats, same enemies, same loot, every time. Share c
 
 ---
 
+## Visual Themes (Graphical Frontend)
+
+Press **`[T]`** on the title screen to cycle through five hand-crafted color palettes:
+
+| Theme | Vibe |
+|-------|------|
+| **VOID PROTOCOL** | Deep space violet/indigo with electric blue highlights |
+| **BLOOD PACT** | Gothic crimson on near-black, ember orange accents |
+| **EMERALD ENGINE** | Matrix green circuit-board geometry on dark canvas |
+| **SOLAR FORGE** | Amber/gold desert heat, alchemical fire |
+| **GLACIAL ABYSS** | Crystalline ice blue, absolute zero precision |
+
+All gradient HP/mana bars, double-line borders, animated cursors, and panel titles adapt to the active theme.
+
+---
+
 ## Tutorial
-
-### First Launch
-
-When you start the game you land on the **title screen**. Use arrow keys (TUI) or mouse (graphical/web) to navigate. Select **New Game**.
 
 ### Character Creation
 
@@ -120,6 +114,10 @@ Pick a class, background, and difficulty. Stats are rolled by chaining a Destiny
 | Alchemist | Items and potions grant 50% more effect |
 | Paladin | Regenerate (3 + VIT/20) HP at start of each round |
 | VoidWalker | ENTROPY% chance to phase through any attack |
+| Warlord | Commands a party of soldiers; morale affects stats |
+| Trickster | Illusion-based skills; confusion attacks |
+| Runesmith | Inscribes weapons mid-combat for bonus effects |
+| Chronomancer | Manipulates action order; time-dilation spells |
 
 **Backgrounds:** Scholar (+mana/cunning), Wanderer (balanced), Gladiator (+force/vitality), Outcast (+entropy/luck)
 
@@ -137,6 +135,8 @@ Each floor is a procedurally generated map of rooms. Navigate with arrow keys or
 | `$` | Shop | Spend gold on items and spells. |
 | `>` | Stairs | Descend. Enemies scale harder. |
 | `B` | Boss | Boss room. Very bad. Very rewarding. |
+| `C` | Crafting | Combine items at a workbench. |
+| `N` | NPC | Merchant, questgiver, or faction agent. |
 
 ### Combat
 
@@ -156,7 +156,6 @@ Round structure:
 | `A` | Attack | Basic attack. Scales with force stat. |
 | `H` | Heal | Use a health item from inventory. |
 | `D` | Defend | Raise shield; reduce incoming damage this round. |
-| `T` | Status | Open equipment/status screen mid-combat. |
 | `F` | Flee | Luck + cunning roll to escape. Fails often on high floors. |
 | `1–9` | Spell | Cast a known spell. Costs mana. Crits apply class bonuses. |
 | `I` | Item | Use a non-healing item (bomb, scroll, etc.). |
@@ -181,8 +180,6 @@ The **Engine Trace panel** in the TUI shows every step in real time during comba
 
 Every kill adds 1 corruption stack. Every 50 stacks, the chaos pipeline gains a permanent mutation — shifted seeds, altered weights. By stage 4 you are no longer playing the same game. By stage 8, the math is unrecognizable.
 
-Corruption stage and progress are shown on the character sheet once they begin.
-
 ### The Nemesis System
 
 If you flee from an enemy or barely survive a fight, that enemy may be **promoted to Nemesis**:
@@ -204,12 +201,17 @@ The 12 unique bosses include:
 - **The Recursive Lich** — heals for a fraction of all damage dealt to it
 - *(and 7 more)*
 
-### Leveling Up
+### Factions & World Map
 
-Gain XP from combat. On level-up:
-- All stats increase (amount based on chaos roll, not a fixed table)
-- You learn a new spell
-- You receive skill points for the **Passive Tree** (Path of Exile-style node grid)
+The world map spans multiple regions, each controlled by a faction. Reputation with each faction affects:
+- Shop prices and available stock
+- NPC dialogue options
+- Whether guards let you pass or attack on sight
+- Faction-exclusive quests and rewards
+
+### Party System
+
+Recruit NPCs as party members. Each has their own class, stats, and morale. Party morale affects combat performance — lead well or watch them flee.
 
 ### Items & Crafting
 
@@ -221,6 +223,10 @@ Iron Sword    + Fire Gem     →  Flameblade (+fire damage on attacks)
 ```
 
 Full recipe list in [`MATH_MANIFESTO.md`](MATH_MANIFESTO.md).
+
+### Audio
+
+The game synthesizes all sound procedurally at startup — no audio files bundled. Every SFX (attacks, spells, level-up fanfares, death stingers) and music loop (menu, exploration, combat, boss, cursed floor) is built from oscillators, ADSR envelopes, and filters seeded from the current floor. Audio is optional — the game runs silently if no audio device is found.
 
 ### Saving & Scoreboard
 
@@ -248,40 +254,36 @@ chaos-rpg/
 │       ├── passive_tree.rs      skill tree nodes
 │       ├── crafting.rs          recipe system
 │       ├── scoreboard.rs        score persistence
-│       ├── io_util.rs           ANSI constants + prompt() for non-UI use
-│       └── ...                  (30+ modules total)
+│       ├── faction_system.rs    faction reputation + world control
+│       ├── party_system.rs      multi-character party management
+│       ├── audio_events.rs      audio event enum + music state machine types
+│       ├── audio_synth.rs       procedural oscillator/ADSR synthesizer
+│       └── ...                  (40+ modules total)
+│
+├── audio/                   # chaos-rpg-audio — rodio playback backend
+│   └── src/
+│       ├── lib.rs               AudioSystem: mpsc channel + background thread
+│       ├── sound_bank.rs        pre-generated WAV buffers for all SFX
+│       └── music_system.rs      state-machine music transitions + looping
 │
 ├── terminal/                # ratatui TUI frontend
 │   └── src/
-│       ├── main.rs              game loop, screen routing
+│       ├── main.rs              game loop, screen routing, thread-local audio
 │       ├── ui.rs                menus, character sheet, floor nav (ANSI)
 │       └── ratatui_screens.rs   full ratatui layout (combat, engine trace,
 │                                Unicode portraits, HP bars, scoreboard)
 │
 ├── graphical/               # bracket-lib CP437 OpenGL frontend
 │   └── src/
-│       ├── main.rs              game loop, all 6 screens
-│       ├── renderer.rs          titled-box and progress-bar helpers
-│       ├── sprites.rs           CP437 sprite definitions (player + enemies)
+│       ├── main.rs              game loop, all screens
+│       ├── renderer.rs          double-box, gradient bars, animated helpers
+│       ├── theme.rs             5 visual themes (VOID/BLOOD/EMERALD/SOLAR/GLACIAL)
+│       ├── sprites.rs           CP437 sprite definitions
 │       └── ui_overlay.rs        damage floats, tooltips, status banners
-│
-├── web/                     # macroquad frontend — native desktop + WASM
-│   └── src/
-│       └── main.rs              full game loop, particle system,
-│                                immediate-mode 2D UI, damage floats
-│
-├── assets/
-│   ├── tilesets/                CP437 and custom PNG tilesets
-│   ├── sprites/classes/         per-class player sprites
-│   ├── sprites/enemies/         enemy sprites
-│   └── fonts/                   bitmap fonts
-│
-├── dist/
-│   └── chaos-rpg.exe            pre-built Windows binary (legacy)
 │
 ├── .github/workflows/
 │   ├── ci.yml                   test + check on every push
-│   └── release.yml              build all 3 frontends × 3 platforms + WASM on tag
+│   └── release.yml              build both frontends × 3 platforms on tag
 │
 └── MATH_MANIFESTO.md        deep-dive on every algorithm used
 ```
@@ -305,6 +307,5 @@ PRs welcome. Rules:
 4. `cargo test --workspace` must pass before submitting.
 
 ---
-
 
 MIT

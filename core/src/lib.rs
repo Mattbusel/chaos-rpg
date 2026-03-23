@@ -48,3 +48,5 @@ pub mod party_system;
 pub mod class_system;
 pub mod dungeon_generator_v2;
 pub mod dialogue_system;
+pub mod map_generator;
+pub mod merchant_system;

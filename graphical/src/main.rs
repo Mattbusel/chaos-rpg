@@ -29,6 +29,8 @@ mod sprites;
 mod theme;
 mod ui_overlay;
 
+use theme::{Theme, THEMES};
+
 // ─── GAME MODE ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -864,265 +866,383 @@ impl GameState for State {
 
 // ─── DRAW HELPERS ─────────────────────────────────────────────────────────────
 
-fn hbar(ctx: &mut BTerm, x: i32, y: i32, w: i32, cur: i64, max: i64, fc: (u8,u8,u8)) {
-    let f = if max > 0 { ((cur * w as i64) / max.max(1)).clamp(0, w as i64) as i32 } else { 0 };
-    for i in 0..w {
-        let ch  = if i < f { 219u16 } else { 176u16 };
-        let col = if i < f { RGB::named(fc) } else { RGB::named(DARK_GRAY) };
-        ctx.set(x + i, y, col, RGB::named(BLACK), ch);
-    }
-}
+use renderer::{
+    draw_panel, draw_subpanel, draw_bar_gradient, draw_bar_solid,
+    print_t, print_center, print_hint, draw_separator,
+    print_selectable, draw_minimap_cell, stat_line,
+    MinimapState, cursor_char,
+};
 
-fn hp_col(pct: f32) -> (u8,u8,u8) {
-    if pct > 0.6 { GREEN } else if pct > 0.3 { YELLOW } else { RED }
-}
-
-fn room_color(rt: &RoomType) -> (u8,u8,u8) {
+fn room_col(rt: &RoomType, t: &theme::Theme) -> (u8,u8,u8) {
     match rt {
-        RoomType::Combat        => RED,
-        RoomType::Boss          => (200, 0, 0),
-        RoomType::Treasure      => YELLOW,
-        RoomType::Shop          => CYAN,
-        RoomType::Shrine        => MAGENTA,
-        RoomType::Trap          => ORANGE,
-        RoomType::Portal        => (100, 200, 255),
-        RoomType::Empty         => DARK_GRAY,
-        RoomType::ChaosRift     => (180, 0, 255),
-        RoomType::CraftingBench => (100, 255, 100),
+        RoomType::Combat        => t.danger,
+        RoomType::Boss          => (min_u8(t.danger.0, 200), 0, 0),
+        RoomType::Treasure      => t.gold,
+        RoomType::Shop          => t.accent,
+        RoomType::Shrine        => (180, 80, 220),
+        RoomType::Trap          => t.warn,
+        RoomType::Portal        => t.mana,
+        RoomType::Empty         => t.muted,
+        RoomType::ChaosRift     => t.xp,
+        RoomType::CraftingBench => t.success,
     }
 }
 
-// ─── TITLE ────────────────────────────────────────────────────────────────────
+fn min_u8(a: u8, b: u8) -> u8 { if a < b { a } else { b } }
+
+// ─── SCREENS ──────────────────────────────────────────────────────────────────
 
 impl State {
-    fn draw_title(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(30, 4,  yel, bg, "  ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗");
-        ctx.print_color(30, 5,  yel, bg, " ██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝");
-        ctx.print_color(30, 6,  col, bg, " ██║     ███████║███████║██║   ██║███████╗ ");
-        ctx.print_color(30, 7,  col, bg, " ╚██████╗██║  ██║██║  ██║╚██████╔╝███████║");
-        ctx.print_color(30, 8,  col, bg, "  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚══════╝");
-        ctx.print_color(38, 10, dim, bg, "R P G   —   Where Math Goes To Die");
-        ctx.print_color(28, 13, RGB::named(MAGENTA), bg, "Graphical Edition — Fullscreen");
+    // ── TITLE ─────────────────────────────────────────────────────────────────
 
-        let opts = ["  New Game","  Scoreboard","  Quit"];
-        let ox = 46i32; let oy = 22i32;
-        ctx.draw_box(ox-2, oy-2, 32, opts.len() as i32+3, col, bg);
+    fn draw_title(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let brd = RGB::from_u8(t.border.0,  t.border.1,  t.border.2);
+        let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let sel = RGB::from_u8(t.selected.0,t.selected.1,t.selected.2);
+
+        // Fill background
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "", &t);
+
+        // Animated banner pulse
+        let pulse = ((self.frame as f32 * 0.04).sin() * 0.15 + 0.85) as f32;
+        let ph = (t.heading.0 as f32 * pulse) as u8;
+        let pg = (t.heading.1 as f32 * pulse) as u8;
+        let pb = (t.heading.2 as f32 * pulse) as u8;
+        let pulsed = RGB::from_u8(ph, pg, pb);
+
+        ctx.print_color(27, 4,  pulsed, bg, " ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗");
+        ctx.print_color(27, 5,  pulsed, bg, "██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝");
+        ctx.print_color(27, 6,  hd,     bg, "██║     ███████║███████║██║   ██║███████╗");
+        ctx.print_color(27, 7,  hd,     bg, "╚██████╗██║  ██║██║  ██║╚██████╔╝███████║");
+        ctx.print_color(27, 8,  hd,     bg, " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝");
+
+        ctx.print_color(27, 9,  dim, bg, "        R P G    ─    Where Math Goes To Die");
+
+        // Decorative separator
+        draw_separator(ctx, 5, 11, 110, &t);
+
+        ctx.print_color(28, 12, ac, bg, "Graphical Edition  ·  Fullscreen  ·  All Systems");
+
+        // Theme name badge bottom-right
+        let tname = format!(" Theme: {} [T] ", t.name);
+        ctx.print_color(119 - tname.len() as i32 - 1, 47, dim, bg, &tname);
+
+        // Menu box
+        let ox = 44i32; let oy = 20i32;
+        draw_subpanel(ctx, ox - 3, oy - 2, 36, 9, "MAIN MENU", &t);
+
+        let opts = ["New Game", "Scoreboard", "Quit"];
         for (i, opt) in opts.iter().enumerate() {
-            let (fg, pfx) = if i == self.selected_menu { (RGB::named(WHITE), "►") } else { (dim, " ") };
-            ctx.print_color(ox, oy + i as i32, fg, bg, &format!("{} {}", pfx, opt));
+            print_selectable(ctx, ox, oy + i as i32 * 2, i == self.selected_menu, opt, self.frame, &t);
         }
-        ctx.print_color(4, 46, dim, bg, "↑↓ Navigate   Enter Select   Q Quit");
+
+        // Hint bar
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 4, 46, "↑↓", " Navigate   ", &t);
+        print_hint(ctx, 22, 46, "Enter", " Select   ", &t);
+        print_hint(ctx, 40, 46, "T", " Theme   ", &t);
+        print_hint(ctx, 52, 46, "Q", " Quit", &t);
+
+        // Tagline
+        ctx.print_color(4, 47, dim, bg, &format!("\"{}\"", t.tagline));
     }
 
-    // ─── MODE SELECT ──────────────────────────────────────────────────────────
+    // ── MODE SELECT ───────────────────────────────────────────────────────────
 
     fn draw_mode_select(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(44, 2, yel, bg, "─── SELECT MODE ───");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "SELECT MODE", &t);
+
         let modes = [
-            ("Story Mode",    "10 floors. A complete narrative arc."),
-            ("Infinite Mode", "Descend forever. Score for the leaderboard."),
-            ("Daily Seed",    "Same seed for all players today. Race to top."),
+            ("Story Mode",    "10 floors. A complete narrative arc with a final boss.",        "★ Recommended for newcomers"),
+            ("Infinite Mode", "Descend forever. The math gets worse the deeper you go.",       "∞ Score for the global leaderboard"),
+            ("Daily Seed",    "Everyone plays the same dungeon today. Compare your score.",    "◈ Resets at UTC midnight"),
         ];
-        for (i, (name, desc)) in modes.iter().enumerate() {
-            let y = 10 + i as i32 * 6;
-            let (fg, pfx) = if i == self.mode_cursor { (RGB::named(WHITE), "►") } else { (dim, " ") };
-            ctx.print_color(20, y,   fg, bg, &format!("{} {}", pfx, name));
-            ctx.print_color(22, y+1, dim, bg, desc);
+
+        for (i, (name, desc, hint)) in modes.iter().enumerate() {
+            let y = 10 + i as i32 * 10;
+            let is_sel = i == self.mode_cursor;
+            let bx = 15i32;
+            if is_sel {
+                draw_subpanel(ctx, bx - 2, y - 1, 90, 7, "", &t);
+            }
+            print_selectable(ctx, bx, y, is_sel, name, self.frame, &t);
+            ctx.print_color(bx + 2, y + 2, dim, bg, desc);
+            ctx.print_color(bx + 2, y + 4, if is_sel { ac } else { dim }, bg, hint);
         }
-        ctx.print_color(4, 46, dim, bg, "↑↓ Navigate   Enter Select   Esc Back");
+
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 4, 46, "↑↓", " Navigate   ", &t);
+        print_hint(ctx, 22, 46, "Enter", " Select   ", &t);
+        print_hint(ctx, 38, 46, "Esc", " Back", &t);
     }
 
-    // ─── CHAR CREATION ────────────────────────────────────────────────────────
+    // ── CHAR CREATION ─────────────────────────────────────────────────────────
 
     fn draw_char_creation(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(44, 2, yel, bg, "─── CHARACTER CREATION ───");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let sel = RGB::from_u8(t.selected.0,t.selected.1,t.selected.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+        let wrn = RGB::from_u8(t.warn.0,   t.warn.1,   t.warn.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
-        ctx.print_color(3, 5, col, bg, "CLASS  ↑↓");
-        ctx.print_color(3, 6, dim, bg, "──────────────────");
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "CHARACTER CREATION", &t);
+
+        // ── Class column
+        draw_subpanel(ctx, 2, 3, 25, 25, "CLASS  ↑↓", &t);
         for (i, (name, _)) in CLASSES.iter().enumerate() {
-            let (fg, pfx) = if i == self.cc_class { (RGB::named(WHITE), "►") } else { (dim, " ") };
-            ctx.print_color(3, 7 + i as i32, fg, bg, &format!("{} {}", pfx, name));
+            print_selectable(ctx, 4, 5 + i as i32 * 2, i == self.cc_class, name, self.frame, &t);
         }
 
+        // Class passive description
         let class = &CLASSES[self.cc_class].1;
-        ctx.print_color(3, 17, col, bg, "PASSIVE");
-        ctx.print_color(3, 18, yel, bg, class.passive_name());
+        draw_subpanel(ctx, 2, 30, 25, 14, "PASSIVE ABILITY", &t);
+        ctx.print_color(4, 32, ac, bg, class.passive_name());
         let desc = class.passive_desc();
-        let mut row = 19i32; let mut line = String::new();
+        let mut row = 34i32;
+        let mut line = String::new();
         for w in desc.split_whitespace() {
-            if line.len() + w.len() + 1 > 34 { ctx.print_color(3, row, dim, bg, &line); line = w.to_string(); row += 1; }
-            else { if !line.is_empty() { line.push(' '); } line.push_str(w); }
+            if line.len() + w.len() + 1 > 20 {
+                ctx.print_color(4, row, dim, bg, &line);
+                line = w.to_string(); row += 1;
+            } else {
+                if !line.is_empty() { line.push(' '); }
+                line.push_str(w);
+            }
         }
-        if !line.is_empty() { ctx.print_color(3, row, dim, bg, &line); }
+        if !line.is_empty() { ctx.print_color(4, row, dim, bg, &line); }
 
-        ctx.print_color(28, 5, col, bg, "BACKGROUND  ←→");
-        ctx.print_color(28, 6, dim, bg, "──────────────────");
+        // ── Background column
+        draw_subpanel(ctx, 30, 3, 25, 12, "BACKGROUND  ←→", &t);
         for (i, (name, _)) in BACKGROUNDS.iter().enumerate() {
-            let (fg, pfx) = if i == self.cc_bg { (RGB::named(WHITE), "►") } else { (dim, " ") };
-            ctx.print_color(28, 7 + i as i32, fg, bg, &format!("{} {}", pfx, name));
+            print_selectable(ctx, 32, 5 + i as i32 * 2, i == self.cc_bg, name, self.frame, &t);
         }
 
-        ctx.print_color(50, 5, col, bg, "DIFFICULTY  Tab");
-        ctx.print_color(50, 6, dim, bg, "──────────────────");
+        // ── Difficulty column
+        draw_subpanel(ctx, 30, 18, 25, 12, "DIFFICULTY  Tab", &t);
+        let diff_colors = [suc, hd, wrn, dng];
         for (i, (name, _)) in DIFFICULTIES.iter().enumerate() {
-            let c = match i { 0 => RGB::named(GREEN), 1 => RGB::named(YELLOW), 2 => RGB::named(ORANGE), _ => RGB::named(RED) };
-            let pfx = if i == self.cc_diff { "►" } else { " " };
-            ctx.print_color(50, 7 + i as i32, c, bg, &format!("{} {}", pfx, name));
+            let is_sel = i == self.cc_diff;
+            let c = if is_sel { sel } else { diff_colors[i] };
+            let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
+            ctx.print_color(32, 20 + i as i32 * 2, c, bg, &format!("{}{}", pfx, name));
         }
 
+        // ── Portrait column
+        draw_subpanel(ctx, 58, 3, 59, 43, "PORTRAIT", &t);
         let portrait = class.ascii_art();
-        ctx.print_color(85, 5, col, bg, "PORTRAIT");
         for (i, l) in portrait.lines().enumerate() {
-            ctx.print_color(85, 7 + i as i32, RGB::named(WHITE), bg, l);
+            ctx.print_color(60, 5 + i as i32, ac, bg, l);
         }
 
-        ctx.print_color(3, 46, col, bg, "[ ENTER ] Continue to Boon Select");
-        ctx.print_color(3, 47, dim, bg, "↑↓=class  ←→=background  Tab=difficulty  Esc=back");
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 4, 46, "↑↓", " Class   ", &t);
+        print_hint(ctx, 18, 46, "←→", " Background   ", &t);
+        print_hint(ctx, 36, 46, "Tab", " Difficulty   ", &t);
+        print_hint(ctx, 54, 46, "Enter", " Confirm   ", &t);
+        print_hint(ctx, 70, 46, "Esc", " Back", &t);
     }
 
-    // ─── BOON SELECT ──────────────────────────────────────────────────────────
+    // ── BOON SELECT ───────────────────────────────────────────────────────────
 
     fn draw_boon_select(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let mag = RGB::named(MAGENTA); let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(40, 2, yel, bg, "─── CHOOSE YOUR BOON ───");
-        ctx.print_color(30, 4, mag, bg, "A gift from the chaos. Choose wisely.");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "CHOOSE YOUR BOON", &t);
+
+        ctx.print_color(30, 3, dim, bg, "A gift from the chaos engine. Only one. Choose wisely.");
+        draw_separator(ctx, 5, 5, 110, &t);
 
         for (i, boon) in self.boon_options.iter().enumerate() {
-            let y = 8 + i as i32 * 8;
-            let (fg, pfx) = if i == self.boon_cursor { (RGB::named(WHITE), "►") } else { (dim, " ") };
-            ctx.print_color(10, y,   fg,  bg, &format!("{} [{}] {}", pfx, i+1, boon.name()));
-            ctx.print_color(12, y+1, dim, bg, boon.description());
+            let y = 8 + i as i32 * 12;
+            let is_sel = i == self.boon_cursor;
+            if is_sel {
+                draw_subpanel(ctx, 8, y - 1, 103, 10, "", &t);
+            }
+            let key = format!("[{}] ", i + 1);
+            ctx.print_color(12, y, if is_sel { ac } else { dim }, bg, &key);
+            print_selectable(ctx, 16, y, is_sel, boon.name(), self.frame, &t);
+            ctx.print_color(16, y + 2, dim, bg, boon.description());
         }
 
-        ctx.print_color(4, 46, col, bg, "[ Enter / 1-3 ] Select   Esc = Back");
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 4, 46, "↑↓ / 1-3", " Select   ", &t);
+        print_hint(ctx, 28, 46, "Enter", " Confirm   ", &t);
+        print_hint(ctx, 44, 46, "Esc", " Back", &t);
     }
 
-    // ─── FLOOR NAV ────────────────────────────────────────────────────────────
+    // ── FLOOR NAV ─────────────────────────────────────────────────────────────
 
     fn draw_floor_nav(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let red = RGB::named(RED); let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+        let mana= RGB::from_u8(t.mana.0,   t.mana.1,   t.mana.2);
 
-        let (pname, pclass, plv, pfloor, pkills, pgold, pxp, php, pmhp, pstatus, pcorruption,
-             pkills_u, prwk) = match &self.player {
+        let (pname, pclass, plv, pfloor, pkills, pgold, pxp, php, pmhp, pstatus,
+             pcorruption, prwk) = match &self.player {
             Some(p) => (p.name.clone(), p.class.name(), p.level, p.floor,
                         p.kills, p.gold, p.xp, p.current_hp, p.max_hp,
-                        p.status_badge_line(), p.corruption, p.kills, p.rooms_without_kill),
+                        p.status_badge_line(), p.corruption, p.rooms_without_kill),
             None => { self.screen = AppScreen::Title; return; }
         };
 
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(3, 2, yel, bg, &format!("FLOOR {}  —  {}  Lv.{} {}", pfloor, pname, plv, pclass));
-        ctx.print_color(3, 3, dim, bg, &format!("Kills: {}  Gold: {}  XP: {}  Corruption: {}", pkills, pgold, pxp, pcorruption));
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "", &t);
 
-        // Cursed floor warning
+        // ── Header bar ────────────────────────────────────────────────────────
+        let floor_str = format!(" FLOOR {}  ·  {}  Lv.{}  {} ",
+            pfloor, pname, plv, pclass);
+        ctx.print_color(2, 1, hd, bg, &floor_str);
+
+        // Cursed floor badge
         if self.is_cursed_floor {
-            ctx.print_color(60, 2, red, bg, "☠ CURSED FLOOR ☠");
-            ctx.print_color(60, 3, dim, bg, "Engine outputs INVERTED");
+            ctx.print_color(85, 1, dng, bg, "☠ CURSED FLOOR — INVERTED ☠");
         }
 
-        // The Hunger warning
+        // Mode badge
+        let mode_str = match self.game_mode {
+            GameMode::Story    => format!("STORY {}/{}", pfloor, 10),
+            GameMode::Infinite => "∞ INFINITE".to_string(),
+            GameMode::Daily    => "◈ DAILY".to_string(),
+        };
+        ctx.print_color(105, 1, ac, bg, &mode_str);
+
+        draw_separator(ctx, 1, 2, 118, &t);
+
+        // ── Left panel: player stats ───────────────────────────────────────────
+        draw_subpanel(ctx, 1, 3, 42, 20, "STATUS", &t);
+
+        let hp_pct = php as f32 / pmhp.max(1) as f32;
+        let hp_c = t.hp_color(hp_pct);
+        stat_line(ctx, 3, 5, "HP  ", &format!("{}/{}", php, pmhp), hp_c, &t);
+        draw_bar_gradient(ctx, 3, 6, 38, php, pmhp, hp_c, t.muted, &t);
+
+        let mp_pct = self.current_mana as f32 / self.max_mana() as f32;
+        let _ = mp_pct;
+        stat_line(ctx, 3, 8, "MP  ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
+        draw_bar_solid(ctx, 3, 9, 38, self.current_mana, self.max_mana(), t.mana, &t);
+
+        stat_line(ctx, 3, 11, "Gold  ", &format!("{}g", pgold), t.gold, &t);
+        stat_line(ctx, 3, 12, "XP    ", &format!("{}", pxp), t.xp, &t);
+        stat_line(ctx, 3, 13, "Kills ", &format!("{}", pkills), t.success, &t);
+        if pcorruption > 0 {
+            stat_line(ctx, 3, 14, "Corruption ", &format!("{}", pcorruption), t.warn, &t);
+        }
+        if !pstatus.is_empty() {
+            ctx.print_color(3, 15, RGB::from_u8(t.xp.0, t.xp.1, t.xp.2), bg,
+                &format!("Status: {}", pstatus));
+        }
+
+        // Hunger / Nemesis warnings
         if pfloor >= 50 && prwk >= 3 {
             let rooms_left = 5u32.saturating_sub(prwk);
-            ctx.print_color(3, 4, red, bg, &format!("THE HUNGER: {} rooms dry. {} more = -5% max HP", prwk, rooms_left));
+            ctx.print_color(3, 17, dng, bg,
+                &format!("HUNGER: {} dry  ({} left)", prwk, rooms_left));
         }
-
-        // Nemesis warning
         if let Some(ref nem) = self.nemesis_record {
-            ctx.print_color(3, 5, red, bg, &format!("☠ NEMESIS: {} lurks (floor {})", nem.enemy_name, nem.floor_killed_at));
+            ctx.print_color(3, 19, dng, bg,
+                &format!("☠ NEMESIS: {}  (fl.{})", nem.enemy_name, nem.floor_killed_at));
         }
 
-        let pp = php as f32 / pmhp.max(1) as f32;
-        ctx.print_color(3, 7,  RGB::named(hp_col(pp)), bg, &format!("HP {}/{}", php, pmhp));
-        hbar(ctx, 3, 8, 50, php, pmhp, hp_col(pp));
-        ctx.print_color(3, 9,  RGB::named(BLUE), bg, &format!("MP {}/{}", self.current_mana, self.max_mana()));
-        hbar(ctx, 3, 10, 50, self.current_mana, self.max_mana(), BLUE);
-        if !pstatus.is_empty() {
-            ctx.print_color(3, 11, RGB::named(MAGENTA), bg, &format!("Status: {}", pstatus));
-        }
-
-        // Minimap
-        ctx.print_color(3, 13, col, bg, "FLOOR MAP");
-        ctx.print_color(3, 14, dim, bg, "─────────────────────────────────────────────────────────────────────");
+        // ── Minimap ───────────────────────────────────────────────────────────
+        draw_subpanel(ctx, 1, 24, 117, 13, "FLOOR MAP", &t);
         if let Some(ref floor) = self.floor {
-            let per_row = 20usize;
+            let per_row = 22usize;
             for (i, room) in floor.rooms.iter().enumerate() {
                 let rx = 3 + (i % per_row) as i32 * 5;
-                let ry = 15 + (i / per_row) as i32 * 2;
+                let ry = 26 + (i / per_row) as i32 * 3;
                 let sym = room.room_type.icon();
-                let (r_col, marker) = if i == floor.current_room {
-                    (RGB::named(WHITE), format!("[{}]", sym.trim_matches(|c| c == '[' || c == ']')))
-                } else if i < floor.current_room {
-                    (dim, "···".to_string())
-                } else {
-                    (RGB::named(room_color(&room.room_type)), sym.to_string())
-                };
-                ctx.print_color(rx, ry, r_col, bg, &marker);
+                let rc = room_col(&room.room_type, &t);
+                let mstate = if i == floor.current_room { MinimapState::Current }
+                             else if i < floor.current_room { MinimapState::Visited }
+                             else { MinimapState::Ahead };
+                draw_minimap_cell(ctx, rx, ry, mstate, rc, sym, &t);
             }
             let current = floor.current();
-            ctx.print_color(3, 27, RGB::named(room_color(&current.room_type)), bg,
-                &format!("Next: {}  —  {}", current.room_type.name(), current.description));
+            let rc = room_col(&current.room_type, &t);
+            ctx.print_color(3, 35,
+                RGB::from_u8(rc.0, rc.1, rc.2), bg,
+                &format!("Next: [{}]  {}  —  {}",
+                    current.room_type.icon().trim_matches(|c| c == '[' || c == ']'),
+                    current.room_type.name(), current.description));
         }
 
-        // Mode banner
-        let mode_str = match self.game_mode {
-            GameMode::Story   => format!("STORY MODE — Floor {}/{}", pfloor, 10),
-            GameMode::Infinite => "INFINITE MODE".to_string(),
-            GameMode::Daily   => "DAILY SEED".to_string(),
-        };
-        ctx.print_color(3, 29, RGB::named(MAGENTA), bg, &mode_str);
-
-        // Recent log
-        ctx.print_color(3, 31, col, bg, "LOG");
-        let log_start = self.combat_log.len().saturating_sub(6);
+        // ── Log panel ─────────────────────────────────────────────────────────
+        draw_subpanel(ctx, 44, 3, 74, 20, "CHAOS LOG", &t);
+        let log_start = self.combat_log.len().saturating_sub(16);
         for (i, line) in self.combat_log[log_start..].iter().enumerate() {
-            ctx.print_color(3, 32 + i as i32, dim, bg, line);
+            let fg = if line.contains("BOSS") || line.contains("☠") { dng }
+                     else if line.contains("Victory") || line.contains("LEVEL") { gld }
+                     else if line.contains('+') { suc }
+                     else { dim };
+            ctx.print_color(46, 5 + i as i32, fg, bg, &line.chars().take(70).collect::<String>());
         }
 
-        // Actions
-        ctx.draw_box(1, 38, 118, 9, col, bg);
-        ctx.print_color(3, 39, col, bg, "ACTIONS");
-        ctx.print_color(3, 40, dim, bg, "[E] Enter room   [C] Character sheet   [S] Scoreboard   [Q] Quit");
+        // ── Actions bar ───────────────────────────────────────────────────────
+        draw_separator(ctx, 1, 38, 118, &t);
+        ctx.print_color(2, 39, hd, bg, "ACTIONS");
+        let y = 40i32;
+        print_hint(ctx, 2, y,   "E",   " Enter Room   ", &t);
+        print_hint(ctx, 20, y,  "C",   " Character   ", &t);
+        print_hint(ctx, 36, y,  "S",   " Scoreboard   ", &t);
+        print_hint(ctx, 52, y,  "Q",   " Quit", &t);
         if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
-            ctx.print_color(3, 41, yel, bg, "[D] Descend to next floor");
+            ctx.print_color(2, y + 1, gld, bg, "  [ D ] Descend to next floor  ▼");
         }
-        ctx.print_color(3, 42, dim, bg, "[×]=Combat  [★]=Treasure  [$]=Shop  [~]=Shrine  [!]=Trap  [B]=Boss");
-        ctx.print_color(3, 43, dim, bg, "[^]=Portal  [ ]=Empty  [∞]=Rift  [⚒]=Crafting");
-        let _ = pkills_u;
+        draw_separator(ctx, 1, 43, 118, &t);
+        ctx.print_color(2, 44, dim, bg, "[×]=Combat  [★]=Treasure  [$]=Shop  [~]=Shrine  [!]=Trap  [B]=Boss  [^]=Portal  [∞]=Rift  [⚒]=Craft");
     }
 
-    // ─── ROOM VIEW ────────────────────────────────────────────────────────────
+    // ── ROOM VIEW ─────────────────────────────────────────────────────────────
 
     fn draw_room_view(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let sel = RGB::from_u8(t.selected.0,t.selected.1,t.selected.2);
+        let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
 
         // Apply effects once
         if !self.room_event.resolved {
             self.room_event.resolved = true;
             let gd = self.room_event.gold_delta;
-            let hd = self.room_event.hp_delta;
+            let hd_val = self.room_event.hp_delta;
             let dt = self.room_event.damage_taken;
             let bonuses: Vec<(&'static str, i64)> = self.room_event.stat_bonuses.clone();
             if let Some(ref mut p) = self.player {
                 if gd != 0 { p.gold += gd; }
-                if hd > 0  { p.heal(hd); }
+                if hd_val > 0  { p.heal(hd_val); }
                 if dt > 0  { p.take_damage(dt); }
                 for (stat, val) in &bonuses { self.apply_stat_modifier(stat, *val); }
             }
-            // Check death from trap/chaos
             if dt > 0 {
                 if let Some(ref p) = self.player {
                     if !p.is_alive() {
@@ -1134,31 +1254,48 @@ impl State {
             }
         }
 
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "", &t);
+        draw_subpanel(ctx, 5, 2, 109, 40, "", &t);
+
         let title = self.room_event.title.clone();
-        ctx.print_color(40, 2, yel, bg, &title);
+        print_center(ctx, 5, 4, 110, t.heading, &t, &title);
+        draw_separator(ctx, 6, 5, 108, &t);
+
         for (i, line) in self.room_event.lines.iter().enumerate() {
-            let fg = if line.starts_with('[') { RGB::named(WHITE) } else { dim };
-            ctx.print_color(5, 5 + i as i32, fg, bg, line);
+            let fg = if line.starts_with('[') { sel }
+                     else if line.starts_with('+') || line.starts_with("You find") { hd }
+                     else { dim };
+            ctx.print_color(8, 7 + i as i32, fg, bg, line);
         }
 
         let has_item  = self.room_event.pending_item.is_some();
         let has_spell = self.room_event.pending_spell.is_some();
         let is_portal = self.room_event.portal_available;
 
-        let y = 40;
-        if has_item  { ctx.print_color(5, y,   RGB::named(WHITE), bg, "[P] Pick up item   [Enter] Leave it"); }
-        if has_spell { ctx.print_color(5, y+1, RGB::named(WHITE), bg, "[L] Learn spell    [Enter] Leave scroll"); }
-        if is_portal { ctx.print_color(5, y,   RGB::named(WHITE), bg, "[P] Step through portal   [Enter] Resist"); }
+        draw_separator(ctx, 6, 40, 108, &t);
+        let ay = 42i32;
+        if has_item  { print_hint(ctx, 8, ay, "[P]", " Pick up item   ", &t); print_hint(ctx, 32, ay, "[Enter]", " Leave it", &t); }
+        if has_spell { print_hint(ctx, 8, ay+1, "[L]", " Learn spell   ", &t); print_hint(ctx, 32, ay+1, "[Enter]", " Leave scroll", &t); }
+        if is_portal { print_hint(ctx, 8, ay, "[P]", " Step through portal   ", &t); print_hint(ctx, 38, ay, "[Enter]", " Resist", &t); }
         if !has_item && !has_spell && !is_portal {
-            ctx.print_color(5, y, RGB::named(WHITE), bg, "[Enter] Continue");
+            print_hint(ctx, 8, ay, "[Enter]", " Continue", &t);
         }
     }
 
-    // ─── COMBAT ───────────────────────────────────────────────────────────────
+    // ── COMBAT ────────────────────────────────────────────────────────────────
 
     fn draw_combat(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let red = RGB::named(RED); let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let mna = RGB::from_u8(t.mana.0,   t.mana.1,   t.mana.2);
+        let xp  = RGB::from_u8(t.xp.0,     t.xp.1,     t.xp.2);
 
         let (pname, pclass, plv, php, pmhp, pstatus) = match &self.player {
             Some(p) => (p.name.clone(), p.class.name(), p.level, p.current_hp, p.max_hp, p.status_badge_line()),
@@ -1169,232 +1306,360 @@ impl State {
             None => { self.screen = AppScreen::FloorNav; return; }
         };
 
-        ctx.draw_box(1, 1, 118, 48, red, bg);
+        ctx.cls_bg(bg);
 
-        // Enemy panel
-        ctx.draw_box(2, 2, 55, 22, red, bg);
-        ctx.print_color(4, 3, red, bg, &format!("{} [{}]", ename, etier));
+        // Combat border pulses danger color
+        draw_panel(ctx, 0, 0, 119, 49, "COMBAT", &t);
+
+        // ── Enemy panel ───────────────────────────────────────────────────────
+        draw_subpanel(ctx, 1, 2, 55, 21, "ENEMY", &t);
+        let boss_lbl = if self.gauntlet_stage > 0 {
+            format!(" GAUNTLET {}/3 ", self.gauntlet_stage)
+        } else if self.is_boss_fight { " ★ BOSS ★ ".to_string() } else { String::new() };
+        if !boss_lbl.is_empty() {
+            ctx.print_color(40, 3, dng, bg, &boss_lbl);
+        }
+        ctx.print_color(3, 4, dng, bg, &format!("{} [{}]", ename, etier));
         let ep = ehp as f32 / emhp.max(1) as f32;
-        ctx.print_color(4, 4, RGB::named(hp_col(ep)), bg, &format!("HP {}/{}", ehp, emhp));
-        hbar(ctx, 4, 5, 50, ehp, emhp, hp_col(ep));
-        if self.is_boss_fight { ctx.print_color(4, 6, red, bg, "★ BOSS"); }
-        if self.gauntlet_stage > 0 {
-            ctx.print_color(4, 7, red, bg, &format!("GAUNTLET {}/3", self.gauntlet_stage));
-        }
-        for (i, line) in esprite.lines().enumerate().take(10) {
-            ctx.print_color(4, 9 + i as i32, dim, bg, line);
+        let ec = t.hp_color(ep);
+        stat_line(ctx, 3, 5, "HP ", &format!("{}/{}", ehp, emhp), ec, &t);
+        draw_bar_gradient(ctx, 3, 6, 50, ehp, emhp, ec, t.muted, &t);
+
+        // Sprite
+        for (i, line) in esprite.lines().enumerate().take(12) {
+            ctx.print_color(3, 8 + i as i32, dim, bg, line);
         }
 
-        // Player panel
-        ctx.draw_box(59, 2, 59, 22, col, bg);
-        ctx.print_color(61, 3, col, bg, &format!("{} Lv.{} {}", pname, plv, pclass));
+        // ── Player panel ──────────────────────────────────────────────────────
+        draw_subpanel(ctx, 58, 2, 60, 21, "PLAYER", &t);
+        ctx.print_color(60, 4, hd, bg, &format!("{} · Lv.{} {}", pname, plv, pclass));
         let pp = php as f32 / pmhp.max(1) as f32;
-        ctx.print_color(61, 4, RGB::named(hp_col(pp)), bg, &format!("HP {}/{}", php, pmhp));
-        hbar(ctx, 61, 5, 54, php, pmhp, hp_col(pp));
-        ctx.print_color(61, 6, RGB::named(BLUE), bg, &format!("MP {}/{}", self.current_mana, self.max_mana()));
-        hbar(ctx, 61, 7, 54, self.current_mana, self.max_mana(), BLUE);
+        let pc = t.hp_color(pp);
+        stat_line(ctx, 60, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
+        draw_bar_gradient(ctx, 60, 6, 55, php, pmhp, pc, t.muted, &t);
+        stat_line(ctx, 60, 7, "MP ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
+        draw_bar_solid(ctx, 60, 8, 55, self.current_mana, self.max_mana(), t.mana, &t);
         if !pstatus.is_empty() {
-            ctx.print_color(61, 8, RGB::named(MAGENTA), bg, &format!("Status: {}", pstatus));
+            ctx.print_color(60, 9, xp, bg, &format!("Status: {}", pstatus));
         }
         if self.is_cursed_floor {
-            ctx.print_color(61, 9, red, bg, "☠ CURSED FLOOR");
+            ctx.print_color(60, 10, dng, bg, "☠ CURSED FLOOR — engines inverted");
         }
 
-        // Spells list
+        // Spells
         if let Some(ref p) = self.player {
-            ctx.print_color(61, 11, yel, bg, "SPELLS (1-8)");
-            for (i, spell) in p.known_spells.iter().enumerate().take(8) {
-                let affordable = self.current_mana >= spell.mana_cost;
-                let fg = if affordable { RGB::named(CYAN) } else { dim };
-                ctx.print_color(61, 12 + i as i32, fg, bg,
-                    &format!("[{}] {} ({}mp)", i+1, spell.name, spell.mana_cost));
+            if !p.known_spells.is_empty() {
+                ctx.print_color(60, 12, ac, bg, "SPELLS  [1-8]");
+                for (i, spell) in p.known_spells.iter().enumerate().take(8) {
+                    let can = self.current_mana >= spell.mana_cost;
+                    let fg = if can { mna } else { dim };
+                    ctx.print_color(60, 13 + i as i32, fg, bg,
+                        &format!("[{}] {:<18} {}mp", i+1, spell.name, spell.mana_cost));
+                }
             }
         }
 
-        // Combat actions
-        ctx.draw_box(2, 25, 116, 8, col, bg);
-        ctx.print_color(4, 26, col, bg, "COMBAT ACTIONS");
-        ctx.print_color(4, 27, dim, bg, "[A] Attack    [H] Heavy Attack    [D] Defend    [T] Taunt    [F] Flee");
-        ctx.print_color(4, 28, dim, bg, "[1-8] Cast Spell   [Q/W/E/R/Y/U/I/O] Use Item 1-8");
+        // ── Actions bar ───────────────────────────────────────────────────────
+        draw_subpanel(ctx, 1, 24, 116, 8, "ACTIONS", &t);
+        let ay = 26i32;
+        print_hint(ctx, 3, ay, "[A]", " Attack   ", &t);
+        print_hint(ctx, 17, ay, "[H]", " Heavy   ", &t);
+        print_hint(ctx, 29, ay, "[D]", " Defend   ", &t);
+        print_hint(ctx, 42, ay, "[T]", " Taunt   ", &t);
+        print_hint(ctx, 53, ay, "[F]", " Flee   ", &t);
+        print_hint(ctx, 63, ay, "[1-8]", " Spells   ", &t);
+        print_hint(ctx, 79, ay, "[Q-O]", " Items", &t);
 
-        // Items
+        // Items row
         if let Some(ref p) = self.player {
-            let item_keys = ["Q","W","E","R","Y","U","I","O"];
-            let mut ix = 4;
+            let keys = ["Q","W","E","R","Y","U","I","O"];
+            let mut ix = 3i32;
             for (i, item) in p.inventory.iter().enumerate().take(8) {
-                ctx.print_color(ix, 29, dim, bg, &format!("[{}]{}", item_keys[i], item.name));
-                ix += item.name.len() as i32 + 5;
-                if ix > 100 { break; }
+                if ix > 110 { break; }
+                let label = format!("[{}]{} ", keys[i], &item.name.chars().take(12).collect::<String>());
+                ctx.print_color(ix, ay + 2, dim, bg, &label);
+                ix += label.len() as i32;
             }
         }
 
-        // Combat log
-        ctx.draw_box(2, 34, 116, 13, dim, bg);
-        ctx.print_color(4, 35, col, bg, "CHAOS LOG");
-        let log_start = self.combat_log.len().saturating_sub(11);
+        // ── Combat log ────────────────────────────────────────────────────────
+        draw_subpanel(ctx, 1, 33, 116, 14, "CHAOS LOG", &t);
+        let log_start = self.combat_log.len().saturating_sub(13);
         for (i, line) in self.combat_log[log_start..].iter().enumerate() {
-            let fg = if line.contains("CRIT") || line.contains("BOSS") { red }
-                     else if line.contains("Victory") || line.contains("+") { yel }
-                     else { dim };
-            ctx.print_color(4, 36 + i as i32, fg, bg, line);
+            let fg = if line.contains("CRIT") || line.contains("BOSS") || line.contains("☠") { dng }
+                     else if line.contains("Victory") || line.contains("LEVEL") { gld }
+                     else if line.contains("heal") || line.contains('+') { suc }
+                     else if line.starts_with("  ") { dim } // engine trace
+                     else { RGB::from_u8(t.primary.0, t.primary.1, t.primary.2) };
+            ctx.print_color(3, 35 + i as i32, fg, bg, &line.chars().take(112).collect::<String>());
         }
     }
 
-    // ─── SHOP ─────────────────────────────────────────────────────────────────
+    // ── SHOP ──────────────────────────────────────────────────────────────────
 
     fn draw_shop(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(44, 2, yel, bg, "─── SHOP ───");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "SHOP", &t);
 
         let pgold = self.player.as_ref().map(|p| p.gold).unwrap_or(0);
-        ctx.print_color(3, 4, yel, bg, &format!("Your gold: {}g", pgold));
+        stat_line(ctx, 3, 3, "Your Gold: ", &format!("{}g", pgold), t.gold, &t);
+        draw_separator(ctx, 1, 4, 118, &t);
 
-        ctx.print_color(3, 6, RGB::named(WHITE), bg,
-            &format!("[H] Healing Potion — {}g (+40 HP)", self.shop_heal_cost));
+        // Heal option
+        let heal_row = 5i32;
+        let can_heal = self.player.as_ref().map(|p| p.gold >= self.shop_heal_cost).unwrap_or(false);
+        ctx.print_color(3, heal_row, if can_heal { suc } else { dim }, bg,
+            &format!("[H] Healing Potion  +40 HP  ─  {}g", self.shop_heal_cost));
+
+        draw_separator(ctx, 1, 7, 118, &t);
 
         for (i, (item, price)) in self.shop_items.iter().enumerate() {
-            let y = 8 + i as i32 * 4;
-            let fg = if i + 1 == self.shop_cursor { RGB::named(WHITE) } else { dim };
-            let pfx = if i + 1 == self.shop_cursor { "►" } else { " " };
-            ctx.print_color(3, y, fg, bg,
-                &format!("{} [{}] {} — {}g  ({})", pfx, i+1, item.name, price, item.rarity.name()));
+            let y = 9 + i as i32 * 5;
+            let is_sel = i + 1 == self.shop_cursor;
+            let can_buy = self.player.as_ref().map(|p| p.gold >= *price).unwrap_or(false);
+            if is_sel { draw_subpanel(ctx, 2, y - 1, 115, 5, "", &t); }
+            let name_col = if is_sel { hd } else { dim };
+            let price_col = if can_buy { gld } else { dim };
+            let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
+            ctx.print_color(3, y, name_col, bg, &format!("{}[{}] {}", pfx, i+1, item.name));
+            ctx.print_color(80, y, price_col, bg, &format!("{}g  ({})", price, item.rarity.name()));
             for (j, m) in item.stat_modifiers.iter().enumerate().take(2) {
-                ctx.print_color(7, y + 1 + j as i32, dim, bg,
-                    &format!("  {:+} {}", m.value, m.stat));
+                let mc = if m.value > 0 { suc } else { dim };
+                ctx.print_color(8, y + 1 + j as i32, mc, bg,
+                    &format!("{:+} {}", m.value, m.stat));
             }
         }
 
-        ctx.print_color(3, 44, dim, bg, "[1-4] Select item   [H] Buy heal   [Enter/0] Leave shop");
-        ctx.print_color(3, 45, dim, bg, "↑↓ Scroll   Enter = Buy selected");
+        draw_separator(ctx, 1, 45, 118, &t);
+        print_hint(ctx, 3, 46, "[1-4]", " Buy item   ", &t);
+        print_hint(ctx, 22, 46, "[H]", " Heal   ", &t);
+        print_hint(ctx, 31, 46, "[Enter/0/Esc]", " Leave", &t);
     }
 
-    // ─── CRAFTING ─────────────────────────────────────────────────────────────
+    // ── CRAFTING ──────────────────────────────────────────────────────────────
 
     fn draw_crafting(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(44, 2, yel, bg, "─── CRAFTING BENCH ───");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "CRAFTING BENCH", &t);
 
         let has_inventory = self.player.as_ref().map(|p| !p.inventory.is_empty()).unwrap_or(false);
         if !has_inventory {
-            ctx.print_color(20, 20, dim, bg, "Your inventory is empty. Nothing to craft.");
-            ctx.print_color(20, 22, dim, bg, "[Esc/Enter] Leave");
+            print_center(ctx, 10, 22, 100, t.dim, &t, "Your inventory is empty. Nothing to craft.");
+            print_hint(ctx, 55, 25, "[Esc/Enter]", " Leave", &t);
             return;
         }
 
         match self.craft_phase {
             CraftPhase::SelectItem => {
-                ctx.print_color(3, 5, col, bg, "Select item to craft (↑↓ navigate, Enter confirm):");
+                draw_subpanel(ctx, 2, 3, 115, 38, "SELECT ITEM TO CRAFT  ↑↓ Navigate · Enter Confirm", &t);
                 if let Some(ref p) = self.player {
                     for (i, item) in p.inventory.iter().enumerate() {
-                        let fg = if i == self.craft_item_cursor { RGB::named(WHITE) } else { dim };
-                        let pfx = if i == self.craft_item_cursor { "►" } else { " " };
-                        ctx.print_color(3, 7 + i as i32, fg, bg,
-                            &format!("{} [{}] {} ({})", pfx, i+1, item.name, item.rarity.name()));
+                        let is_sel = i == self.craft_item_cursor;
+                        print_selectable(ctx, 5, 5 + i as i32 * 2, is_sel,
+                            &format!("[{}] {} · {}", i+1, item.name, item.rarity.name()),
+                            self.frame, &t);
+                        if is_sel {
+                            for (j, m) in item.stat_modifiers.iter().enumerate().take(3) {
+                                let vc = if m.value > 0 { ac } else { dng };
+                                ctx.print_color(10, 6 + i as i32 * 2 + j as i32, vc, bg,
+                                    &format!("{:+} {}", m.value, m.stat));
+                            }
+                        }
                     }
                 }
-                ctx.print_color(3, 44, dim, bg, "↑↓ Navigate   Enter Select item   Esc Leave");
+                draw_separator(ctx, 2, 44, 116, &t);
+                print_hint(ctx, 4, 45, "↑↓", " Navigate   ", &t);
+                print_hint(ctx, 20, 45, "Enter", " Select   ", &t);
+                print_hint(ctx, 35, 45, "Esc", " Leave", &t);
             }
             CraftPhase::SelectOp => {
-                let item_name = self.player.as_ref()
+                let (item_name, item_rarity) = self.player.as_ref()
                     .and_then(|p| p.inventory.get(self.craft_item_cursor))
-                    .map(|i| i.name.clone())
+                    .map(|i| (i.name.clone(), i.rarity.name()))
                     .unwrap_or_default();
-                ctx.print_color(3, 5, yel, bg, &format!("Crafting: {}", item_name));
+
+                ctx.print_color(3, 3, hd, bg, &format!("Crafting: {}", item_name));
+                ctx.print_color(3, 4, dim, bg, &format!("Rarity: {}", item_rarity));
+                draw_separator(ctx, 2, 5, 116, &t);
 
                 let ops = [
-                    ("[1] Reforge",    "Chaos-reroll all stat modifiers"),
-                    ("[2] Augment",    "Add one new chaos-rolled modifier"),
-                    ("[3] Annul",      "Remove one random modifier"),
-                    ("[4] Corrupt",    "Unpredictable chaos effect"),
-                    ("[5] Fuse",       "Double value + upgrade rarity"),
-                    ("[6] EngineLock", "Lock chaos engine into item (costs gold)"),
+                    ("Reforge",    "Chaos-reroll ALL stat modifiers from scratch",     t.warn),
+                    ("Augment",    "ADD one new chaos-rolled modifier",                 t.success),
+                    ("Annul",      "REMOVE one random modifier",                       t.danger),
+                    ("Corrupt",    "Unpredictable chaos effect — anything can happen", t.xp),
+                    ("Fuse",       "DOUBLE all values and upgrade rarity tier",        t.gold),
+                    ("EngineLock", "Lock a chaos engine signature into the item",      t.mana),
                 ];
-                for (i, (key, desc)) in ops.iter().enumerate() {
-                    let fg = if i == self.craft_op_cursor { RGB::named(WHITE) } else { dim };
-                    let pfx = if i == self.craft_op_cursor { "►" } else { " " };
-                    ctx.print_color(3, 8 + i as i32 * 2, fg, bg, &format!("{} {}  — {}", pfx, key, desc));
+                for (i, (name, desc, col)) in ops.iter().enumerate() {
+                    let is_sel = i == self.craft_op_cursor;
+                    let y = 8 + i as i32 * 5;
+                    if is_sel { draw_subpanel(ctx, 3, y - 1, 113, 4, "", &t); }
+                    let fc = RGB::from_u8(col.0, col.1, col.2);
+                    let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
+                    ctx.print_color(5, y, if is_sel { fc } else { dim }, bg,
+                        &format!("{}[{}] {}", pfx, i+1, name));
+                    ctx.print_color(10, y + 1, dim, bg, desc);
                 }
 
                 if !self.craft_message.is_empty() {
-                    ctx.print_color(3, 28, yel, bg, &self.craft_message);
+                    draw_separator(ctx, 2, 38, 116, &t);
+                    ctx.print_color(4, 39, gld, bg, &self.craft_message);
                 }
-                ctx.print_color(3, 44, dim, bg, "↑↓ Navigate   Enter Apply   Esc Back to item list");
+
+                draw_separator(ctx, 2, 44, 116, &t);
+                print_hint(ctx, 4, 45, "↑↓ / 1-6", " Select op   ", &t);
+                print_hint(ctx, 28, 45, "Enter", " Apply   ", &t);
+                print_hint(ctx, 43, 45, "Esc", " Back", &t);
             }
         }
     }
 
-    // ─── GAME OVER ────────────────────────────────────────────────────────────
+    // ── GAME OVER ─────────────────────────────────────────────────────────────
 
     fn draw_game_over(&mut self, ctx: &mut BTerm) {
-        let red = RGB::named(RED); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, red, bg);
-        ctx.print_color(38, 5,  red, bg, "╔══════════════════════════════════════╗");
-        ctx.print_color(38, 6,  red, bg, "║         Y O U   D I E D             ║");
-        ctx.print_color(38, 7,  red, bg, "║   The math has claimed another soul  ║");
-        ctx.print_color(38, 8,  red, bg, "╚══════════════════════════════════════╝");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+
+        ctx.cls_bg(bg);
+        // Danger border
+        ctx.draw_box(0, 0, 119, 49,
+            RGB::from_u8(t.danger.0, t.danger.1, t.danger.2),
+            bg);
+
+        // Flashing "YOU DIED" (pulse every 30 frames)
+        let pulse = if (self.frame / 30) % 2 == 0 { dng } else { hd };
+        ctx.print_color(37, 5,  pulse, bg, "╔══════════════════════════════════════════╗");
+        ctx.print_color(37, 6,  pulse, bg, "║         Y  O  U     D  I  E  D           ║");
+        ctx.print_color(37, 7,  dng,   bg, "║     The mathematics have consumed you.   ║");
+        ctx.print_color(37, 8,  pulse, bg, "╚══════════════════════════════════════════╝");
 
         if let Some(ref p) = self.player {
-            ctx.print_color(20, 12, yel, bg, &format!("{} — {} — Lv.{}", p.name, p.class.name(), p.level));
-            ctx.print_color(20, 13, dim, bg, &format!("Floor {} | Kills: {} | Gold: {} | XP: {}", p.floor, p.kills, p.gold, p.xp));
-            ctx.print_color(20, 14, dim, bg, &format!("Spells cast: {}  Items used: {}  Corruption: {}", p.spells_cast, p.items_used, p.corruption));
-            for (i, line) in p.run_summary().iter().enumerate().take(15) {
-                ctx.print_color(20, 16 + i as i32, dim, bg, line);
+            draw_subpanel(ctx, 10, 11, 99, 24, "RUN SUMMARY", &t);
+            ctx.print_color(12, 13, hd, bg,
+                &format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
+            stat_line(ctx, 12, 14, "Floor  ", &format!("{}", p.floor),  t.warn, &t);
+            stat_line(ctx, 12, 15, "Kills  ", &format!("{}", p.kills),  t.success, &t);
+            stat_line(ctx, 12, 16, "Gold   ", &format!("{}g", p.gold),  t.gold, &t);
+            stat_line(ctx, 12, 17, "XP     ", &format!("{}", p.xp),     t.xp, &t);
+            stat_line(ctx, 12, 18, "Spells ", &format!("{}", p.spells_cast), t.mana, &t);
+            stat_line(ctx, 12, 19, "Corrupt", &format!("{}", p.corruption), t.danger, &t);
+            draw_separator(ctx, 11, 20, 98, &t);
+            for (i, line) in p.run_summary().iter().enumerate().take(12) {
+                ctx.print_color(12, 21 + i as i32, dim, bg, line);
             }
         }
 
         if let Some(ref nem) = self.nemesis_record {
-            ctx.print_color(20, 34, red, bg, &format!("☠ New Nemesis: {} — will appear in your next run.", nem.enemy_name));
+            ctx.print_color(10, 37, dng, bg,
+                &format!("☠  {} is now your Nemesis — they will return stronger.", nem.enemy_name));
         }
 
-        ctx.print_color(38, 44, dim, bg, "[Enter] Return to title   [S] Scoreboard");
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 38, 46, "[Enter]", " Return to title   ", &t);
+        print_hint(ctx, 70, 46, "[S]", " Scoreboard", &t);
     }
 
-    // ─── VICTORY ──────────────────────────────────────────────────────────────
+    // ── VICTORY ───────────────────────────────────────────────────────────────
 
     fn draw_victory(&mut self, ctx: &mut BTerm) {
-        let yel = RGB::named(YELLOW); let col = RGB::named(CYAN);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, yel, bg);
-        ctx.print_color(35, 5,  yel, bg, "╔══════════════════════════════════════════╗");
-        ctx.print_color(35, 6,  yel, bg, "║   ★ V I C T O R Y ★                     ║");
-        ctx.print_color(35, 7,  yel, bg, "║   You survived 10 floors of pure math.   ║");
-        ctx.print_color(35, 8,  yel, bg, "╚══════════════════════════════════════════╝");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+
+        ctx.cls_bg(bg);
+        ctx.draw_box(0, 0, 119, 49, gld, bg);
+
+        // Animated shimmer on victory banner
+        let shimmer_t = (self.frame as f32 * 0.05).sin() * 0.2 + 0.8;
+        let sc = Theme::lerp(t.gold, t.heading, shimmer_t);
+        let shimmer = RGB::from_u8(sc.0, sc.1, sc.2);
+
+        ctx.print_color(33, 5,  shimmer, bg, "╔═══════════════════════════════════════════════╗");
+        ctx.print_color(33, 6,  shimmer, bg, "║   ★  V  I  C  T  O  R  Y  ★                  ║");
+        ctx.print_color(33, 7,  gld,     bg, "║   You solved 10 floors of pure mathematical   ║");
+        ctx.print_color(33, 8,  gld,     bg, "║   chaos. The algorithms bow before you.       ║");
+        ctx.print_color(33, 9,  shimmer, bg, "╚═══════════════════════════════════════════════╝");
+
         if let Some(ref p) = self.player {
-            ctx.print_color(20, 12, col, bg, &format!("{} — {} — Lv.{}", p.name, p.class.name(), p.level));
-            ctx.print_color(20, 13, dim, bg, &format!("Floor {} | Kills: {} | Gold: {} | XP: {}", p.floor, p.kills, p.gold, p.xp));
-            for (i, line) in p.run_summary().iter().enumerate().take(15) {
-                ctx.print_color(20, 15 + i as i32, dim, bg, line);
+            draw_subpanel(ctx, 10, 12, 99, 26, "FINAL STATS", &t);
+            ctx.print_color(12, 14, hd, bg,
+                &format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
+            stat_line(ctx, 12, 15, "Floors    ", &format!("{}", p.floor), t.gold, &t);
+            stat_line(ctx, 12, 16, "Kills     ", &format!("{}", p.kills), t.success, &t);
+            stat_line(ctx, 12, 17, "Gold      ", &format!("{}g", p.gold), t.gold, &t);
+            stat_line(ctx, 12, 18, "XP        ", &format!("{}", p.xp), t.xp, &t);
+            draw_separator(ctx, 11, 19, 98, &t);
+            for (i, line) in p.run_summary().iter().enumerate().take(14) {
+                ctx.print_color(12, 20 + i as i32, if i == 0 { suc } else { dim }, bg, line);
             }
         }
-        ctx.print_color(38, 44, dim, bg, "[Enter] Return to title   [S] Scoreboard");
+
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 38, 46, "[Enter]", " Return to title   ", &t);
+        print_hint(ctx, 70, 46, "[S]", " Scoreboard", &t);
     }
 
-    // ─── SCOREBOARD ───────────────────────────────────────────────────────────
+    // ── SCOREBOARD ────────────────────────────────────────────────────────────
 
     fn draw_scoreboard(&mut self, ctx: &mut BTerm) {
-        let col = RGB::named(CYAN); let yel = RGB::named(YELLOW);
-        let dim = RGB::named(DARK_GRAY); let bg = RGB::named(BLACK);
-        ctx.draw_box(1, 1, 118, 48, col, bg);
-        ctx.print_color(44, 2, yel, bg, "─── SCOREBOARD ───");
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 119, 49, "SCOREBOARD", &t);
 
         let scores = load_scores();
         if scores.is_empty() {
-            ctx.print_color(40, 20, dim, bg, "No scores yet. Play and die bravely.");
+            print_center(ctx, 5, 22, 110, t.dim, &t, "No scores yet. Play and die bravely.");
         } else {
-            ctx.print_color(5, 5, dim, bg, "Rank  Score      Name                Class        Floor  Kills");
-            ctx.print_color(5, 6, dim, bg, "─────────────────────────────────────────────────────────────");
+            ctx.print_color(4, 4, dim, bg,
+                &format!("{:<4} {:<12} {:<22} {:<14} {:<6} {:<6}",
+                    "Rank", "Score", "Name", "Class", "Floor", "Kills"));
+            draw_separator(ctx, 3, 5, 113, &t);
             for (i, s) in scores.iter().enumerate().take(20) {
-                let fg = if i == 0 { yel } else { dim };
-                ctx.print_color(5, 7 + i as i32, fg, bg,
-                    &format!("{:3}.  {:10}  {:20} {:12} {:5}  {}", i+1, s.score, s.name, s.class, s.floor_reached, s.enemies_defeated));
+                let row_col = match i {
+                    0 => gld,
+                    1 => hd,
+                    2 => ac,
+                    _ => dim,
+                };
+                let medal = match i { 0 => "★ ", 1 => "◆ ", 2 => "● ", _ => "  " };
+                ctx.print_color(4, 6 + i as i32, row_col, bg,
+                    &format!("{}{:<3}  {:<12} {:<22} {:<14} {:<6} {}",
+                        medal, i+1, s.score, s.name, s.class, s.floor_reached, s.enemies_defeated));
             }
         }
-        ctx.print_color(5, 46, dim, bg, "[Esc/Q] Back to title");
+
+        draw_separator(ctx, 2, 45, 116, &t);
+        print_hint(ctx, 4, 46, "[Esc/Q]", " Back to title", &t);
     }
 }
 
@@ -1413,6 +1678,7 @@ impl State {
                     1 => self.screen = AppScreen::Scoreboard,
                     _ => ctx.quit(),
                 },
+                VirtualKeyCode::T => self.cycle_theme(),
                 VirtualKeyCode::Q => ctx.quit(),
                 _ => {}
             },
