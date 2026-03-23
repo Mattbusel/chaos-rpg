@@ -64,3 +64,5 @@ pub mod bestiary;
 pub mod quest_system;
 pub mod combat_system;
 pub mod character_creator;
+pub mod dungeon_generator;
+pub mod loot_table;
