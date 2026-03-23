@@ -201,8 +201,7 @@ pub fn resolve_action(
             damage += match player.class {
                 CharacterClass::Berserker => {
                     // Berserker rage: extra damage when low HP
-                    let rage = ((1.0 - player.hp_percent()) * 20.0) as i64;
-                    rage
+                    ((1.0 - player.hp_percent()) * 20.0) as i64
                 }
                 CharacterClass::Ranger => player.stats.precision / 8,
                 _ => 0,

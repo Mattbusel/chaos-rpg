@@ -181,7 +181,7 @@ impl Spell {
             width = inner - 11
         ));
 
-        let mana_sign = if self.mana_cost >= 0 { "" } else { "" };
+        let mana_sign = "";
         let mana_note = if self.mana_cost < 0 {
             " (GIVES mana!)"
         } else {
@@ -210,11 +210,7 @@ impl Spell {
             width = inner - 9
         ));
 
-        let scale_sign = if self.scaling_factor >= 0.0 {
-            "×"
-        } else {
-            "×"
-        };
+        let scale_sign = "×";
         lines.push(format!(
             "{}│   Scales: {} {:.2}{:<w$}│{}",
             cyan,

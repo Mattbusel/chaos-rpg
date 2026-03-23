@@ -53,11 +53,12 @@ fn format_unix_timestamp(secs: u64) -> String {
     let mut year = 1970u32;
     let mut days = days_since_epoch as u32;
     loop {
-        let year_days = if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
-            366
-        } else {
-            365
-        };
+        let year_days =
+            if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) {
+                366
+            } else {
+                365
+            };
         if days < year_days {
             break;
         }
@@ -65,7 +66,7 @@ fn format_unix_timestamp(secs: u64) -> String {
         year += 1;
     }
     let month_days = [31u32, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let is_leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let is_leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
     let mut month = 1u32;
     for &md in &month_days {
         let md = if month == 2 && is_leap { 29 } else { md };

@@ -187,14 +187,14 @@ impl Floor {
         let mut map = String::new();
         for (i, _room) in self.rooms.iter().enumerate() {
             if i < self.current_room {
-                map.push_str("▓");
+                map.push('▓');
             } else if i == self.current_room {
-                map.push_str("◉");
+                map.push('◉');
             } else {
-                map.push_str("░");
+                map.push('░');
             }
             if i + 1 < self.rooms.len() {
-                map.push_str("─");
+                map.push('─');
             }
         }
         map
@@ -215,7 +215,7 @@ pub fn generate_floor(floor_num: u32, seed: u64) -> Floor {
     }
 
     // Override last room to be boss on every 5th floor
-    if floor_num % 5 == 0 {
+    if floor_num.is_multiple_of(5) {
         let last = rooms.last_mut().unwrap();
         last.room_type = RoomType::Boss;
         last.description = "The BOSS chamber. Mathematics itself trembles.".to_string();

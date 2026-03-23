@@ -198,7 +198,7 @@ pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
 
     let hp = ((base_hp as f64 * floor_scale * tier.hp_multiplier()) as i64).max(1);
     let base_damage = ((base_dmg as f64 * floor_scale) as i64).max(1);
-    let attack_modifier = roll_stat(0, 5 + floor as i64 / 2, seed.wrapping_add(30)) as i64;
+    let attack_modifier = roll_stat(0, 5 + floor as i64 / 2, seed.wrapping_add(30));
     let chaos_level = (seed.wrapping_add(floor as u64) as f64 * 1e-13).fract();
 
     let xp = (15 + floor as u64 * 8) * tier.xp_multiplier();
@@ -224,8 +224,8 @@ pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
 }
 
 fn determine_tier(floor: u32, seed: u64) -> EnemyTier {
-    if floor % 5 == 0 {
-        if floor >= 10 && seed % 3 == 0 {
+    if floor.is_multiple_of(5) {
+        if floor >= 10 && seed.is_multiple_of(3) {
             return EnemyTier::Abomination;
         }
         return EnemyTier::Boss;
@@ -243,7 +243,7 @@ fn pick_name_sprite(tier: &EnemyTier, seed: u64) -> (String, &'static str) {
     match tier {
         EnemyTier::Minion => {
             let idx = (seed % MINION_NAMES.len() as u64) as usize;
-            let sprite = if seed % 2 == 0 {
+            let sprite = if seed.is_multiple_of(2) {
                 SPRITE_IMP
             } else {
                 SPRITE_WRAITH
@@ -275,7 +275,7 @@ fn pick_ability(tier: &EnemyTier, seed: u64) -> Option<&'static str> {
             let idx = (seed % SPECIAL_ABILITIES.len() as u64) as usize;
             Some(SPECIAL_ABILITIES[idx])
         }
-        EnemyTier::Elite if seed % 2 == 0 => {
+        EnemyTier::Elite if seed.is_multiple_of(2) => {
             let idx = (seed.wrapping_add(7) % SPECIAL_ABILITIES.len() as u64) as usize;
             Some(SPECIAL_ABILITIES[idx])
         }

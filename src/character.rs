@@ -360,13 +360,13 @@ impl Character {
         let weights = self.class.stat_weights();
         let chaos_mult = (roll.final_value + 1.5).max(0.5);
 
-        self.stats.vitality += (weights.vitality / 20 + 1) as i64 * chaos_mult as i64 + 1;
-        self.stats.force += (weights.force / 20 + 1) as i64 * chaos_mult as i64 + 1;
-        self.stats.mana += (weights.mana / 20 + 1) as i64 * chaos_mult as i64 + 1;
-        self.stats.cunning += (weights.cunning / 20 + 1) as i64 * chaos_mult as i64 + 1;
-        self.stats.precision += (weights.precision / 20 + 1) as i64 * chaos_mult as i64 + 1;
-        self.stats.entropy += (weights.entropy / 20 + 1) as i64 * chaos_mult as i64 + 1;
-        self.stats.luck += (weights.luck / 20 + 1) as i64 * chaos_mult as i64 + 1;
+        self.stats.vitality += (weights.vitality / 20 + 1) * chaos_mult as i64 + 1;
+        self.stats.force += (weights.force / 20 + 1) * chaos_mult as i64 + 1;
+        self.stats.mana += (weights.mana / 20 + 1) * chaos_mult as i64 + 1;
+        self.stats.cunning += (weights.cunning / 20 + 1) * chaos_mult as i64 + 1;
+        self.stats.precision += (weights.precision / 20 + 1) * chaos_mult as i64 + 1;
+        self.stats.entropy += (weights.entropy / 20 + 1) * chaos_mult as i64 + 1;
+        self.stats.luck += (weights.luck / 20 + 1) * chaos_mult as i64 + 1;
 
         // HP scales with vitality
         let old_max = self.max_hp;

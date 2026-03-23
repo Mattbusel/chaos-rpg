@@ -69,7 +69,7 @@ pub fn prime_density_sieve(input: f64, seed: u64) -> f64 {
     let limit = ((start + window) as f64).sqrt() as usize + 1;
     for p in 2..=limit {
         if p < start {
-            let first_mult = if start % p == 0 {
+            let first_mult = if start.is_multiple_of(p) {
                 start
             } else {
                 start + p - (start % p)
@@ -230,8 +230,8 @@ pub fn euler_totient(input: f64, seed: u64) -> f64 {
     let mut m = n;
     let mut p = 2u64;
     while p * p <= m {
-        if m % p == 0 {
-            while m % p == 0 {
+        if m.is_multiple_of(p) {
+            while m.is_multiple_of(p) {
                 m /= p;
             }
             result -= result / p;
@@ -262,7 +262,7 @@ pub fn collatz_chain(input: f64, seed: u64) -> f64 {
     let max_steps = 2000u64;
 
     while n != 1 && steps < max_steps {
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             n /= 2;
         } else {
             n = n.saturating_mul(3).saturating_add(1);

@@ -238,9 +238,8 @@ pub fn draw_combat_screen(
         };
         println!("| {:<w$}|", t, w = w);
     }
-    while log.len() - start < 4 {
+    if log.len() - start < 4 {
         println!("| {:<w$}|", "", w = w);
-        break;
     }
     println_colored(&format!("+{}+", bar), Color::DarkYellow);
     let pbar = hp_bar(player.current_hp, player.max_hp, 16);
@@ -274,8 +273,8 @@ pub fn draw_scoreboard(scores: &[crate::scoreboard::ScoreEntry]) {
         println!("No scores yet. Go get cursed.");
     } else {
         println!(
-            "{:<4} {:<16} {:<12} {:<10} {:<6} {}",
-            "#", "Name", "Class", "Score", "Floor", "Date"
+            "{:<4} {:<16} {:<12} {:<10} {:<6} Date",
+            "#", "Name", "Class", "Score", "Floor"
         );
         println!("{}", "-".repeat(60));
         for (i, s) in scores.iter().enumerate() {
