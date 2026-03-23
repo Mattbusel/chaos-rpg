@@ -1,6 +1,6 @@
 use chaos_rpg::{
     chaos_pipeline::chaos_roll_verbose,
-    character::{Character, CharacterClass},
+    character::{Character, CharacterClass, Difficulty as GameDifficulty},
     combat::{resolve_action, CombatAction, CombatOutcome, CombatState},
     enemy::Enemy,
     items::Item,
@@ -51,9 +51,14 @@ fn run_game(mode: GameMode) {
         ui::show_help();
     }
 
-    let (name, class, background) = ui::create_character_ui();
+    let (name, class, background, game_difficulty): (_, _, _, GameDifficulty) =
+        ui::create_character_ui();
     let seed = current_seed();
-    let mut player = Character::roll_new(name, class, background, seed);
+    let mut player = Character::roll_new(name, class, background, seed, game_difficulty);
+
+    // Boon selection
+    let boon = ui::show_boon_select(seed);
+    player.apply_boon(boon);
 
     ui::clear_screen();
     println!("\n  {}Destiny roll complete.{}", ui::YELLOW, ui::RESET);
@@ -72,6 +77,18 @@ fn run_game(mode: GameMode) {
         }
         CharacterClass::Thief => {
             "Logistic map r=3.9: you are the period-doubling cascade no one sees coming."
+        }
+        CharacterClass::Necromancer => {
+            "The dead remember everything. You remember the equations they used to die."
+        }
+        CharacterClass::Alchemist => {
+            "Chaos is just unoptimized chemistry. You have the formula — and the flask."
+        }
+        CharacterClass::Paladin => {
+            "Order is a lie the universe tells itself. You are the one constant in the storm."
+        }
+        CharacterClass::VoidWalker => {
+            "Between the Mandelbrot set's boundary and infinity, you found a door. You walked through."
         }
     };
     println!("  {}{}{}", ui::MAGENTA, intro, ui::RESET);

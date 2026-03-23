@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 // ─── Tables ──────────────────────────────────────────────────────────────────
 
 const BASE_TYPES: &[&str] = &[
+    // Weapons (indices 0-9 = is_weapon: true)
     "Sword",
     "Greatsword",
     "Staff",
@@ -13,6 +14,10 @@ const BASE_TYPES: &[&str] = &[
     "Bow",
     "Crossbow",
     "Dagger",
+    "Scythe",
+    "Paradox Blade",
+    "Death Equation",
+    // Non-weapons (indices 10+)
     "Shield",
     "Helm",
     "Armor",
@@ -21,6 +26,12 @@ const BASE_TYPES: &[&str] = &[
     "Boots",
     "Gloves",
     "Cape",
+    "Chaos Crystal",
+    "Prime Shard",
+    "Fractal Lens",
+    "Null Field",
+    "Theorem",
+    "Singularity",
     "Mysterious Object",
     "Error",
     "Placeholder That Became Real",
@@ -44,6 +55,16 @@ const MATERIALS: &[&str] = &[
     "the concept of sharpness",
     "recycled prayers",
     "bottled lightning",
+    "crystallized entropy",
+    "prime-factored obsidian",
+    "eigenstate alloy",
+    "superposition glass",
+    "deterministic void",
+    "asymptotic silk",
+    "non-euclidean bone",
+    "compressed infinity",
+    "decompiled soul",
+    "Turing-complete leather",
 ];
 
 const ADJECTIVES: &[&str] = &[
@@ -60,6 +81,15 @@ const ADJECTIVES: &[&str] = &[
     "of Accidental Greatness",
     "of Yesterday's Problems",
     "of Mathematical Inevitability",
+    "of Schrödinger",
+    "of the Prime Manifold",
+    "of Undecidable Truth",
+    "that Observes You Back",
+    "of Non-Euclidean Design",
+    "of the Lorenz Attractor",
+    "of Bifurcation Point",
+    "of the Omega Constant",
+    "beyond the Mandelbrot Set",
 ];
 
 const SPECIAL_EFFECTS: &[&str] = &[
@@ -82,6 +112,17 @@ const SPECIAL_EFFECTS: &[&str] = &[
     "deals bonus damage to concepts",
     "is haunted by its previous owner (they're fine with it)",
     "None (but that itself is suspicious)",
+    "rerolls one chaos die per combat (unverified)",
+    "all critical hits deal 3× damage instead of 2×",
+    "immune to status effects (while conscious)",
+    "each kill permanently raises max HP by 5",
+    "spell costs become negative: mana regenerates on cast",
+    "20% chance to phase through incoming attacks",
+    "combo attacks deal double the normal combo bonus",
+    "grants a vision of your next enemy's weakness (blurry)",
+    "exists in superposition: both useful and useless until observed",
+    "the prime factorization of its damage is always prime",
+    "laughs at the concept of defense stats",
 ];
 
 const STAT_NAMES: &[&str] = &[
@@ -106,6 +147,7 @@ pub enum Rarity {
     Mythical,
     Divine,
     Beyond,
+    Artifact, // unique: one-of-a-kind chaos-generated masterpiece
 }
 
 impl Rarity {
@@ -119,7 +161,8 @@ impl Rarity {
             1001..=5000 => Rarity::Legendary,
             5001..=20000 => Rarity::Mythical,
             20001..=99999 => Rarity::Divine,
-            _ => Rarity::Beyond,
+            100000..=999999 => Rarity::Beyond,
+            _ => Rarity::Artifact,
         }
     }
 
@@ -133,6 +176,7 @@ impl Rarity {
             Rarity::Mythical => "Mythical",
             Rarity::Divine => "Divine",
             Rarity::Beyond => "???",
+            Rarity::Artifact => "◈ ARTIFACT ◈",
         }
     }
 
@@ -145,10 +189,12 @@ impl Rarity {
             Rarity::Legendary => "\x1b[35m", // magenta
             Rarity::Mythical => "\x1b[33m",  // yellow
             Rarity::Divine => "\x1b[31m",    // red
-            Rarity::Beyond => "\x1b[96m",    // bright cyan (cycles in display)
+            Rarity::Beyond => "\x1b[96m",    // bright cyan
+            Rarity::Artifact => "\x1b[97m",  // bright white (blinding)
         }
     }
 }
+
 
 // ─── Stat Modifier ───────────────────────────────────────────────────────────
 
@@ -183,10 +229,7 @@ impl Item {
         let adjective = ADJECTIVES[adj_idx];
         let name = format!("{} {} {}", material, base_type, adjective);
 
-        let is_weapon = matches!(
-            base_idx,
-            0..=6 // Sword through Dagger are weapons
-        );
+        let is_weapon = base_idx <= 9; // indices 0-9 are weapons
 
         // Damage/defense — fully unbounded chaos roll mapped to a wide range
         let dmg_seed = seed.wrapping_add(111);

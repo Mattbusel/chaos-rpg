@@ -1,306 +1,32 @@
-//! Terminal display using crossterm.
+//! Terminal UI — all rendering, menus, and input for CHAOS RPG.
+//!
+//! Includes: ANSI color themes, box-drawing borders, class selector with ASCII
+//! art, animated chaos roll display, difficulty/theme customization menus.
 
 use crossterm::{
     cursor, execute,
-    style::{Color, Print, ResetColor, SetForegroundColor},
     terminal::{self, ClearType},
 };
 use std::io::{self, Write};
+use std::sync::OnceLock;
 
-pub fn stat_color(value: i64) -> Color {
-    match value {
-        i64::MIN..=-100 => Color::DarkRed,
-        -99..=-1 => Color::Red,
-        0..=20 => Color::White,
-        21..=100 => Color::Cyan,
-        101..=1000 => Color::Green,
-        1001..=9999 => Color::Yellow,
-        _ => Color::Magenta,
-    }
+use crate::character::{
+    display_stat, Boon, Character, CharacterClass, Background, ColorTheme, Difficulty,
+};
+
+// ─── GLOBAL THEME ─────────────────────────────────────────────────────────────
+
+static THEME: OnceLock<ColorTheme> = OnceLock::new();
+
+pub fn set_theme(theme: ColorTheme) {
+    let _ = THEME.set(theme);
 }
 
-pub fn hp_color(pct: f64) -> Color {
-    if pct > 0.6 {
-        Color::Green
-    } else if pct > 0.3 {
-        Color::Yellow
-    } else {
-        Color::Red
-    }
+fn theme() -> ColorTheme {
+    *THEME.get().unwrap_or(&ColorTheme::Classic)
 }
 
-pub fn clear_screen() {
-    let mut out = io::stdout();
-    let _ = execute!(out, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0));
-}
-
-pub fn print_colored(text: &str, color: Color) {
-    let _ = execute!(
-        io::stdout(),
-        SetForegroundColor(color),
-        Print(text),
-        ResetColor
-    );
-}
-
-pub fn println_colored(text: &str, color: Color) {
-    print_colored(text, color);
-    println!();
-}
-
-pub fn hp_bar(current: i64, max: i64, width: usize) -> String {
-    let pct = if max > 0 {
-        (current as f64 / max as f64).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    let filled = (pct * width as f64) as usize;
-    format!(
-        "[{}{}] {}/{}",
-        "█".repeat(filled),
-        "░".repeat(width - filled),
-        current,
-        max
-    )
-}
-
-pub fn draw_title_screen() {
-    clear_screen();
-    let lines = [
-        (
-            "╔════════════════════════════════════════════════════╗",
-            Color::Red,
-        ),
-        (
-            "║   ____ _   _    _    ___  ____   ____  ____  ____  ║",
-            Color::Red,
-        ),
-        (
-            "║  / ___| | | |  /   / _ / ___| |  _ |  _ / ___| ║",
-            Color::Red,
-        ),
-        (
-            "║ | |   | |_| | / _ | | | ___  | |_) | |_) ___  ║",
-            Color::Yellow,
-        ),
-        (
-            "║ | |___|  _  |/ ___  |_| |___) ||  _ <|  __/ ___) |║",
-            Color::Yellow,
-        ),
-        (
-            "║  ____|_| |_/_/   ____/|____/ |_| __|   |____/ ║",
-            Color::Magenta,
-        ),
-        (
-            "║                                                      ║",
-            Color::White,
-        ),
-        (
-            "║          Where Math Goes To Die                      ║",
-            Color::Cyan,
-        ),
-        (
-            "║   Every outcome: 4-10 chained algorithms             ║",
-            Color::Cyan,
-        ),
-        (
-            "║                                                      ║",
-            Color::White,
-        ),
-        (
-            "║   [N] New Game (Story Mode)                          ║",
-            Color::Green,
-        ),
-        (
-            "║   [I] Infinite Mode                                  ║",
-            Color::Green,
-        ),
-        (
-            "║   [Q] Quick Roll (just character creation)           ║",
-            Color::Green,
-        ),
-        (
-            "║   [S] Scoreboard                                     ║",
-            Color::Yellow,
-        ),
-        (
-            "║   [H] Help / The 10 Algorithms                      ║",
-            Color::Yellow,
-        ),
-        (
-            "║   [X] Exit                                           ║",
-            Color::DarkRed,
-        ),
-        (
-            "╚════════════════════════════════════════════════════╝",
-            Color::Red,
-        ),
-    ];
-    for (line, color) in &lines {
-        println_colored(line, *color);
-    }
-    println!();
-    print!("> ");
-    let _ = io::stdout().flush();
-}
-
-pub fn draw_character_sheet(character: &crate::character::Character) {
-    clear_screen();
-    println_colored(
-        &format!("=== {} ({}) ===", character.name, character.class.name()),
-        Color::Yellow,
-    );
-    println!();
-    let stats = [
-        ("Vitality", character.stats.vitality),
-        ("Force", character.stats.force),
-        ("Mana", character.stats.mana),
-        ("Cunning", character.stats.cunning),
-        ("Precision", character.stats.precision),
-        ("Entropy", character.stats.entropy),
-        ("Luck", character.stats.luck),
-    ];
-    for (name, val) in &stats {
-        let color = stat_color(*val);
-        print!("  {:12}", name);
-        print_colored(&format!("{:>8}", val), color);
-        let bar_len = ((*val).clamp(0, 100) as usize / 5).min(20);
-        println!(" [{}{}]", "▓".repeat(bar_len), "░".repeat(20 - bar_len));
-    }
-    println!();
-    let hp_col = hp_color(character.hp_percent());
-    print!("  HP: ");
-    println_colored(&hp_bar(character.current_hp, character.max_hp, 20), hp_col);
-    println!(
-        "  Lv.{}  Floor {}  XP: {}  Gold: {}  Kills: {}",
-        character.level, character.floor, character.xp, character.gold, character.kills
-    );
-    println!();
-    let tier = character.power_tier();
-    let tc = match tier {
-        crate::character::PowerTier::Abyssal => Color::DarkRed,
-        crate::character::PowerTier::Damned => Color::Red,
-        crate::character::PowerTier::Cursed => Color::Magenta,
-        crate::character::PowerTier::Mortal => Color::White,
-        crate::character::PowerTier::Awakened => Color::Green,
-        crate::character::PowerTier::Champion => Color::Cyan,
-        crate::character::PowerTier::Legendary => Color::Yellow,
-        crate::character::PowerTier::Transcendent => Color::Magenta,
-        crate::character::PowerTier::Godlike => Color::Red,
-        crate::character::PowerTier::BeyondMath => Color::White,
-    };
-    print!("  POWER: ");
-    print_colored(tier.name(), tc);
-    println!();
-    println_colored(&format!("  {}", tier.flavor()), Color::DarkGrey);
-}
-
-pub fn draw_combat_screen(
-    player: &crate::character::Character,
-    enemy: &crate::enemy::Enemy,
-    log: &[String],
-    floor: u32,
-) {
-    clear_screen();
-    let w = 54usize;
-    let bar = "=".repeat(w);
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    println_colored(
-        &format!("| FLOOR {:3} {:^46}|", floor, ""),
-        Color::DarkYellow,
-    );
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    let tier_color = match enemy.tier {
-        crate::enemy::EnemyTier::Minion => Color::Green,
-        crate::enemy::EnemyTier::Elite => Color::Yellow,
-        crate::enemy::EnemyTier::Champion => Color::Red,
-        crate::enemy::EnemyTier::Boss | crate::enemy::EnemyTier::Abomination => Color::Magenta,
-    };
-    for line in enemy.ascii_sprite.lines() {
-        println_colored(&format!("| {:<w$}|", line, w = w), tier_color);
-    }
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    let ename = if enemy.name.len() > 40 {
-        &enemy.name[..40]
-    } else {
-        &enemy.name
-    };
-    println_colored(
-        &format!("| [{:^10}] {:<40}|", enemy.tier.name(), ename),
-        tier_color,
-    );
-    let ebar = hp_bar(enemy.hp, enemy.max_hp, 24);
-    print!("| HP: ");
-    print_colored(&ebar, hp_color(enemy.hp_percent()));
-    println!("{:>w$}|", "", w = (w - 5 - ebar.len()).max(0));
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    let show = 4usize.min(log.len());
-    let start = log.len() - show;
-    for line in &log[start..] {
-        let t = if line.len() > w {
-            &line[..w]
-        } else {
-            line.as_str()
-        };
-        println!("| {:<w$}|", t, w = w);
-    }
-    if log.len() - start < 4 {
-        println!("| {:<w$}|", "", w = w);
-    }
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    let pbar = hp_bar(player.current_hp, player.max_hp, 16);
-    print!("| YOU HP: ");
-    print_colored(&pbar, hp_color(player.hp_percent()));
-    println!("{:>w$}|", "", w = (w - 9 - pbar.len()).max(0));
-    println!(
-        "| {:52}|",
-        format!(
-            "{} Lv.{} Gold:{}",
-            player.class.name(),
-            player.level,
-            player.gold
-        )
-    );
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    println_colored(
-        "| [A]ttack [H]eavy [D]efend [F]lee [T]alk [C]har    |",
-        Color::Green,
-    );
-    println_colored(&format!("+{}+", bar), Color::DarkYellow);
-    print!("> ");
-    let _ = io::stdout().flush();
-}
-
-pub fn draw_scoreboard(scores: &[crate::scoreboard::ScoreEntry]) {
-    clear_screen();
-    println_colored("TOP SCORES", Color::Yellow);
-    println!("{}", "-".repeat(60));
-    if scores.is_empty() {
-        println!("No scores yet. Go get cursed.");
-    } else {
-        println!(
-            "{:<4} {:<16} {:<12} {:<10} {:<6} Date",
-            "#", "Name", "Class", "Score", "Floor"
-        );
-        println!("{}", "-".repeat(60));
-        for (i, s) in scores.iter().enumerate() {
-            println!(
-                "{:<4} {:<16} {:<12} {:<10} {:<6} {}",
-                i + 1,
-                &s.name[..s.name.len().min(15)],
-                &s.class[..s.class.len().min(11)],
-                s.score,
-                s.floor_reached,
-                s.timestamp
-            );
-        }
-    }
-    println!();
-    print!("Press Enter to return...");
-    let _ = io::stdout().flush();
-}
-
-// ─── ANSI COLOR CONSTANTS (for main.rs format! usage) ────────────────────────
+// ─── ANSI COLOR CONSTANTS (for main.rs format! usage) ─────────────────────────
 
 pub const RESET: &str = "\x1b[0m";
 pub const BOLD: &str = "\x1b[1m";
@@ -311,6 +37,31 @@ pub const YELLOW: &str = "\x1b[33m";
 pub const CYAN: &str = "\x1b[36m";
 pub const MAGENTA: &str = "\x1b[35m";
 pub const WHITE: &str = "\x1b[97m";
+pub const BRIGHT_RED: &str = "\x1b[91m";
+pub const BRIGHT_GREEN: &str = "\x1b[92m";
+pub const BRIGHT_CYAN: &str = "\x1b[96m";
+pub const BRIGHT_MAGENTA: &str = "\x1b[95m";
+
+// ─── THEME-AWARE ACCESSORS ────────────────────────────────────────────────────
+
+pub fn t_primary() -> &'static str {
+    theme().primary()
+}
+pub fn t_danger() -> &'static str {
+    theme().danger()
+}
+pub fn t_success() -> &'static str {
+    theme().success()
+}
+pub fn t_warning() -> &'static str {
+    theme().warning()
+}
+pub fn t_magic() -> &'static str {
+    theme().magic()
+}
+pub fn t_title() -> &'static str {
+    theme().title()
+}
 
 // ─── GAME MODE / FLOOR CHOICE ─────────────────────────────────────────────────
 
@@ -331,10 +82,19 @@ pub enum FloorChoice {
     ViewTrace,
 }
 
-// ─── LINE-BUFFERED I/O HELPERS ────────────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+
+pub fn clear_screen() {
+    let mut out = io::stdout();
+    let _ = execute!(out, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0));
+}
+
+pub fn println_color(color: &str, msg: &str) {
+    println!("{}{}{}", color, msg, RESET);
+}
 
 pub fn prompt(msg: &str) -> String {
-    print!("{}{}{} ", CYAN, msg, RESET);
+    print!("{}{}{} ", t_primary(), msg, RESET);
     let _ = io::stdout().flush();
     let mut s = String::new();
     let _ = io::stdin().read_line(&mut s);
@@ -348,96 +108,550 @@ pub fn press_enter(msg: &str) {
     let _ = io::stdin().read_line(&mut s);
 }
 
-pub fn println_color(color: &str, msg: &str) {
-    println!("{}{}{}", color, msg, RESET);
+// ─── BOX DRAWING UTILITIES ────────────────────────────────────────────────────
+
+/// Draw a full-width labeled box header
+pub fn box_header(label: &str, color: &str, width: usize) {
+    let inner = width.saturating_sub(4);
+    let padded = format!("{:^width$}", label, width = inner);
+    println!(
+        "{}╔{}╗{}",
+        color,
+        "═".repeat(width - 2),
+        RESET
+    );
+    println!("{}║ {}{}{} ║{}", color, BOLD, padded, RESET, "");
+    println!("{}╚{}╝{}", color, "═".repeat(width - 2), RESET);
+    // fix trailing RESET
+    print!("{}", RESET);
 }
 
-// ─── HIGH-LEVEL SCREENS ───────────────────────────────────────────────────────
+pub fn box_section(lines: &[String], color: &str, width: usize) {
+    let inner = width.saturating_sub(4);
+    println!("{}┌{}┐{}", color, "─".repeat(width - 2), RESET);
+    for line in lines {
+        let display = if line.len() > inner {
+            format!("{}…", &line[..inner - 1])
+        } else {
+            format!("{:<width$}", line, width = inner)
+        };
+        println!("{}│ {} │{}", color, display, RESET);
+    }
+    println!("{}└{}┘{}", color, "─".repeat(width - 2), RESET);
+}
+
+pub fn separator(color: &str, width: usize) {
+    println!("{}{}{}",  color, "─".repeat(width), RESET);
+}
+
+// ─── TITLE SCREEN ─────────────────────────────────────────────────────────────
 
 pub fn show_title() {
-    draw_title_screen();
+    clear_screen();
+    let c = t_title();
+    let y = t_warning();
+    let m = t_magic();
+    let d = DIM;
+    println!();
+    println!("{}╔══════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("{}║{}                                                      {}║{}", c, RESET, c, RESET);
+    println!("{}║{}  {}  ___  _   _    _    ___  ____   ____  ____  ____  {}║{}", c, RESET, y, RESET, c);
+    println!("{}║{} {} / __|  | | |  / \\  / _ \\/ ___| |  _ \\|  _ \\/ ___| {}║{}", c, RESET, y, RESET, c);
+    println!("{}║{} {}| |     | |_| | / _ \\| | | \\___ \\ | |_) | |_) \\___  {}║{}", c, RESET, y, RESET, c);
+    println!("{}║{} {}| |___  |  _  |/ ___ \\ |_| |___) ||  _ <|  __/ ___) {}║{}", c, RESET, m, RESET, c);
+    println!("{}║{}  {}\\____|_| |_/_/   \\_\\____/|____/ |_| \\_\\_|   |____/ {}║{}", c, RESET, m, RESET, c);
+    println!("{}║{}                                                      {}║{}", c, RESET, c, RESET);
+    println!("{}║{}     {}Where math goes to die. 10 sacred algorithms.{}     {}║{}", c, RESET, d, RESET, c, RESET);
+    println!("{}║{}                                                      {}║{}", c, RESET, c, RESET);
+    println!("{}╠══════════════════════════════════════════════════════╣{}", c, RESET);
+    println!("{}║{}  {}[N]{} Story Mode      — 10 floors of pure chaos          {}║{}", c, RESET, GREEN, RESET, c, RESET);
+    println!("{}║{}  {}[I]{} Infinite Mode   — descend forever                  {}║{}", c, RESET, GREEN, RESET, c, RESET);
+    println!("{}║{}  {}[S]{} Scoreboard      — hall of the mathematically gifted {}║{}", c, RESET, YELLOW, RESET, c, RESET);
+    println!("{}║{}  {}[H]{} Help / Tutorial — the 10 algorithms explained       {}║{}", c, RESET, YELLOW, RESET, c, RESET);
+    println!("{}║{}  {}[X]{} Exit            — the chaos subsides                {}║{}", c, RESET, RED, RESET, c, RESET);
+    println!("{}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+    println!();
 }
 
 pub fn select_mode() -> GameMode {
-    println!();
-    println!(
-        "  {}[N]{} Story Mode  {}[I]{} Infinite  {}[S]{} Scoreboard  {}[H]{} Help  {}[X]{} Exit",
-        GREEN, RESET, GREEN, RESET, YELLOW, RESET, YELLOW, RESET, RED, RESET
-    );
-    println!();
     loop {
-        let input = prompt(">");
+        let input = prompt("  MODE >");
         match input.to_uppercase().as_str() {
             "N" | "1" => return GameMode::Story,
             "I" | "2" => return GameMode::Infinite,
             "S" | "3" => return GameMode::Scoreboard,
             "H" | "?" => {
                 show_help();
-                draw_title_screen();
+                show_title();
             }
             "X" | "Q" | "EXIT" | "QUIT" => return GameMode::Quit,
-            _ => println!("  {}Unknown — N/I/S/H/X{}", DIM, RESET),
+            _ => println!("  {}Unknown — type N, I, S, H, or X{}", DIM, RESET),
         }
     }
 }
 
-pub fn show_scoreboard(scores: &[crate::scoreboard::ScoreEntry]) {
-    draw_scoreboard(scores);
-    let mut s = String::new();
-    let _ = io::stdin().read_line(&mut s);
-}
+// ─── DIFFICULTY SELECTION ─────────────────────────────────────────────────────
 
-pub fn show_character_sheet(c: &crate::character::Character) {
-    draw_character_sheet(c);
-}
-
-pub fn show_enemy(enemy: &crate::enemy::Enemy) {
+pub fn select_difficulty() -> Difficulty {
+    clear_screen();
+    let c = t_primary();
     println!();
-    for line in enemy.ascii_sprite.lines() {
-        println!("  {}", line);
+    println!("  {}╔══════════════════════════════════╗{}", c, RESET);
+    println!("  {}║       SELECT DIFFICULTY          ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════╝{}", c, RESET);
+    println!();
+    println!("  {}[1]{} Easy       — {}{}",        GREEN,   RESET, Difficulty::Easy.description(),    RESET);
+    println!("  {}[2]{} Normal     — {}{}",        CYAN,    RESET, Difficulty::Normal.description(),  RESET);
+    println!("  {}[3]{} Brutal     — {}{}",        YELLOW,  RESET, Difficulty::Brutal.description(),  RESET);
+    println!("  {}[4]{} CHAOS      — {}{}",        RED,     RESET, Difficulty::Chaos.description(),   RESET);
+    println!();
+    loop {
+        match prompt("  DIFFICULTY >").as_str() {
+            "1" => return Difficulty::Easy,
+            "2" | "" => return Difficulty::Normal,
+            "3" => return Difficulty::Brutal,
+            "4" => return Difficulty::Chaos,
+            _ => println!("  {}Enter 1-4{}", DIM, RESET),
+        }
     }
+}
+
+// ─── THEME SELECTION ──────────────────────────────────────────────────────────
+
+pub fn select_color_theme() -> ColorTheme {
+    clear_screen();
+    println!();
+    println!("  {}╔══════════════════════════════════╗{}", CYAN, RESET);
+    println!("  {}║        SELECT COLOR THEME        ║{}", CYAN, RESET);
+    println!("  {}╚══════════════════════════════════╝{}", CYAN, RESET);
+    println!();
+    println!("  {}[1]{} Classic    — Standard ANSI terminal colors", CYAN, RESET);
+    println!("  {}[2]{} Neon       — Bright electric cyberpunk", BRIGHT_CYAN, RESET);
+    println!("  {}[3]{} Blood      — Deep reds and dark tones", BRIGHT_RED, RESET);
+    println!("  {}[4]{} Void       — Purple and shadow", BRIGHT_MAGENTA, RESET);
+    println!("  {}[5]{} Monochrome — Grayscale only", WHITE, RESET);
+    println!();
+    loop {
+        match prompt("  THEME >").as_str() {
+            "1" | "" => return ColorTheme::Classic,
+            "2" => return ColorTheme::Neon,
+            "3" => return ColorTheme::Blood,
+            "4" => return ColorTheme::Void,
+            "5" => return ColorTheme::Monochrome,
+            _ => println!("  {}Enter 1-5{}", DIM, RESET),
+        }
+    }
+}
+
+// ─── CLASS SELECTION UI ───────────────────────────────────────────────────────
+
+pub fn create_character_ui() -> (String, CharacterClass, Background, Difficulty) {
+    let difficulty = select_difficulty();
+    let theme = select_color_theme();
+    set_theme(theme);
+
+    clear_screen();
+    let c = t_primary();
+    println!();
+    println!("  {}╔══════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║           CHARACTER CREATION             ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════╝{}", c, RESET);
+    println!();
+
+    let name = loop {
+        let n = prompt("  Your name >");
+        if n.is_empty() {
+            println!("  {}A name is required.{}", RED, RESET);
+        } else if n.len() > 20 {
+            println!("  {}Max 20 characters.{}", RED, RESET);
+        } else {
+            break n;
+        }
+    };
+
+    let class = select_class_ui();
+    let background = select_background_ui();
+
+    (name, class, background, difficulty)
+}
+
+/// Show 3 random boons and let the player pick one.
+pub fn show_boon_select(seed: u64) -> Boon {
+    let boons = Boon::random_three(seed);
+    let c = t_primary();
+    let m = t_magic();
+    clear_screen();
+    println!();
+    println!("  {}╔══════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║           ✦  CHOOSE YOUR BOON  ✦            ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+    println!("  {}A gift from the chaos — choose wisely.{}", m, RESET);
+    println!();
+
+    for (i, boon) in boons.iter().enumerate() {
+        let bc = boon.color_code();
+        println!("  {}[{}] {}{}{}", c, i + 1, bc, boon.name(), RESET);
+        println!("      {}{}{}", DIM, boon.description(), RESET);
+        println!();
+    }
+
+    loop {
+        let input = prompt("  Choose boon [1/2/3] >");
+        match input.trim() {
+            "1" => return boons[0],
+            "2" => return boons[1],
+            "3" => return boons[2],
+            _ => println!("  {}Enter 1, 2, or 3.{}", RED, RESET),
+        }
+    }
+}
+
+fn select_class_ui() -> CharacterClass {
+    let classes = [
+        (CharacterClass::Mage, "1"),
+        (CharacterClass::Berserker, "2"),
+        (CharacterClass::Ranger, "3"),
+        (CharacterClass::Thief, "4"),
+        (CharacterClass::Necromancer, "5"),
+        (CharacterClass::Alchemist, "6"),
+        (CharacterClass::Paladin, "7"),
+        (CharacterClass::VoidWalker, "8"),
+    ];
+
+    clear_screen();
+    let c = t_primary();
+    println!();
+    println!("  {}╔══════════════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║                     CHOOSE YOUR CLASS                        ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+
+    for (i, (class, num)) in classes.iter().enumerate() {
+        let col = match i {
+            0 => BRIGHT_CYAN,
+            1 => BRIGHT_RED,
+            2 => BRIGHT_GREEN,
+            3 => YELLOW,
+            4 => MAGENTA,
+            5 => GREEN,
+            6 => WHITE,
+            _ => BRIGHT_MAGENTA,
+        };
+        println!(
+            "  {}[{}]{} {:12} — {}",
+            col, num, RESET, class.name(), class.description()
+        );
+        println!(
+            "       {}Passive: {} — {}{}",
+            DIM, class.passive_name(), class.passive_desc(), RESET
+        );
+        println!();
+    }
+
+    loop {
+        match prompt("  CLASS >").as_str() {
+            "1" => return CharacterClass::Mage,
+            "2" => return CharacterClass::Berserker,
+            "3" => return CharacterClass::Ranger,
+            "4" => return CharacterClass::Thief,
+            "5" => return CharacterClass::Necromancer,
+            "6" => return CharacterClass::Alchemist,
+            "7" => return CharacterClass::Paladin,
+            "8" => return CharacterClass::VoidWalker,
+            _ => println!("  {}Enter 1-8{}", DIM, RESET),
+        }
+    }
+}
+
+fn select_background_ui() -> Background {
+    let backgrounds = [
+        Background::Scholar,
+        Background::Wanderer,
+        Background::Gladiator,
+        Background::Outcast,
+        Background::Merchant,
+        Background::Cultist,
+        Background::Exile,
+        Background::Oracle,
+    ];
+
+    clear_screen();
+    let c = t_primary();
+    println!();
+    println!("  {}╔════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║          CHOOSE YOUR BACKGROUND        ║{}", c, RESET);
+    println!("  {}╚════════════════════════════════════════╝{}", c, RESET);
+    println!();
+
+    for (i, bg) in backgrounds.iter().enumerate() {
+        println!(
+            "  {}[{}]{} {:12} — {}",
+            t_primary(), i + 1, RESET, bg.name(), bg.description()
+        );
+    }
+    println!();
+
+    loop {
+        let input = prompt("  BACKGROUND >");
+        if let Ok(n) = input.parse::<usize>() {
+            if n >= 1 && n <= backgrounds.len() {
+                return backgrounds[n - 1];
+            }
+        }
+        println!("  {}Enter 1-8{}", DIM, RESET);
+    }
+}
+
+// ─── CHARACTER SHEET ──────────────────────────────────────────────────────────
+
+pub fn show_character_sheet(c: &Character) {
+    let col = t_primary();
+    let tier = c.power_tier();
+    let name_col = t_warning();
+    println!();
+    println!("  {}╔══════════════════════════════════════════════════╗{}", col, RESET);
     println!(
-        "  {}[{}]{} {}  HP: {}",
-        CYAN,
-        enemy.tier.name(),
-        RESET,
-        enemy.name,
-        hp_bar(enemy.hp, enemy.max_hp, 20)
+        "  {}║  {}{} {}{}  — Lv.{} {} ({}){}{}║{}",
+        col, name_col, c.name, RESET, col,
+        c.level, c.class.name(), c.background.name(),
+        RESET, col, RESET
     );
-    if let Some(ability) = enemy.special_ability {
-        println!("  {}⚡ {}{}", YELLOW, ability, RESET);
-    }
-}
-
-pub fn show_game_over(player: &crate::character::Character) {
-    println!();
-    println!("  {}{}☠  GAME OVER  ☠{}", RED, BOLD, RESET);
-    println!("  {} fell at floor {}.", player.name, player.floor);
     println!(
-        "  Enemies slain: {}  Gold: {}  Score: {}{}{}",
-        player.kills,
-        player.gold,
-        YELLOW,
-        player.score(),
+        "  {}║  {}{}  {}{}{}║{}",
+        col, tier.color_code(), tier.name(),
+        DIM, tier.flavor(), RESET,
         RESET
     );
-    println!();
+    println!("  {}║  {}Passive: {}{} — {}{}║{}",
+        col, t_magic(), BOLD, c.class.passive_name(), RESET, col, RESET);
+    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
+    println!("  {}║  HP:  {}  {}║{}",
+        col, c.hp_bar(24), col, RESET);
+    println!("  {}║  Floor {}  Gold {}  Kills {}  XP {}{}  {}║{}",
+        col, c.floor, c.gold, c.kills, c.xp, DIM, col, RESET);
+    if !c.status_effects.is_empty() {
+        println!("  {}║  Status: {}  {}║{}", col, c.status_badge_line(), col, RESET);
+    }
+    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
+
+    let stats = [
+        ("Vitality",  c.stats.vitality),
+        ("Force",     c.stats.force),
+        ("Mana",      c.stats.mana),
+        ("Cunning",   c.stats.cunning),
+        ("Precision", c.stats.precision),
+        ("Entropy",   c.stats.entropy),
+        ("Luck",      c.stats.luck),
+    ];
+    for (name, val) in &stats {
+        println!("  {}║ {}{}", col, display_stat(name, *val), RESET);
+    }
+
+    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
+    println!("  {}║  Spells: {}  Items: {}  Difficulty: {}{}║{}",
+        col, c.known_spells.len(), c.inventory.len(),
+        c.difficulty.name(), col, RESET);
+    println!("  {}╚══════════════════════════════════════════════════╝{}", col, RESET);
 }
 
-pub fn show_victory(player: &crate::character::Character) {
-    println!();
-    println!("  {}{}★  VICTORY  ★{}", YELLOW, BOLD, RESET);
-    println!("  {} has transcended the mathematical abyss!", player.name);
-    println!("  Score: {}{}{}", MAGENTA, player.score(), RESET);
-    println!();
-}
+// ─── ENEMY DISPLAY ────────────────────────────────────────────────────────────
 
-pub fn show_level_up(level: u32, msg: &str) {
+pub fn show_enemy(enemy: &crate::enemy::Enemy) {
+    let tier_col = enemy.tier_color();
+    println!();
+    for line in enemy.ascii_sprite.lines() {
+        println!("  {}{}{}", tier_col, line, RESET);
+    }
+    println!();
     println!(
-        "  {}{}▲ LEVEL UP! Now level {}. {}{}",
-        YELLOW, BOLD, level, msg, RESET
+        "  {}[ {} ] {}  HP: {}/{}{}",
+        tier_col,
+        enemy.tier.name(),
+        enemy.name,
+        enemy.hp,
+        enemy.max_hp,
+        RESET
     );
+    let hp_pct = enemy.hp as f64 / enemy.max_hp as f64;
+    let hp_col = if hp_pct > 0.6 { GREEN } else if hp_pct > 0.3 { YELLOW } else { RED };
+    let bar_len = 24usize;
+    let filled = ((hp_pct * bar_len as f64) as usize).min(bar_len);
+    println!(
+        "  {}[{}{}{}]{}",
+        hp_col,
+        "█".repeat(filled),
+        "░".repeat(bar_len - filled),
+        RESET,
+        ""
+    );
+    if let Some(ability) = enemy.special_ability {
+        println!("  {}[ABILITY] {}{}", YELLOW, ability, RESET);
+    }
 }
+
+// ─── COMBAT MENU ──────────────────────────────────────────────────────────────
+
+pub fn show_combat_menu(
+    player: &Character,
+    enemy: &crate::enemy::Enemy,
+    round: u32,
+) {
+    let c = t_primary();
+    let tier_col = enemy.tier_color();
+    let w = 56usize;
+    let bar = "═".repeat(w - 2);
+
+    println!();
+    println!("  {}╔{}╗{}", c, bar, RESET);
+    println!(
+        "  {}║  {} Round {:<3} {}  Floor {}  {}{}{}║{}",
+        c, BOLD, round, RESET, player.floor, DIM,
+        player.difficulty.name(), RESET, RESET
+    );
+    println!("  {}╠{}╣{}", c, bar, RESET);
+
+    // Enemy info block
+    println!(
+        "  {}║  {}[{}]{} {:<36}{}║{}",
+        c, tier_col, enemy.tier.name(), RESET,
+        &enemy.name[..enemy.name.len().min(36)],
+        c, RESET
+    );
+    let hp_pct = enemy.hp as f64 / enemy.max_hp as f64;
+    let e_col = if hp_pct > 0.6 { GREEN } else if hp_pct > 0.3 { YELLOW } else { RED };
+    let efill = ((hp_pct * 30.0) as usize).min(30);
+    println!(
+        "  {}║  {}HP [{}{}{}{}]{} {}/{:<12}{}║{}",
+        c, e_col,
+        "█".repeat(efill), "░".repeat(30 - efill),
+        RESET, e_col, RESET,
+        enemy.hp, enemy.max_hp,
+        c, RESET
+    );
+
+    println!("  {}╠{}╣{}", c, bar, RESET);
+
+    // Player info block
+    println!(
+        "  {}║  {}{}{} Lv.{} {} {}{}║{}",
+        c, BOLD, player.name, RESET,
+        player.level, player.class.name(),
+        c, "", RESET
+    );
+    println!(
+        "  {}║  {}  Gold: {}  Kills: {}{}║{}",
+        c, DIM, player.gold, player.kills, c, RESET
+    );
+
+    let pfill = ((player.hp_percent() * 30.0) as usize).min(30);
+    let p_col = if player.hp_percent() > 0.6 { GREEN } else if player.hp_percent() > 0.3 { YELLOW } else { RED };
+    println!(
+        "  {}║  {}HP [{}{}{}{}]{} {}/{}{}{}║{}",
+        c, p_col,
+        "█".repeat(pfill), "░".repeat(30 - pfill),
+        RESET, p_col, RESET,
+        player.current_hp, player.max_hp,
+        c, "", RESET
+    );
+
+    // Status badges
+    let badges = player.status_badge_line();
+    if !badges.is_empty() {
+        println!("  {}║  Status: {}{:<30}{}║{}", c, badges, "", c, RESET);
+    }
+
+    println!("  {}╠{}╣{}", c, bar, RESET);
+
+    // Action menu
+    println!(
+        "  {}║  {}[A]{} Attack    {}[H]{} Heavy    {}[D]{} Defend    {}[F]{} Flee    {}║{}",
+        c, GREEN, RESET, YELLOW, RESET, CYAN, RESET, RED, RESET, c, RESET
+    );
+    println!(
+        "  {}║  {}[T]{} Taunt     {}[S]{} Spell    {}[I]{} Item     {}[?]{} Trace   {}║{}",
+        c, MAGENTA, RESET, BRIGHT_CYAN, RESET, GREEN, RESET, DIM, RESET, c, RESET
+    );
+
+    if !player.known_spells.is_empty() {
+        println!("  {}║  {}Spells:{}", c, DIM, RESET);
+        for (i, spell) in player.known_spells.iter().enumerate().take(4) {
+            let name = &spell.name[..spell.name.len().min(28)];
+            println!(
+                "  {}║    [S{}] {}{:<32}{}║{}",
+                c, i + 1, t_magic(), name, c, RESET
+            );
+        }
+    }
+
+    if !player.inventory.is_empty() {
+        println!("  {}║  {}Items:{}", c, DIM, RESET);
+        for (i, item) in player.inventory.iter().enumerate().take(4) {
+            let name = &item.name[..item.name.len().min(28)];
+            println!(
+                "  {}║    [I{}] {}{:<32}{}║{}",
+                c, i + 1, item.rarity.color_code(), name, c, RESET
+            );
+        }
+    }
+
+    println!("  {}╚{}╝{}", c, bar, RESET);
+    println!();
+}
+
+pub fn read_combat_action() -> crate::combat::CombatAction {
+    use crate::combat::CombatAction;
+    loop {
+        let s = prompt("  ACTION >");
+        let lower = s.to_lowercase();
+        let trimmed = lower.trim();
+        match trimmed {
+            "a" | "attack" => return CombatAction::Attack,
+            "h" | "heavy" => return CombatAction::HeavyAttack,
+            "d" | "defend" => return CombatAction::Defend,
+            "t" | "taunt" => return CombatAction::Taunt,
+            "f" | "flee" => return CombatAction::Flee,
+            s if s.starts_with('s') => {
+                let idx = s[1..].parse::<usize>().unwrap_or(1).saturating_sub(1);
+                return CombatAction::UseSpell(idx);
+            }
+            s if s.starts_with('i') => {
+                let idx = s[1..].parse::<usize>().unwrap_or(1).saturating_sub(1);
+                return CombatAction::UseItem(idx);
+            }
+            "?" => {
+                println!("  {}Use 't' after combat to review the last chaos trace.{}", DIM, RESET);
+            }
+            _ => println!("  {}a/h/d/t/f/s#/i#{}", DIM, RESET),
+        }
+    }
+}
+
+pub fn display_combat_events(events: &[crate::combat::CombatEvent]) {
+    for event in events {
+        let line = event.to_display_string();
+        let color = if line.contains("CRITICAL") || line.contains("CRIT") {
+            YELLOW
+        } else if line.contains("CHAOS") || line.contains("chaos") {
+            BRIGHT_MAGENTA
+        } else if line.contains("slain") || line.contains("Victory") {
+            GREEN
+        } else if line.contains("damage") && line.contains("Enemy") {
+            RED
+        } else if line.contains("BACKFIRE") || line.contains("backfir") {
+            BRIGHT_RED
+        } else if line.contains("blasts") || line.contains("spell") || line.contains("Spell") {
+            BRIGHT_CYAN
+        } else if line.contains("recover") || line.contains("healed") || line.contains("heal") {
+            BRIGHT_GREEN
+        } else {
+            WHITE
+        };
+        println!("  {}{}{}", color, line, RESET);
+    }
+}
+
+// ─── FLOOR / ROOM DISPLAY ─────────────────────────────────────────────────────
 
 pub fn show_floor_header(floor: u32, mode: &GameMode) {
     let mode_str = if *mode == GameMode::Story {
@@ -445,29 +659,21 @@ pub fn show_floor_header(floor: u32, mode: &GameMode) {
     } else {
         "Infinite"
     };
-    println_color(
-        CYAN,
-        &format!("  ═══ Floor {}  [{} Mode] ═══", floor, mode_str),
+    let c = t_primary();
+    println!();
+    println!(
+        "  {}╔══════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║  Floor {:>3}  [{:<8}]       ║{}",
+        c, floor, mode_str, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════╝{}",
+        c, RESET
     );
     println!();
-}
-
-pub fn show_help() {
-    clear_screen();
-    println!("  {}=== CHAOS RPG: HOW TO PLAY ==={}", BOLD, RESET);
-    println!();
-    println!("  {}THE CHAOS ENGINE:{}", CYAN, RESET);
-    println!("  Every roll chains 4-10 mathematical algorithms.");
-    println!("  Lorenz · Fourier · Mandelbrot · Riemann · Fibonacci");
-    println!("  Logistic · Euler · Collatz · Prime · Modular Exp");
-    println!();
-    println!("  {}COMBAT ACTIONS:{}", CYAN, RESET);
-    println!("  [A] Attack  [H] Heavy Attack  [D] Defend  [T] Taunt  [F] Flee");
-    println!();
-    println!("  {}STATS (all unbounded):{}", CYAN, RESET);
-    println!("  VIT=HP  FOR=Damage  MAN=Magic  CUN=Crit  PRC=Accuracy  ENT=Chaos  LCK=Fortune");
-    println!();
-    press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));
 }
 
 pub fn story_event(floor: u32, seed: u64) -> Option<String> {
@@ -480,181 +686,142 @@ pub fn story_event(floor: u32, seed: u64) -> Option<String> {
         "Prime numbers glow on the floor: 2, 3, 5, 7, 11...",
         "The Mandelbrot boundary bleeds through the ceiling.",
         "Logistic map on the wall: r=3.9, x=chaos.",
-        "Euler's identity carved in a skull: e^(iπ)+1=0",
-        "Collatz echoes: 27→82→41→124→62→31→94→47→142...",
+        "Euler's identity carved in a skull: e^(i*pi)+1=0",
+        "Collatz echoes: 27, 82, 41, 124, 62, 31...",
         "The golden ratio hums in dust: 1.6180339887...",
         "Binary — the first abstraction. The floor counts in base 2.",
+        "A necromancer's ghost: 'Death is just a local minimum.'",
+        "Alchemical symbols bleed through the stone walls.",
+        "A paladin's prayer carved in bedrock: '3.14159...'",
+        "Void signatures pulse across every surface.",
     ];
     if roll.final_value > 0.3 {
         let idx = (seed % events.len() as u64) as usize;
-        Some(format!("  {}▶ {}{}", MAGENTA, events[idx], RESET))
+        Some(format!("  {}>> {}{}", t_magic(), events[idx], RESET))
     } else {
         None
     }
 }
 
-pub fn floor_choices() -> FloorChoice {
-    println!(
-        "  {}[1]{} Explore  {}[2]{} Descend  {}[3]{} Rest(10g)  {}[4]{} Sheet  {}[5]{} Last Roll",
-        CYAN, RESET, CYAN, RESET, CYAN, RESET, CYAN, RESET, CYAN, RESET
-    );
-    loop {
-        match prompt(">").as_str() {
-            "1" => return FloorChoice::Explore,
-            "2" => return FloorChoice::Descend,
-            "3" => return FloorChoice::Rest,
-            "4" => return FloorChoice::ViewSheet,
-            "5" => return FloorChoice::ViewTrace,
-            _ => println!("  {}1-5{}", DIM, RESET),
-        }
-    }
+// ─── LEVEL UP / VICTORY / GAME OVER ──────────────────────────────────────────
+
+pub fn show_level_up(level: u32, msg: &str) {
+    let c = t_warning();
+    println!();
+    println!("  {}╔═══════════════════════════════════╗{}", c, RESET);
+    println!("  {}║   *** LEVEL UP! Now Level {:>3} ***  ║{}", c, level, RESET);
+    println!("  {}║   {}{}{}{}║{}", c, DIM, msg, RESET, c, RESET);
+    println!("  {}╚═══════════════════════════════════╝{}", c, RESET);
+    println!();
 }
 
-pub fn create_character_ui() -> (
-    String,
-    crate::character::CharacterClass,
-    crate::character::Background,
-) {
-    use crate::character::{Background, CharacterClass};
+pub fn show_victory(player: &Character) {
+    let c = t_warning();
+    println!();
+    println!("  {}╔══════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║                                              ║{}", c, RESET);
+    println!("  {}║     *** VICTORY — THE MATH YIELDS ***        ║{}", c, RESET);
+    println!("  {}║                                              ║{}", c, RESET);
+    println!("  {}║  {}{} has transcended the abyss!{}{}          ║{}", c, BOLD, player.name, RESET, c, RESET);
+    println!("  {}║  Score: {}{}{:<8}{}{}                         ║{}", c, t_magic(), BOLD, player.score(), RESET, c, RESET);
+    println!("  {}║                                              ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+}
+
+pub fn show_game_over(player: &Character) {
+    let c = t_danger();
+    println!();
+    println!("  {}╔══════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║                                              ║{}", c, RESET);
+    println!("  {}║          *** GAME OVER ***                   ║{}", c, RESET);
+    println!("  {}║                                              ║{}", c, RESET);
+    println!(
+        "  {}║  {}{}{} fell on Floor {}  Level {}{}{}          ║{}",
+        c, BOLD, player.name, RESET, player.floor, player.level, c, RESET, RESET
+    );
+    println!(
+        "  {}║  Final Score: {}{}{:<10}{}{}                  ║{}",
+        c, t_warning(), BOLD, player.score(), RESET, c, RESET
+    );
+    println!("  {}║                                              ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+}
+
+// ─── SCOREBOARD ───────────────────────────────────────────────────────────────
+
+pub fn show_scoreboard(scores: &[crate::scoreboard::ScoreEntry]) {
     clear_screen();
-    println!("  {}CHARACTER CREATION{}", BOLD, RESET);
+    let c = t_warning();
     println!();
-
-    let name = loop {
-        let n = prompt("Name >");
-        if n.is_empty() {
-            println!("  {}Name required.{}", RED, RESET);
-        } else if n.len() > 20 {
-            println!("  {}Max 20 chars.{}", RED, RESET);
-        } else {
-            break n;
+    println!("  {}╔══════════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║                  HALL OF CHAOS — TOP SCORES              ║{}", c, RESET);
+    println!("  {}╠══════╦════════════════╦════════════╦═══════╦═══════╦═════╣{}", c, RESET);
+    println!("  {}║ {:>4} ║ {:<14} ║ {:<10} ║ {:>5} ║ {:>5} ║ Date  ║{}", c, "#", "Name", "Class", "Score", "Floor", RESET);
+    println!("  {}╠══════╬════════════════╬════════════╬═══════╬═══════╬═════╣{}", c, RESET);
+    if scores.is_empty() {
+        println!("  {}║  No scores yet. The void awaits your sacrifice.          ║{}", DIM, RESET);
+    } else {
+        for (i, s) in scores.iter().enumerate().take(15) {
+            let row_col = if i == 0 { YELLOW } else if i < 3 { CYAN } else { WHITE };
+            println!(
+                "  {}║ {:>4} ║ {:<14} ║ {:<10} ║ {:>5} ║ {:>5} ║ {} ║{}",
+                row_col,
+                i + 1,
+                &s.name[..s.name.len().min(14)],
+                &s.class[..s.class.len().min(10)],
+                s.score,
+                s.floor_reached,
+                &s.timestamp[..s.timestamp.len().min(5)],
+                RESET
+            );
         }
-    };
-
+    }
+    println!("  {}╚══════╩════════════════╩════════════╩═══════╩═══════╩═════╝{}", c, RESET);
     println!();
-    println!(
-        "  Class: {}[1]{} Mage  {}[2]{} Berserker  {}[3]{} Ranger  {}[4]{} Thief",
-        CYAN, RESET, CYAN, RESET, CYAN, RESET, CYAN, RESET
-    );
-    let class = loop {
-        match prompt("Class >").as_str() {
-            "1" => break CharacterClass::Mage,
-            "2" => break CharacterClass::Berserker,
-            "3" => break CharacterClass::Ranger,
-            "4" => break CharacterClass::Thief,
-            _ => println!("  {}1-4{}", RED, RESET),
-        }
-    };
-
-    println!();
-    println!(
-        "  Background: {}[1]{} Scholar  {}[2]{} Wanderer  {}[3]{} Gladiator",
-        CYAN, RESET, CYAN, RESET, CYAN, RESET
-    );
-    println!(
-        "              {}[4]{} Outcast  {}[5]{} Merchant  {}[6]{} Cultist",
-        CYAN, RESET, CYAN, RESET, CYAN, RESET
-    );
-    let background = loop {
-        match prompt("Background >").as_str() {
-            "1" => break Background::Scholar,
-            "2" => break Background::Wanderer,
-            "3" => break Background::Gladiator,
-            "4" => break Background::Outcast,
-            "5" => break Background::Merchant,
-            "6" => break Background::Cultist,
-            _ => println!("  {}1-6{}", RED, RESET),
-        }
-    };
-
-    (name, class, background)
+    press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));
 }
 
-pub fn show_combat_menu(
-    player: &crate::character::Character,
-    enemy: &crate::enemy::Enemy,
-    round: u32,
-) {
-    let log: Vec<String> = Vec::new();
-    draw_combat_screen(player, enemy, &log, player.floor);
-    println!("  {}Round {}{}  |  HP: {}/{}  |  Status: {}{}{}",
-        YELLOW, round, RESET,
-        player.current_hp, player.max_hp,
-        CYAN,
-        if player.status_effects.is_empty() {
-            "None".to_string()
-        } else {
-            player.status_effects.iter().map(|e| e.name()).collect::<Vec<_>>().join(", ")
-        },
-        RESET,
-    );
+// ─── HELP ─────────────────────────────────────────────────────────────────────
+
+pub fn show_help() {
+    clear_screen();
+    let c = t_primary();
     println!();
-    println!("  {}[A]{}ttack  {}[H]{}eavy  {}[D]{}efend  {}[T]{}aunt  {}[F]{}lee",
-        YELLOW, RESET, YELLOW, RESET, YELLOW, RESET, YELLOW, RESET, YELLOW, RESET);
-
-    // Spells
-    if !player.known_spells.is_empty() {
-        print!("  Spells: ");
-        for (i, spell) in player.known_spells.iter().enumerate() {
-            let short = spell.name.chars().take(20).collect::<String>();
-            print!("{}[S{}]{} {} (dmg:{})  ",
-                CYAN, i + 1, RESET, short, spell.damage);
-        }
-        println!();
-    }
-
-    // Inventory items
-    if !player.inventory.is_empty() {
-        print!("  Items:  ");
-        for (i, item) in player.inventory.iter().enumerate().take(4) {
-            let short = item.name.chars().take(16).collect::<String>();
-            print!("{}[I{}]{} {}  ", MAGENTA, i + 1, RESET, short);
-        }
-        println!();
+    println!("  {}╔══════════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║              CHAOS RPG — HOW TO PLAY                     ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+    println!("  {}THE 10 SACRED ALGORITHMS:{}", t_warning(), RESET);
+    println!("  {}Lorenz{}     · Butterfly effect chaos attractor", CYAN, RESET);
+    println!("  {}Fourier{}    · Harmonic decomposition of fate", CYAN, RESET);
+    println!("  {}Primes{}     · Density sieve of fortune", CYAN, RESET);
+    println!("  {}Riemann{}    · Zeta function partial sums", CYAN, RESET);
+    println!("  {}Fibonacci{}  · Golden spiral trajectory", CYAN, RESET);
+    println!("  {}Mandelbrot{} · Escape velocity (inside = cursed)", CYAN, RESET);
+    println!("  {}Logistic{}   · r=3.9 chaos regime bifurcation", CYAN, RESET);
+    println!("  {}Euler{}      · Totient ratio irregularity", CYAN, RESET);
+    println!("  {}Collatz{}    · 3n+1 stopping time", CYAN, RESET);
+    println!("  {}ModExp{}     · Modular exponentiation hash", CYAN, RESET);
+    println!();
+    println!("  {}STATS (all unbounded — can go negative):{}", t_warning(), RESET);
+    println!("  VIT=HP  FOR=Damage  MAN=Magic  CUN=Crit");
+    println!("  PRC=Accuracy  ENT=Chaos bonus  LCK=Fortune");
+    println!();
+    println!("  {}COMBAT:{}", t_warning(), RESET);
+    println!("  [A] Attack   [H] Heavy   [D] Defend   [T] Taunt");
+    println!("  [F] Flee     [S#] Spell  [I#] Item    [?] Show last trace");
+    println!();
+    println!("  {}CLASSES:{}", t_warning(), RESET);
+    for class in &[
+        CharacterClass::Mage, CharacterClass::Berserker,
+        CharacterClass::Ranger, CharacterClass::Thief,
+        CharacterClass::Necromancer, CharacterClass::Alchemist,
+        CharacterClass::Paladin, CharacterClass::VoidWalker,
+    ] {
+        println!("  {}{:<12}{} {}Passive:{} {}", t_primary(), class.name(), RESET, DIM, RESET, class.passive_desc());
     }
     println!();
-}
-
-pub fn read_combat_action() -> crate::combat::CombatAction {
-    use crate::combat::CombatAction;
-    loop {
-        let s = prompt("Action >");
-        let trimmed = s.trim().to_lowercase();
-        match trimmed.as_str() {
-            "a" | "attack" => return CombatAction::Attack,
-            "h" | "heavy" => return CombatAction::HeavyAttack,
-            "d" | "defend" => return CombatAction::Defend,
-            "t" | "taunt" => return CombatAction::Taunt,
-            "f" | "flee" => return CombatAction::Flee,
-            s if s.starts_with('s') => {
-                // S1, S2, S3... spell selection
-                let idx: usize = s[1..].parse().unwrap_or(1);
-                return CombatAction::UseSpell(idx.saturating_sub(1));
-            }
-            s if s.starts_with('i') => {
-                // I1, I2... item selection
-                let idx: usize = s[1..].parse().unwrap_or(1);
-                return CombatAction::UseItem(idx.saturating_sub(1));
-            }
-            _ => println!("  {}[A]ttack [H]eavy [D]efend [T]aunt [F]lee [S#]pell [I#]tem{}", DIM, RESET),
-        }
-    }
-}
-
-pub fn display_combat_events(events: &[crate::combat::CombatEvent]) {
-    for event in events {
-        let line = event.to_display_string();
-        let color = if line.contains("CRITICAL") || line.contains("CRIT") {
-            YELLOW
-        } else if line.contains("CHAOS") {
-            MAGENTA
-        } else if line.contains("slain") {
-            GREEN
-        } else if line.contains("damage") && line.contains("Enemy") {
-            RED
-        } else {
-            WHITE
-        };
-        println!("  {}{}{}", color, line, RESET);
-    }
+    press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));
 }

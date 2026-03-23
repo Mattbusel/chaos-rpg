@@ -287,6 +287,7 @@ mod tests {
             CharacterClass::Thief,
             Background::Outcast,
             42,
+            crate::character::Difficulty::Normal,
         )
     }
 

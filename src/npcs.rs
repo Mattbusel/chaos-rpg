@@ -255,6 +255,7 @@ mod tests {
             CharacterClass::Thief,
             Background::Merchant,
             1,
+            crate::character::Difficulty::Normal,
         );
         let initial_rel = npc.relationship;
         let _ = npc.haggle(&player, 99);

@@ -137,6 +137,8 @@ pub struct CombatState {
     /// The enemy's chaos roll for their counterattack — shown in compact trace.
     pub enemy_last_roll: Option<ChaosRollResult>,
     pub seed: u64,
+    pub combo_streak: u32,    // consecutive attacks without interruption
+    pub is_first_attack: bool, // Physicist passive: first attack has no catastrophe
 }
 
 impl CombatState {
@@ -150,6 +152,8 @@ impl CombatState {
             last_roll: None,
             enemy_last_roll: None,
             seed,
+            combo_streak: 0,
+            is_first_attack: true,
         }
     }
 
@@ -187,39 +191,89 @@ pub fn resolve_action(
     let mut events = Vec::new();
     let seed = state.next_seed();
 
+    // ── BERSERKER PASSIVE: auto-Enrage below 30% HP ──────────────────────────
+    if player.class == CharacterClass::Berserker
+        && player.hp_percent() < 0.30
+        && !player.has_status("ENRAGED")
+    {
+        player.add_status(crate::character::StatusEffect::Enraged(3));
+        events.push(CombatEvent::StatusApplied {
+            name: "ENRAGED (Berserker passive!)".to_string(),
+        });
+    }
+
+    // ── PALADIN PASSIVE: Divine Regen ─────────────────────────────────────────
+    if player.class == CharacterClass::Paladin {
+        let regen = (3 + player.stats.vitality / 20).max(1);
+        player.heal(regen);
+        events.push(CombatEvent::PlayerHealed { amount: regen });
+    }
+
     // ── PLAYER TURN ──────────────────────────────────────────────────────────
+    let is_attack_action = matches!(action, CombatAction::Attack | CombatAction::HeavyAttack);
+    if !is_attack_action {
+        state.combo_streak = 0;
+    }
+
     match action {
         CombatAction::Attack => {
-            let roll = chaos_roll_verbose(player.stats.force as f64 * 0.01, seed);
+            // Physicist passive: first attack has no catastrophe
+            let roll = if player.class == CharacterClass::Ranger && state.is_first_attack {
+                state.is_first_attack = false;
+                let r = chaos_roll_verbose(player.stats.force as f64 * 0.01, seed);
+                // Override catastrophe: treat as neutral roll
+                if r.is_catastrophe() {
+                    chaos_roll_verbose(player.stats.precision as f64 * 0.01, seed.wrapping_add(42))
+                } else { r }
+            } else {
+                chaos_roll_verbose(player.stats.force as f64 * 0.01, seed)
+            };
+
             let is_crit = roll.is_critical();
             let base_dmg = 5 + player.stats.force / 5 + player.stats.precision / 10;
             let mut damage = roll_damage(base_dmg, player.stats.force, seed);
 
             if is_crit {
-                // Crit multiplied by entropy modifier
                 let entropy_bonus = (player.stats.entropy as f64 / 50.0 + 1.0).min(4.0);
                 damage = (damage as f64 * entropy_bonus) as i64;
+                // Mage passive: crit amplifies next spell
+                if player.class == CharacterClass::Mage {
+                    player.spell_damage_mult = (player.spell_damage_mult + 0.5).min(3.0);
+                }
+            }
+
+            // Combo bonus: +20% damage per streak above 1 (max ×2.5)
+            state.combo_streak += 1;
+            if state.combo_streak > 1 {
+                let combo_mult = (1.0 + (state.combo_streak - 1) as f64 * 0.20).min(2.5);
+                damage = (damage as f64 * combo_mult) as i64;
+                // Ranger passive: Ranger gets +10% extra per combo step
+                if player.class == CharacterClass::Ranger {
+                    damage = (damage as f64 * (1.0 + (state.combo_streak - 1) as f64 * 0.10)) as i64;
+                }
             }
 
             // Class bonuses
             damage += match player.class {
-                CharacterClass::Berserker => {
-                    // Berserker rage: extra damage when low HP
-                    ((1.0 - player.hp_percent()) * 20.0) as i64
-                }
+                CharacterClass::Berserker => ((1.0 - player.hp_percent()) * 20.0) as i64,
                 CharacterClass::Ranger => player.stats.precision / 8,
                 _ => 0,
             };
+            // Enraged status: +50% damage
+            if player.has_status("ENRAGED") {
+                damage = (damage as f64 * 1.5) as i64;
+            }
 
             state.last_roll = Some(roll.clone());
             enemy.hp = (enemy.hp - damage).max(0);
+            player.total_damage_dealt += damage;
             events.push(CombatEvent::PlayerAttack { damage, is_crit });
         }
 
         CombatAction::HeavyAttack => {
             let roll = biased_chaos_roll(
                 player.stats.force as f64 * 0.01,
-                0.3, // slight positive bias
+                0.3,
                 seed,
             );
             let is_crit = roll.is_critical();
@@ -230,34 +284,52 @@ pub fn resolve_action(
                 seed,
             );
 
-            if is_crit {
-                damage *= 2;
-            }
-            if roll.is_catastrophe() {
-                // Heavy attack whiffs catastrophically
-                damage = 0;
+            if is_crit { damage *= 2; }
+
+            // Heavy attack consumes combo streak for a bonus, then resets
+            if state.combo_streak >= 2 {
+                let combo_bonus = state.combo_streak as i64 * (base_dmg / 3).max(5);
+                damage += combo_bonus;
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your swing goes wide — the Lorenz butterfly mocks you."
-                        .to_string(),
+                    description: format!("COMBO FINISHER ×{}! Bonus +{} damage!", state.combo_streak, combo_bonus),
                 });
             }
+            state.combo_streak = 0;
+
+            if roll.is_catastrophe()
+                && !(player.class == CharacterClass::Ranger && state.is_first_attack)
+            {
+                damage = 0;
+                events.push(CombatEvent::ChaosEvent {
+                    description: "Your swing goes wide — the Lorenz butterfly mocks you.".to_string(),
+                });
+            }
+            state.is_first_attack = false;
 
             state.last_roll = Some(roll);
             if damage > 0 {
                 enemy.hp = (enemy.hp - damage).max(0);
+                player.total_damage_dealt += damage;
                 events.push(CombatEvent::PlayerAttack { damage, is_crit });
             }
         }
 
         CombatAction::Defend => {
             state.player_defending = true;
+            state.combo_streak = 0;
             events.push(CombatEvent::PlayerDefend { damage_reduced: 0 }); // updated below
         }
 
         CombatAction::Flee => {
             let flee_roll = chaos_roll_verbose(player.stats.luck as f64 * 0.01, seed);
             let flee_chance = flee_roll.to_range(1, 100);
-            let threshold = 40 + player.stats.cunning / 5;
+            // Thief boon PhantomStep: first flee always succeeds (modeled via very low threshold)
+            let threshold = if matches!(player.boon, Some(crate::character::Boon::BloodPact)) {
+                0
+            } else {
+                40 + player.stats.cunning / 5
+            };
+            state.combo_streak = 0;
 
             if flee_chance > threshold {
                 events.push(CombatEvent::PlayerFled);
@@ -270,16 +342,15 @@ pub fn resolve_action(
 
         CombatAction::Taunt => {
             let taunt_roll = chaos_roll_verbose(player.stats.cunning as f64 * 0.01, seed);
+            state.combo_streak = 0;
             if taunt_roll.is_critical() {
                 state.enemy_stunned = true;
                 events.push(CombatEvent::StatusApplied {
                     name: "STUNNED (enemy)".to_string(),
                 });
             } else if taunt_roll.is_catastrophe() {
-                // Taunt backfires: enemy gets enraged
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you."
-                        .to_string(),
+                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you.".to_string(),
                 });
             }
         }
@@ -308,12 +379,21 @@ pub fn resolve_action(
                     if spell_roll.is_critical() {
                         damage = (damage as f64 * 1.5) as i64;
                     }
-                    // Negative damage heals the enemy (chaotic spells)
+                    // Apply spell_damage_mult (MathSavant boon, Mage crit passive)
+                    if player.spell_damage_mult != 1.0 {
+                        damage = (damage as f64 * player.spell_damage_mult) as i64;
+                        // Mage crit passive resets after one use
+                        if player.class == CharacterClass::Mage && player.spell_damage_mult > 1.0 {
+                            player.spell_damage_mult = if matches!(player.boon, Some(crate::character::Boon::MathSavant)) { 1.75 } else { 1.0 };
+                        }
+                    }
+                    state.combo_streak = 0; // spell resets combo
+
                     if damage >= 0 {
                         enemy.hp = (enemy.hp - damage).max(0);
                         player.total_damage_dealt += damage;
                     } else {
-                        // Negative damage = heal self
+                        // Negative damage = heal self (chaotic spell)
                         player.heal(damage.abs() / 4);
                     }
                     player.spells_cast += 1;
@@ -323,10 +403,13 @@ pub fn resolve_action(
                         backfired: false,
                     });
 
-                    // Side effect: apply status based on spell side effect text
+                    // Side effects from spell text
                     if spell.side_effect.contains("burning") || spell.side_effect.contains("fire") {
                         player.add_status(crate::character::StatusEffect::Blessed(2));
                         events.push(CombatEvent::StatusApplied { name: "BLESSED (2 turns)".to_string() });
+                    } else if spell.side_effect.contains("stun") {
+                        state.enemy_stunned = true;
+                        events.push(CombatEvent::StatusApplied { name: "STUNNED (enemy)".to_string() });
                     }
                 }
             } else {
@@ -366,7 +449,9 @@ pub fn resolve_action(
                     player.total_damage_dealt += weapon_dmg;
                     events.push(CombatEvent::PlayerAttack { damage: weapon_dmg, is_crit: false });
                 } else {
-                    let base_heal = item.damage_or_defense.abs().max(0) / 5 + heal_amount.max(0);
+                    let base_heal = player.item_heal_bonus(
+                        item.damage_or_defense.abs().max(0) / 5 + heal_amount.max(0),
+                    );
                     if base_heal > 0 {
                         player.heal(base_heal);
                         events.push(CombatEvent::PlayerHealed { amount: base_heal });
@@ -391,6 +476,32 @@ pub fn resolve_action(
         player.kills += 1;
         player.gold += gold;
         player.gain_xp(xp);
+
+        // ── Class/boon death passives ─────────────────────────────────────
+        // Necromancer: Death Harvest — shield from fallen enemy
+        if player.class == CharacterClass::Necromancer {
+            let shield = (enemy.max_hp as f64 * 0.30) as i64;
+            player.add_status(crate::character::StatusEffect::Shielded(shield));
+            events.push(CombatEvent::StatusApplied {
+                name: format!("DEATH SHIELD +{} (Necromancer)", shield),
+            });
+        }
+        // Thief passive: ShadowKill — if enemy was killed in one action, double gold
+        if player.class == CharacterClass::Thief && state.turn <= 2 {
+            let bonus = gold;
+            player.gold += bonus;
+            events.push(CombatEvent::ChaosEvent {
+                description: format!("Shadow Kill! Double gold: +{}!", bonus),
+            });
+        }
+        // PrimeBlood boon
+        if matches!(player.boon, Some(crate::character::Boon::PrimeBlood)) {
+            player.prime_blood_tick();
+            events.push(CombatEvent::ChaosEvent {
+                description: "Prime Blood pulses. Your highest stat grew.".to_string(),
+            });
+        }
+
         return (events, CombatOutcome::PlayerWon { xp, gold });
     }
 
@@ -403,6 +514,9 @@ pub fn resolve_action(
 
         let base = enemy.base_damage + enemy.attack_modifier;
         let mut enemy_dmg = roll_damage(base, base, enemy_seed);
+
+        // Scale by game difficulty
+        enemy_dmg = (enemy_dmg * player.difficulty.enemy_damage_mult() as i64 / 100).max(1);
 
         if is_crit {
             enemy_dmg = (enemy_dmg as f64 * 1.5) as i64;
@@ -417,11 +531,18 @@ pub fn resolve_action(
             events.push(CombatEvent::PlayerDefend { damage_reduced });
         }
 
-        player.take_damage(enemy_dmg);
-        events.push(CombatEvent::EnemyAttack {
-            damage: enemy_dmg,
-            is_crit,
-        });
+        // ── VOIDWALKER PASSIVE: Phase Shift ──────────────────────────────────
+        if player.class == CharacterClass::VoidWalker && player.phase_dodge_roll(enemy_seed) {
+            events.push(CombatEvent::ChaosEvent {
+                description: "PHASE SHIFT! You phase through the attack! (VoidWalker)".to_string(),
+            });
+        } else {
+            player.take_damage(enemy_dmg);
+            events.push(CombatEvent::EnemyAttack {
+                damage: enemy_dmg,
+                is_crit,
+            });
+        }
     } else {
         state.enemy_stunned = false;
         events.push(CombatEvent::ChaosEvent {
@@ -433,6 +554,16 @@ pub fn resolve_action(
     let chaos_roll = chaos_roll_verbose(state.chaos_events as f64 * 0.1, state.next_seed());
     if chaos_roll.final_value > 0.85 {
         let chaos_event = generate_chaos_event(player, enemy, &mut state.seed);
+        // ChaosMath passive: Chaos Resonance — chaos events restore 15 HP
+        if player.class == CharacterClass::VoidWalker {
+            player.heal(15);
+            events.push(CombatEvent::PlayerHealed {
+                amount: 15,
+            });
+            events.push(CombatEvent::ChaosEvent {
+                description: "CHAOS RESONANCE: The math heals you!".to_string(),
+            });
+        }
         events.push(chaos_event);
         state.chaos_events += 1;
     }
@@ -507,6 +638,7 @@ mod tests {
             CharacterClass::Berserker,
             Background::Gladiator,
             42,
+            crate::character::Difficulty::Normal,
         )
     }
 
