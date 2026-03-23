@@ -10,9 +10,11 @@ use chaos_rpg_core::{
     combat::{resolve_action, CombatAction, CombatOutcome, CombatState},
     enemy::{generate_enemy, Enemy, FloorAbility},
     items::Item,
+    legacy_system::{GraveyardEntry, LegacyData},
+    misery_system::{MiserySource, SpiteAction},
     nemesis::{load_nemesis, save_nemesis, NemesisRecord},
     npcs::shop_npc,
-    scoreboard::{save_score, ScoreEntry},
+    scoreboard::{load_misery_scores, save_misery_score, save_score, MiseryEntry, ScoreEntry},
     skill_checks::{perform_skill_check, Difficulty, SkillType},
     world::{generate_floor, room_enemy, Room, RoomType},
 };
@@ -1458,6 +1460,52 @@ fn do_combat_encounter(
             *last_roll = Some(roll.clone());
         }
 
+        // ── Misery tracking ──────────────────────────────────────────────────
+        {
+            use chaos_rpg_core::combat::CombatEvent;
+            for event in &events {
+                match event {
+                    CombatEvent::EnemyAttack { damage, is_crit } => {
+                        let new_ms = player.misery.add_misery(MiserySource::DamageTaken, *damage as f64);
+                        if *is_crit { player.misery.add_misery(MiserySource::Headshot, 0.0); }
+                        player.run_stats.record_damage_taken(*damage, *is_crit);
+                        for ms in new_ms {
+                            println!("  \x1b[35m[MISERY] {} — {}\x1b[0m", ms.title(), ms.flavor());
+                        }
+                    }
+                    CombatEvent::PlayerFleeFailed => {
+                        player.misery.add_misery(MiserySource::FleeFailed, 0.0);
+                    }
+                    CombatEvent::PlayerAttack { damage, is_crit } => {
+                        player.run_stats.record_damage_dealt(*damage, None, *is_crit);
+                        // Defiance roll tracking
+                        let new_passives = player.misery.increment_defiance_roll();
+                        for p in new_passives {
+                            println!("  \x1b[96m[DEFIANCE] {} UNLOCKED!\x1b[0m", p.name());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // Cosmic Joke flavor (15% chance per round for negative chars)
+            if player.misery.cosmic_joke {
+                if let Some(line) = chaos_rpg_core::misery_system::MiseryState::cosmic_joke_combat_line(
+                    player.seed, player.rooms_cleared as u64) {
+                    println!("  \x1b[2m{}\x1b[0m", line);
+                }
+            }
+            // Underdog mercy — pity skip
+            let pity_chance = chaos_rpg_core::misery_system::MiseryState::enemy_pity_chance(player.stats.total());
+            if pity_chance > 0.0 {
+                let roll = (player.seed.wrapping_mul(player.rooms_cleared as u64 + 1)) % 100;
+                if roll < (pity_chance * 100.0) as u64 {
+                    player.misery.add_misery(MiserySource::EnemyPitiedYou, 0.0);
+                    player.run_stats.enemies_pitied_you += 1;
+                    println!("  \x1b[2m{} looks at you with pity. It cannot bring itself to attack.\x1b[0m", enemy.name);
+                }
+            }
+        }
+
         ui::display_combat_events(&events);
         println!();
 
@@ -1539,6 +1587,9 @@ fn do_combat_encounter(
             CombatOutcome::PlayerDied => {
                 emit_audio(AudioEvent::EntityDied { is_player: true });
                 emit_audio(AudioEvent::GameOver);
+                // Record death stats
+                player.run_stats.cause_of_death = format!("Killed by {}", enemy.name);
+                player.misery.add_misery(MiserySource::DeathRemainingEnemyHp, enemy.hp as f64);
                 // Save nemesis: the enemy that just killed the player
                 let kill_method = if player.spells_cast > player.kills * 2 { "spell" } else { "physical" };
                 let nemesis = NemesisRecord::new(
@@ -1677,6 +1728,11 @@ fn events_to_enemy_outcome_str(
 }
 
 fn end_game_score(player: &Character) {
+    let tier = player.power_tier();
+    let underdog = player.underdog_multiplier();
+    let misery = player.misery.misery_index;
+
+    // Regular scoreboard
     let entry = ScoreEntry::new(
         player.name.clone(),
         player.class.to_string(),
@@ -1684,7 +1740,67 @@ fn end_game_score(player: &Character) {
         player.floor,
         player.kills,
         0,
-    );
+    )
+    .with_tier(tier.name())
+    .with_misery(misery, underdog);
     let scores = save_score(entry);
+
+    // Hall of Misery (only if they have misery to speak of)
+    if misery >= 100.0 {
+        let misery_entry = MiseryEntry::new(
+            &player.name,
+            player.class.to_string(),
+            misery,
+            player.floor,
+            tier.name(),
+            player.misery.spite_total_spent,
+            player.misery.defiance_rolls,
+            &player.run_stats.cause_of_death,
+            underdog,
+        );
+        save_misery_score(misery_entry);
+    }
+
+    // Legacy / graveyard
+    let epitaph = GraveyardEntry::generate_epitaph(
+        player.class.to_string().as_str(),
+        player.floor,
+        player.kills,
+        player.total_damage_dealt,
+        misery,
+        player.spells_cast,
+        player.stats.vitality < 0 && player.stats.force < 0 && player.stats.mana < 0,
+        player.run_stats.deaths_to_backfire > 0,
+        tier.name(),
+    );
+    let graveyard_entry = GraveyardEntry {
+        name: player.name.clone(),
+        class: player.class.to_string(),
+        level: player.level,
+        floor: player.floor,
+        power_tier: tier.name().to_string(),
+        misery_index: misery,
+        cause_of_death: player.run_stats.cause_of_death.clone(),
+        kills: player.kills,
+        score: player.score(),
+        date: String::new(),
+        epitaph,
+    };
+    let mut legacy = LegacyData::load();
+    legacy.record_run(
+        graveyard_entry,
+        player.total_damage_dealt,
+        player.total_damage_taken,
+        player.gold,
+        misery,
+        player.misery.spite_total_spent,
+        player.run_stats.total_rolls,
+        player.run_stats.deaths_to_backfire > 0,
+        false,
+        player.seed,
+        tier.name(),
+    );
+    legacy.save();
+
     ui::show_scoreboard(&scores);
 }

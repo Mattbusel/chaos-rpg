@@ -638,13 +638,26 @@ pub fn show_character_sheet(c: &Character) {
         col,
         RESET
     );
+    let (power_label, power_value) = c.power_display();
+    let underdog = c.underdog_multiplier();
+    let underdog_str = if underdog > 1.01 {
+        format!("  {}[UNDERDOG ×{:.1}]{}", "\x1b[33m", underdog, RESET)
+    } else { String::new() };
+    let misery = c.misery.misery_index;
+    let misery_str = if misery >= 100.0 {
+        format!("  {}MISERY: {:.0}{}", "\x1b[35m", misery, RESET)
+    } else { String::new() };
     println!(
-        "  {}║  {}{}  {}{}{}║{}",
+        "  {}║  {}{}: {}{}{}  {}{}{}{}║{}",
         col,
-        tier.color_code(),
-        tier.name(),
+        tier.ansi_color(),
+        power_label,
+        power_value,
+        RESET,
+        underdog_str,
         DIM,
         tier.flavor(),
+        misery_str,
         RESET,
         RESET
     );
@@ -1357,7 +1370,7 @@ pub fn show_help() {
 /// Interactive passive skill tree allocation. Shows available nodes and lets
 /// the player type a node ID to allocate it. Applies stat bonuses immediately.
 pub fn show_passive_tree_ui(player: &mut Character, seed: u64) {
-    use chaos_rpg_core::passive_tree::{NodeType, PlayerPassives, NODES};
+    use chaos_rpg_core::passive_tree::{nodes, NodeType, PlayerPassives};
 
     // Build PlayerPassives from character state.
     let mut passives = PlayerPassives {
@@ -1389,7 +1402,7 @@ pub fn show_passive_tree_ui(player: &mut Character, seed: u64) {
         println!();
 
         // Show reachable unallocated nodes.
-        let reachable: Vec<_> = NODES
+        let reachable: Vec<_> = nodes()
             .iter()
             .filter(|n| !passives.allocated.contains(&n.id) && passives.can_allocate(n.id))
             .collect();
@@ -1416,6 +1429,9 @@ pub fn show_passive_tree_ui(player: &mut Character, seed: u64) {
                 NodeType::Engine { engine, .. } => format!("[ENGINE] {}", engine),
                 NodeType::Keystone { id } => format!("[KEYSTONE] {}", id),
                 NodeType::Synergy { cluster, .. } => format!("[SYNERGY] cluster {}", cluster),
+                NodeType::Notable { stat, bonus, .. } => {
+                    format!("[NOTABLE] +{} {}", bonus, stat.to_uppercase())
+                }
             };
             println!(
                 "  {}{:>3}{} {} — {} {}{}{}",
@@ -1446,7 +1462,7 @@ pub fn show_passive_tree_ui(player: &mut Character, seed: u64) {
                 // Apply any newly locked-in stat bonuses to the character.
                 for (&nid, &value) in &passives.stat_bonuses {
                     if !prev_bonuses.contains_key(&nid) {
-                        if let Some(node) = NODES.iter().find(|n| n.id == nid) {
+                        if let Some(node) = nodes().iter().find(|n| n.id == nid) {
                             if let NodeType::Stat { stat, .. } = &node.node_type {
                                 passive_apply_stat(player, stat, value);
                             }

@@ -5,6 +5,8 @@
 
 use crate::body::{Body, BodyPart};
 use crate::chaos_pipeline::{chaos_roll_verbose, destiny_roll, roll_stat};
+use crate::misery_system::MiseryState;
+use crate::run_stats::RunStats;
 use serde::{Deserialize, Serialize};
 
 // ─── CLASSES ──────────────────────────────────────────────────────────────────
@@ -328,82 +330,12 @@ impl StatBlock {
     }
 
     pub fn power_level(&self) -> PowerTier {
-        let total = self.total();
-        match total {
-            i64::MIN..=-1000 => PowerTier::Abyssal,
-            -999..=-300 => PowerTier::Damned,
-            -299..=-1 => PowerTier::Cursed,
-            0..=99 => PowerTier::Mortal,
-            100..=299 => PowerTier::Awakened,
-            300..=599 => PowerTier::Champion,
-            600..=999 => PowerTier::Legendary,
-            1000..=2999 => PowerTier::Transcendent,
-            3000..=9999 => PowerTier::Godlike,
-            _ => PowerTier::BeyondMath,
-        }
+        PowerTier::from_total(self.total())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PowerTier {
-    Abyssal,
-    Damned,
-    Cursed,
-    Mortal,
-    Awakened,
-    Champion,
-    Legendary,
-    Transcendent,
-    Godlike,
-    BeyondMath,
-}
-
-impl PowerTier {
-    pub fn name(&self) -> &'static str {
-        match self {
-            PowerTier::Abyssal => "ABYSSAL",
-            PowerTier::Damned => "DAMNED",
-            PowerTier::Cursed => "CURSED",
-            PowerTier::Mortal => "Mortal",
-            PowerTier::Awakened => "Awakened",
-            PowerTier::Champion => "Champion",
-            PowerTier::Legendary => "Legendary",
-            PowerTier::Transcendent => "Transcendent",
-            PowerTier::Godlike => "GODLIKE",
-            PowerTier::BeyondMath => "BEYOND MATH",
-        }
-    }
-
-    pub fn flavor(&self) -> &'static str {
-        match self {
-            PowerTier::Abyssal => "The math has forsaken you. You exist only through spite.",
-            PowerTier::Damned => "The algorithms hate you specifically. Keep going.",
-            PowerTier::Cursed => "Even rats pity you. Negative stats are technically valid.",
-            PowerTier::Mortal => "Statistically average. The Logistic Map is neutral on you.",
-            PowerTier::Awakened => "The prime numbers notice you. That is an improvement.",
-            PowerTier::Champion => "The Lorenz attractor bends in your favor.",
-            PowerTier::Legendary => "The Riemann zeros align. You are an anomaly.",
-            PowerTier::Transcendent => "The Mandelbrot boundary recognizes your face.",
-            PowerTier::Godlike => "You ARE the chaos engine. The math screams.",
-            PowerTier::BeyondMath => "ERROR: STAT OVERFLOW. YOU HAVE BROKEN THE ALGORITHM.",
-        }
-    }
-
-    pub fn color_code(&self) -> &'static str {
-        match self {
-            PowerTier::Abyssal => "\x1b[31m",
-            PowerTier::Damned => "\x1b[31m",
-            PowerTier::Cursed => "\x1b[35m",
-            PowerTier::Mortal => "\x1b[37m",
-            PowerTier::Awakened => "\x1b[32m",
-            PowerTier::Champion => "\x1b[36m",
-            PowerTier::Legendary => "\x1b[33m",
-            PowerTier::Transcendent => "\x1b[35m",
-            PowerTier::Godlike => "\x1b[91m",
-            PowerTier::BeyondMath => "\x1b[97m",
-        }
-    }
-}
+// PowerTier is now defined in power_tier.rs — re-export for backwards compatibility
+pub use crate::power_tier::PowerTier;
 
 // ─── STATUS EFFECTS ───────────────────────────────────────────────────────────
 
@@ -840,6 +772,12 @@ pub struct Character {
     pub corruption: u32,
     // The Hunger — rooms without a kill (floor 50+: every 5 → lose 5% max HP)
     pub rooms_without_kill: u32,
+    // Misery / Spite / Defiance system (negative-tier runs)
+    #[serde(default)]
+    pub misery: MiseryState,
+    // Per-run statistics tracker
+    #[serde(default)]
+    pub run_stats: RunStats,
 }
 
 impl Character {
@@ -937,6 +875,8 @@ impl Character {
             faction_rep: crate::factions::FactionRep::default(),
             corruption: 0,
             rooms_without_kill: 0,
+            misery: MiseryState::new(),
+            run_stats: RunStats::new(),
         }
     }
 
@@ -1374,7 +1314,7 @@ impl Character {
             format!("  Difficulty:       {}", self.difficulty.name()),
             format!(
                 "  Power tier:       {}{}\x1b[0m",
-                self.power_tier().color_code(),
+                self.power_tier().ansi_color(),
                 self.power_tier().name()
             ),
         ]
@@ -1398,6 +1338,18 @@ impl Character {
             reset
         );
         format!("[{}] {}/{}", bar, self.current_hp, self.max_hp)
+    }
+
+    /// Return the primary power display (label, value string) for the character sheet.
+    /// Negative-tier chars with high misery show MISERY as primary metric.
+    pub fn power_display(&self) -> (&'static str, String) {
+        let tier = self.power_tier();
+        self.misery.display_primary(self.stats.total(), tier.name())
+    }
+
+    /// Underdog XP multiplier (>1.0 only for negative stat totals).
+    pub fn underdog_multiplier(&self) -> f64 {
+        MiseryState::underdog_multiplier(self.stats.total())
     }
 
     pub fn status_badge_line(&self) -> String {

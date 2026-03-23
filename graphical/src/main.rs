@@ -661,6 +661,52 @@ impl State {
             self.combat_log.push(ev.to_display_string());
         }
 
+        // ── Misery event wiring ───────────────────────────────────────────────
+        if let Some(ref mut p) = self.player {
+            use chaos_rpg_core::combat::CombatEvent;
+            use chaos_rpg_core::misery_system::MiserySource;
+            for ev in &events {
+                match ev {
+                    CombatEvent::EnemyAttack { damage, is_crit } => {
+                        let new_ms = p.misery.add_misery(MiserySource::DamageTaken, *damage as f64);
+                        if *is_crit { p.misery.add_misery(MiserySource::Headshot, 0.0); }
+                        p.run_stats.record_damage_taken(*damage, *is_crit);
+                        for ms in new_ms {
+                            self.combat_log.push(format!("[MISERY] {}", ms.title()));
+                        }
+                        // Pity mercy check
+                        let pity = chaos_rpg_core::misery_system::MiseryState::enemy_pity_chance(p.stats.total());
+                        if pity > 0.0 {
+                            let roll = (p.seed.wrapping_mul(p.rooms_cleared as u64 + self.frame)) % 100;
+                            if roll < (pity * 100.0) as u64 {
+                                p.misery.add_misery(MiserySource::EnemyPitiedYou, 0.0);
+                                p.run_stats.enemies_pitied_you += 1;
+                                self.combat_log.push(format!("Enemy looks at you with pity. Attack skipped."));
+                            }
+                        }
+                    }
+                    CombatEvent::PlayerAttack { damage, is_crit } => {
+                        p.run_stats.record_damage_dealt(*damage, None, *is_crit);
+                        let new_passives = p.misery.increment_defiance_roll();
+                        for passive in new_passives {
+                            self.combat_log.push(format!("[DEFIANCE] {} UNLOCKED!", passive.name()));
+                        }
+                    }
+                    CombatEvent::PlayerFleeFailed => {
+                        p.misery.add_misery(MiserySource::FleeFailed, 0.0);
+                    }
+                    _ => {}
+                }
+            }
+            // Cosmic joke flavor
+            if p.misery.cosmic_joke {
+                if let Some(line) = chaos_rpg_core::misery_system::MiseryState::cosmic_joke_combat_line(
+                    p.seed, self.frame) {
+                    self.combat_log.push(format!("  {}", line));
+                }
+            }
+        }
+
         // Chaos engine trace
         if let Some(ref roll) = self.last_roll.clone() {
             for line in roll.display_lines().iter().take(4) {
@@ -800,13 +846,52 @@ impl State {
     }
 
     fn save_score_now(&mut self) {
+        use chaos_rpg_core::{
+            legacy_system::{GraveyardEntry, LegacyData},
+            scoreboard::{save_misery_score, MiseryEntry},
+            misery_system::MiseryState,
+        };
         if let Some(ref p) = self.player {
             let score_val = p.xp + p.gold as u64 + (p.kills * 100) as u64 + (p.floor as u64 * 500);
+            let tier = p.power_tier();
+            let underdog = p.underdog_multiplier();
+            let misery = p.misery.misery_index;
             let entry = ScoreEntry::new(
                 p.name.clone(), p.class.name().to_string(),
                 score_val, p.floor, p.kills, 0,
-            );
+            ).with_tier(tier.name()).with_misery(misery, underdog);
             let _ = save_score(entry);
+
+            // Hall of Misery
+            if misery >= 100.0 {
+                let me = MiseryEntry::new(
+                    &p.name, p.class.name().to_string(), misery, p.floor,
+                    tier.name(), p.misery.spite_total_spent, p.misery.defiance_rolls,
+                    &p.run_stats.cause_of_death, underdog,
+                );
+                let _ = save_misery_score(me);
+            }
+
+            // Graveyard / legacy
+            let all_neg = p.stats.vitality < 0 && p.stats.force < 0 && p.stats.mana < 0;
+            let epitaph = GraveyardEntry::generate_epitaph(
+                p.class.name(), p.floor, p.kills, p.total_damage_dealt,
+                misery, p.spells_cast, all_neg,
+                p.run_stats.deaths_to_backfire > 0, tier.name(),
+            );
+            let ge = GraveyardEntry {
+                name: p.name.clone(), class: p.class.name().to_string(),
+                level: p.level, floor: p.floor, power_tier: tier.name().to_string(),
+                misery_index: misery, cause_of_death: p.run_stats.cause_of_death.clone(),
+                kills: p.kills, score: score_val, date: String::new(), epitaph,
+            };
+            let mut legacy = LegacyData::load();
+            legacy.record_run(
+                ge, p.total_damage_dealt, p.total_damage_taken, p.gold,
+                misery, p.misery.spite_total_spent, p.run_stats.total_rolls,
+                p.run_stats.deaths_to_backfire > 0, false, p.seed, tier.name(),
+            );
+            legacy.save();
         }
     }
 }
@@ -1106,10 +1191,15 @@ impl State {
         let mana= RGB::from_u8(t.mana.0,   t.mana.1,   t.mana.2);
 
         let (pname, pclass, plv, pfloor, pkills, pgold, pxp, php, pmhp, pstatus,
-             pcorruption, prwk) = match &self.player {
-            Some(p) => (p.name.clone(), p.class.name(), p.level, p.floor,
-                        p.kills, p.gold, p.xp, p.current_hp, p.max_hp,
-                        p.status_badge_line(), p.corruption, p.rooms_without_kill),
+             pcorruption, prwk, ptier, pmisery, punderdog, pdefiance) = match &self.player {
+            Some(p) => {
+                let tier = p.power_tier();
+                (p.name.clone(), p.class.name(), p.level, p.floor,
+                 p.kills, p.gold, p.xp, p.current_hp, p.max_hp,
+                 p.status_badge_line(), p.corruption, p.rooms_without_kill,
+                 tier, p.misery.misery_index, p.underdog_multiplier(),
+                 p.misery.defiance_rolls)
+            }
             None => { self.screen = AppScreen::Title; return; }
         };
 
@@ -1152,8 +1242,52 @@ impl State {
         stat_line(ctx, 3, 11, "Gold  ", &format!("{}g", pgold), t.gold, &t);
         stat_line(ctx, 3, 12, "XP    ", &format!("{}", pxp), t.xp, &t);
         stat_line(ctx, 3, 13, "Kills ", &format!("{}", pkills), t.success, &t);
+
+        // ── Power tier display with animated RGB ──────────────────────────────
+        {
+            let tier_rgb = ptier.rgb();
+            // Animate rainbow tiers
+            let tier_col = if ptier.has_effect() {
+                use chaos_rpg_core::power_tier::TierEffect;
+                match ptier.effect() {
+                    TierEffect::Rainbow | TierEffect::RainbowFast => {
+                        let speed = if matches!(ptier.effect(), TierEffect::RainbowFast) { 2 } else { 4 };
+                        let pal = [(220u8,60u8,60u8),(220,180,40),(60,200,80),(80,200,220),(80,80,220),(180,60,200)];
+                        pal[((self.frame / speed) as usize) % pal.len()]
+                    }
+                    TierEffect::Pulse => {
+                        let bright = (self.frame / 15) % 2 == 0;
+                        if bright { tier_rgb } else { (tier_rgb.0/2, tier_rgb.1/2, tier_rgb.2/2) }
+                    }
+                    TierEffect::Flash => {
+                        if (self.frame / 12) % 2 == 0 { tier_rgb } else { t.bg }
+                    }
+                    _ => tier_rgb,
+                }
+            } else { tier_rgb };
+            let (power_label, power_value) = match &self.player {
+                Some(p) => p.power_display(),
+                None => ("POWER", ptier.name().to_string()),
+            };
+            stat_line(ctx, 3, 14, &format!("{}: ", power_label), &power_value, tier_col, &t);
+        }
+
+        // Misery / Underdog badges
+        if pmisery >= 100.0 {
+            let mc = t.warn;
+            stat_line(ctx, 3, 15, "Misery ", &format!("{:.0}", pmisery), mc, &t);
+        }
+        if punderdog > 1.01 {
+            let uc = t.gold;
+            stat_line(ctx, 3, 16, "Underdog ", &format!("×{:.1}", punderdog), uc, &t);
+        }
+        if pdefiance > 0 {
+            let dc = t.accent;
+            stat_line(ctx, 3, 17, "Defiance ", &format!("{} rolls", pdefiance), dc, &t);
+        }
+
         if pcorruption > 0 {
-            stat_line(ctx, 3, 14, "Corruption ", &format!("{}", pcorruption), t.warn, &t);
+            stat_line(ctx, 3, 18, "Corruption ", &format!("{}", pcorruption), t.warn, &t);
         }
         if !pstatus.is_empty() {
             ctx.print_color(3, 15, RGB::from_u8(t.xp.0, t.xp.1, t.xp.2), bg,

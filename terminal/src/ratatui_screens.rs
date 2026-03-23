@@ -969,16 +969,8 @@ pub fn draw_character_sheet(f: &mut Frame, player: &Character, theme: ColorTheme
 
     // ── Center: stats ─────────────────────────────────────────────────────────
     let tier = player.power_tier();
-    let tier_color_ratatui = match tier {
-        PowerTier::Abyssal | PowerTier::Damned | PowerTier::Cursed => Color::Red,
-        PowerTier::Mortal => Color::Gray,
-        PowerTier::Awakened => Color::White,
-        PowerTier::Champion => Color::Cyan,
-        PowerTier::Legendary => Color::Green,
-        PowerTier::Transcendent => Color::LightYellow,
-        PowerTier::Godlike => Color::Yellow,
-        PowerTier::BeyondMath => Color::Magenta,
-    };
+    let (tr, tg, tb) = tier.rgb();
+    let tier_color_ratatui = Color::Rgb(tr, tg, tb);
 
     let bar_width = (chunks[1].width as usize).saturating_sub(20).max(8);
 
