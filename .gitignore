@@ -1,0 +1,13 @@
+/target
+
+
+# Added by cargo
+#
+# already existing elements were commented out
+
+#/target
+*.exe
+*.pdb
+.DS_Store
+Thumbs.db
+chaos_rpg_scores.json
