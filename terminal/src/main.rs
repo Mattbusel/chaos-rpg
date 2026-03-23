@@ -86,6 +86,13 @@ fn run_game(mode: GameMode) {
         ui::show_help();
     }
 
+    let auto_ans = ui::prompt("  Auto-play mode? (AI handles combat/navigation, pauses for items/shop) [y/N] >");
+    if auto_ans.trim().eq_ignore_ascii_case("y") {
+        ui::set_auto_mode(true);
+        println!("  {}[AUTO MODE ON] — type 'z' on the floor to toggle off.{}", ui::GREEN, ui::RESET);
+        println!();
+    }
+
     let (name, class, background, game_difficulty): (_, _, _, GameDifficulty) =
         ui::create_character_ui();
     let seed = if mode == GameMode::DailySeed {
@@ -300,9 +307,30 @@ fn run_game(mode: GameMode) {
                     ui::RESET
                 );
             }
+            if ui::is_auto_mode() {
+                println!("  {}[AUTO PILOT ON — Z to stop]{}", ui::GREEN, ui::RESET);
+            }
             println!();
 
-            let input = ui::prompt("  > ").to_lowercase();
+            // Auto-play: spend any pending passive points, then enter room / descend
+            let input = if ui::is_auto_mode() {
+                if player.skill_points > 0 {
+                    let msgs = player.auto_allocate_passives(
+                        floor_seed.wrapping_add(player.rooms_cleared as u64 * 777));
+                    for m in &msgs {
+                        println!("  {}[AUTO] {}{}", ui::GREEN, m, ui::RESET);
+                    }
+                }
+                if floor.rooms_remaining() == 0 {
+                    println!("  {}[AUTO] All rooms done — descending.{}", ui::DIM, ui::RESET);
+                    "d".to_string()
+                } else {
+                    println!("  {}[AUTO] Entering next room...{}", ui::DIM, ui::RESET);
+                    "e".to_string()
+                }
+            } else {
+                ui::prompt("  > ").to_lowercase()
+            };
 
             match input.trim() {
                 "c" => {
@@ -344,6 +372,17 @@ fn run_game(mode: GameMode) {
                         println!("  {}No chaos roll yet.{}", ui::DIM, ui::RESET);
                     }
                     ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+                    continue 'rooms;
+                }
+                "z" => {
+                    let new_state = !ui::is_auto_mode();
+                    ui::set_auto_mode(new_state);
+                    if new_state {
+                        println!("  {}[AUTO MODE ON]{}", ui::GREEN, ui::RESET);
+                    } else {
+                        println!("  {}[Auto mode off]{}", ui::DIM, ui::RESET);
+                        ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+                    }
                     continue 'rooms;
                 }
                 "d" if floor.rooms_remaining() == 0 => {
@@ -627,6 +666,10 @@ fn handle_room(
 
         RoomType::Shop => {
             emit_audio(AudioEvent::ShopEntered);
+            if ui::is_auto_mode() {
+                println!("  {}[AUTO] Shop skipped — auto mode active. Type 'z' on the floor to disable.{}", ui::DIM, ui::RESET);
+                return RoomOutcome::Continue;
+            }
             let mut npc = shop_npc(player.floor, seed);
             println!("  {}$ SHOP ${}", ui::CYAN, ui::RESET);
             println!();
@@ -836,11 +879,16 @@ fn handle_room(
             println!();
             println!("  {}", room.description);
             println!();
-            println!("  Step through to the next floor? [Y/N]");
-            println!();
 
-            let input = ui::prompt("  > ");
-            if input.trim().eq_ignore_ascii_case("y") {
+            let take = if ui::is_auto_mode() {
+                println!("  {}[AUTO] Stepping through portal!{}", ui::DIM, ui::RESET);
+                true
+            } else {
+                println!("  Step through to the next floor? [Y/N]");
+                println!();
+                ui::prompt("  > ").trim().eq_ignore_ascii_case("y")
+            };
+            if take {
                 println!("  {}You step through the portal!{}", ui::CYAN, ui::RESET);
                 ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                 return RoomOutcome::PortalTaken;
@@ -952,6 +1000,10 @@ fn handle_room(
         }
 
         RoomType::CraftingBench => {
+            if ui::is_auto_mode() {
+                println!("  {}[AUTO] Crafting bench skipped.{}", ui::DIM, ui::RESET);
+                return RoomOutcome::Continue;
+            }
             do_crafting_bench(player, seed, last_roll);
             RoomOutcome::Continue
         }
@@ -1450,7 +1502,11 @@ fn do_combat_encounter(
         ui::clear_screen();
         ui::show_combat_menu(player, enemy, state.turn + 1);
 
-        let action = ui::read_combat_action();
+        let action = if ui::is_auto_mode() {
+            ui::auto_combat_action(player)
+        } else {
+            ui::read_combat_action()
+        };
         // Capture display name before action is moved into resolve_action
         let action_label = combat_action_label(&action);
 
@@ -1542,15 +1598,23 @@ fn do_combat_encounter(
                     ui::show_level_up(player.level, "Chaos has amplified your stats!");
                     ui::show_character_sheet(player);
                     if player.skill_points > 0 {
-                        println!(
-                            "  {}You have {} skill point(s) to spend!{}",
-                            ui::CYAN,
-                            player.skill_points,
-                            ui::RESET
-                        );
-                        let inp = ui::prompt("  [P] Open passive tree  [any] Skip > ");
-                        if inp.trim().eq_ignore_ascii_case("p") {
-                            ui::show_passive_tree_ui(player, seed);
+                        if ui::is_auto_mode() {
+                            let msgs = player.auto_allocate_passives(
+                                seed.wrapping_add(player.level as u64 * 777));
+                            for m in &msgs {
+                                println!("  {}[AUTO] {}{}", ui::GREEN, m, ui::RESET);
+                            }
+                        } else {
+                            println!(
+                                "  {}You have {} skill point(s) to spend!{}",
+                                ui::CYAN,
+                                player.skill_points,
+                                ui::RESET
+                            );
+                            let inp = ui::prompt("  [P] Open passive tree  [any] Skip > ");
+                            if inp.trim().eq_ignore_ascii_case("p") {
+                                ui::show_passive_tree_ui(player, seed);
+                            }
                         }
                     }
                 }

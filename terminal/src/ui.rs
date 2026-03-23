@@ -7,8 +7,39 @@ use crossterm::{
     cursor, execute,
     terminal::{self, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use std::cell::RefCell;
 use std::io::{self, Write};
 use std::sync::OnceLock;
+
+// ─── AUTO-PLAY MODE ───────────────────────────────────────────────────────────
+
+thread_local! {
+    static AUTO_MODE: RefCell<bool> = RefCell::new(false);
+}
+
+pub fn set_auto_mode(v: bool) {
+    AUTO_MODE.with(|m| *m.borrow_mut() = v);
+}
+
+pub fn is_auto_mode() -> bool {
+    AUTO_MODE.with(|m| *m.borrow())
+}
+
+/// Choose a combat action automatically based on character state.
+pub fn auto_combat_action(player: &chaos_rpg_core::character::Character) -> chaos_rpg_core::combat::CombatAction {
+    use chaos_rpg_core::combat::CombatAction;
+    let hp_pct = player.current_hp as f32 / player.max_hp.max(1) as f32;
+    if hp_pct < 0.25 {
+        println!("  {}[AUTO] HP critical — Defending.{}", GREEN, RESET);
+        return CombatAction::Defend;
+    }
+    if !player.known_spells.is_empty() && player.stats.mana > 10 {
+        println!("  {}[AUTO] Casting spell 1.{}", GREEN, RESET);
+        return CombatAction::UseSpell(0);
+    }
+    println!("  {}[AUTO] Attacking.{}", GREEN, RESET);
+    CombatAction::Attack
+}
 
 use chaos_rpg_core::character::{
     display_stat, Background, Boon, Character, CharacterClass, ColorTheme, Difficulty,
@@ -131,6 +162,9 @@ pub fn prompt(msg: &str) -> String {
 }
 
 pub fn press_enter(msg: &str) {
+    if is_auto_mode() {
+        return; // no pause in auto mode
+    }
     print!("{}", msg);
     let _ = io::stdout().flush();
     let mut s = String::new();
