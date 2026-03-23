@@ -23,3 +23,5 @@ pub mod ui;
 pub mod world;
 pub mod world_map;
 pub mod recipes;
+pub mod dialogue;
+pub mod faction_system;

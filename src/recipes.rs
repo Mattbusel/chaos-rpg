@@ -181,7 +181,7 @@ impl std::fmt::Display for CraftingError {
 
 // ─── CRAFTING RESULT ──────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CraftingResult {
     pub item_name: String,
     pub quantity: u32,

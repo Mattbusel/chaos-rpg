@@ -32,7 +32,7 @@ impl RoomType {
 
 // ─── ROOM ─────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Room {
     pub id: String,
     pub name: String,
