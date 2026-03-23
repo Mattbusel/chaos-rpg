@@ -6,6 +6,10 @@
 
 pub mod audio_events;
 pub mod audio_synth;
+pub mod power_tier;
+pub mod misery_system;
+pub mod run_stats;
+pub mod legacy_system;
 pub mod achievement_system;
 pub mod io_util;
 pub mod atlas;
@@ -50,3 +54,4 @@ pub mod dungeon_generator_v2;
 pub mod dialogue_system;
 pub mod map_generator;
 pub mod merchant_system;
+pub mod crafting_system_v2;

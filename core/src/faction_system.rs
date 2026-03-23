@@ -1,300 +1,290 @@
-//! Faction reputation system.
+//! Faction politics, diplomacy, and player reputation.
 //!
-//! Manages multiple named factions, their alliances and enmities, and the
-//! player's standing with each one.  Reputation cascades automatically to
-//! allied and enemy factions when modified.
+//! Manages factions, diplomatic relations, and per-player standing.
 
 use std::collections::HashMap;
 
-// ─── FACTION ──────────────────────────────────────────────────────────────────
+// ── Diplomatic Relations ──────────────────────────────────────────────────
 
-/// A playable or NPC faction with social relationships to other factions.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum DiplomaticRelation {
+    Allied,
+    Friendly,
+    Neutral,
+    Hostile,
+    AtWar,
+}
+
+// ── Faction ───────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Faction {
-    /// Unique machine-readable identifier.
-    pub id: String,
-    /// Display name shown to the player.
+    pub id: u32,
     pub name: String,
-    /// Flavour text describing the faction.
-    pub description: String,
-    /// Ids of factions that share a positive relationship with this one.
-    pub allied_factions: Vec<String>,
-    /// Ids of factions that are at odds with this one.
-    pub enemy_factions: Vec<String>,
+    pub power: f64,
+    pub gold: u64,
+    pub alignment: String,
 }
 
-// ─── REPUTATION LEVEL ─────────────────────────────────────────────────────────
+// ── FactionRelation ───────────────────────────────────────────────────────
 
-/// Qualitative standing derived from a numeric reputation score.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
-pub enum ReputationLevel {
-    /// Score in [-100, -50).
-    Hostile,
-    /// Score in [-50, 0).
-    Unfriendly,
-    /// Score in [0, 25).
-    Neutral,
-    /// Score in [25, 50).
-    Friendly,
-    /// Score in [50, 75).
-    Honored,
-    /// Score in [75, 90).
-    Revered,
-    /// Score in [90, 100].
-    Exalted,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FactionRelation {
+    pub faction_a: u32,
+    pub faction_b: u32,
+    pub relation: DiplomaticRelation,
+    pub score: i32,
 }
 
-impl ReputationLevel {
-    /// Map a numeric score to a reputation level.
-    pub fn from_score(score: i32) -> Self {
-        match score {
-            i32::MIN..=-50 => ReputationLevel::Hostile,
-            -49..=-1 => ReputationLevel::Unfriendly,
-            0..=24 => ReputationLevel::Neutral,
-            25..=49 => ReputationLevel::Friendly,
-            50..=74 => ReputationLevel::Honored,
-            75..=89 => ReputationLevel::Revered,
-            _ => ReputationLevel::Exalted,
-        }
-    }
+// ── PlayerFactionStanding ─────────────────────────────────────────────────
 
-    /// Human-readable title for this reputation tier.
-    pub fn title(&self) -> &str {
-        match self {
-            ReputationLevel::Hostile => "Hostile",
-            ReputationLevel::Unfriendly => "Unfriendly",
-            ReputationLevel::Neutral => "Neutral",
-            ReputationLevel::Friendly => "Friendly",
-            ReputationLevel::Honored => "Honored",
-            ReputationLevel::Revered => "Revered",
-            ReputationLevel::Exalted => "Exalted",
-        }
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PlayerFactionStanding {
+    pub player_id: String,
+    pub faction_id: u32,
+    pub reputation: i32,
+    pub title: String,
+}
+
+// ── Reputation Title ──────────────────────────────────────────────────────
+
+pub fn reputation_title(rep: i32) -> &'static str {
+    if rep >= 90 {
+        "Exalted"
+    } else if rep >= 60 {
+        "Revered"
+    } else if rep >= 30 {
+        "Honored"
+    } else if rep >= 10 {
+        "Friendly"
+    } else if rep >= 0 {
+        "Neutral"
+    } else if rep >= -10 {
+        "Unfriendly"
+    } else if rep >= -30 {
+        "Hostile"
+    } else {
+        "Hated"
     }
 }
 
-// ─── FACTION REGISTRY ─────────────────────────────────────────────────────────
+// ── FactionSystem ─────────────────────────────────────────────────────────
 
-/// Central store for all factions and the player's reputation with each.
 #[derive(Debug, Default)]
-pub struct FactionRegistry {
-    /// All registered factions keyed by id.
-    pub factions: HashMap<String, Faction>,
-    /// Current reputation scores keyed by faction id.
-    pub reputations: HashMap<String, i32>,
+pub struct FactionSystem {
+    pub factions: HashMap<u32, Faction>,
+    pub relations: Vec<FactionRelation>,
+    pub standings: HashMap<(String, u32), PlayerFactionStanding>,
+    pub next_id: u32,
 }
 
-impl FactionRegistry {
-    /// Create a new empty registry.
+impl FactionSystem {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Register a faction.  Initialises its reputation to 0 if not already set.
-    pub fn add_faction(&mut self, faction: Faction) {
-        self.reputations.entry(faction.id.clone()).or_insert(0);
-        self.factions.insert(faction.id.clone(), faction);
+    pub fn add_faction(&mut self, name: &str, power: f64, alignment: &str) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.factions.insert(
+            id,
+            Faction {
+                id,
+                name: name.to_string(),
+                power,
+                gold: 0,
+                alignment: alignment.to_string(),
+            },
+        );
+        id
     }
 
-    /// Return the current reputation score for a faction (0 if unknown).
-    pub fn get_reputation(&self, faction_id: &str) -> i32 {
-        self.reputations.get(faction_id).copied().unwrap_or(0)
+    pub fn set_relation(&mut self, a: u32, b: u32, relation: DiplomaticRelation, score: i32) {
+        // Remove existing relation between a and b if present
+        self.relations.retain(|r| {
+            !((r.faction_a == a && r.faction_b == b)
+                || (r.faction_a == b && r.faction_b == a))
+        });
+        self.relations.push(FactionRelation {
+            faction_a: a,
+            faction_b: b,
+            relation,
+            score: score.clamp(-100, 100),
+        });
     }
 
-    /// Modify reputation by `delta`, clamping to [-100, 100].
-    ///
-    /// Cascade rules:
-    /// * Allied factions gain **half** the delta (rounded toward zero).
-    /// * Enemy factions lose **half** the delta (rounded toward zero).
-    pub fn modify_reputation(&mut self, faction_id: &str, delta: i32) {
-        // Apply to primary faction.
-        let primary = self.reputations.entry(faction_id.to_owned()).or_insert(0);
-        *primary = (*primary + delta).clamp(-100, 100);
-
-        // Collect cascade targets to avoid borrow issues.
-        let (allied, enemy) = if let Some(f) = self.factions.get(faction_id) {
-            (f.allied_factions.clone(), f.enemy_factions.clone())
-        } else {
-            return;
-        };
-
-        let half = delta / 2; // integer truncation toward zero
-
-        for ally_id in allied {
-            let ally = self.reputations.entry(ally_id).or_insert(0);
-            *ally = (*ally + half).clamp(-100, 100);
-        }
-
-        for enemy_id in enemy {
-            let enemy = self.reputations.entry(enemy_id).or_insert(0);
-            *enemy = (*enemy - half).clamp(-100, 100);
-        }
+    pub fn get_relation(&self, a: u32, b: u32) -> Option<&FactionRelation> {
+        self.relations.iter().find(|r| {
+            (r.faction_a == a && r.faction_b == b)
+                || (r.faction_a == b && r.faction_b == a)
+        })
     }
 
-    /// Return the reputation level for a faction.
-    pub fn reputation_level(&self, faction_id: &str) -> ReputationLevel {
-        ReputationLevel::from_score(self.get_reputation(faction_id))
+    pub fn modify_standing(&mut self, player_id: &str, faction_id: u32, delta: i32) {
+        let key = (player_id.to_string(), faction_id);
+        let entry = self.standings.entry(key).or_insert_with(|| PlayerFactionStanding {
+            player_id: player_id.to_string(),
+            faction_id,
+            reputation: 0,
+            title: reputation_title(0).to_string(),
+        });
+        entry.reputation = (entry.reputation + delta).clamp(-100, 100);
+        entry.title = reputation_title(entry.reputation).to_string();
     }
 
-    /// Return the discount fraction available from a faction's vendors.
-    ///
-    /// | Level    | Discount |
-    /// |----------|----------|
-    /// | Friendly | 5 %      |
-    /// | Honored  | 10 %     |
-    /// | Revered  | 15 %     |
-    /// | Exalted  | 20 %     |
-    /// | below    | 0 %      |
-    pub fn available_discounts(&self, faction_id: &str) -> f64 {
-        match self.reputation_level(faction_id) {
-            ReputationLevel::Friendly => 0.05,
-            ReputationLevel::Honored => 0.10,
-            ReputationLevel::Revered => 0.15,
-            ReputationLevel::Exalted => 0.20,
-            _ => 0.0,
-        }
+    pub fn player_standing(&self, player_id: &str, faction_id: u32) -> Option<&PlayerFactionStanding> {
+        self.standings.get(&(player_id.to_string(), faction_id))
     }
 
-    /// Return the ids of all factions with which the player has at least
-    /// Friendly standing (unlocked vendors).
-    pub fn unlocked_vendors(&self) -> Vec<String> {
-        self.factions
-            .keys()
-            .filter(|id| {
-                self.get_reputation(id) >= 25 // Friendly threshold
+    pub fn allied_factions(&self, faction_id: u32) -> Vec<u32> {
+        self.relations
+            .iter()
+            .filter(|r| r.relation == DiplomaticRelation::Allied)
+            .filter_map(|r| {
+                if r.faction_a == faction_id {
+                    Some(r.faction_b)
+                } else if r.faction_b == faction_id {
+                    Some(r.faction_a)
+                } else {
+                    None
+                }
             })
-            .cloned()
             .collect()
+    }
+
+    pub fn declare_war(&mut self, a: u32, b: u32) {
+        // Set A-B to AtWar
+        self.set_relation(a, b, DiplomaticRelation::AtWar, -100);
+
+        // Allies of A become Hostile to allies of B
+        let allies_a = self.allied_factions(a);
+        let allies_b = self.allied_factions(b);
+
+        for &ally_a in &allies_a {
+            for &ally_b in &allies_b {
+                if ally_a != ally_b {
+                    self.set_relation(ally_a, ally_b, DiplomaticRelation::Hostile, -50);
+                }
+            }
+        }
+    }
+
+    pub fn make_peace(&mut self, a: u32, b: u32) {
+        self.set_relation(a, b, DiplomaticRelation::Neutral, 0);
+    }
+
+    pub fn faction_strength(&self, faction_id: u32) -> f64 {
+        if let Some(faction) = self.factions.get(&faction_id) {
+            let ally_count = self.allied_factions(faction_id).len() as f64;
+            faction.power * (1.0 + ally_count * 0.1)
+        } else {
+            0.0
+        }
     }
 }
 
-// ─── TESTS ────────────────────────────────────────────────────────────────────
+// ── Tests ─────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn make_registry() -> FactionRegistry {
-        let mut reg = FactionRegistry::new();
-
-        reg.add_faction(Faction {
-            id: "merchants".into(),
-            name: "Merchant Guild".into(),
-            description: "Traders of the realm.".into(),
-            allied_factions: vec!["artisans".into()],
-            enemy_factions: vec!["thieves".into()],
-        });
-        reg.add_faction(Faction {
-            id: "artisans".into(),
-            name: "Artisan League".into(),
-            description: "Crafters united.".into(),
-            allied_factions: vec![],
-            enemy_factions: vec![],
-        });
-        reg.add_faction(Faction {
-            id: "thieves".into(),
-            name: "Thieves Guild".into(),
-            description: "Shadows of the city.".into(),
-            allied_factions: vec![],
-            enemy_factions: vec![],
-        });
-
-        reg
+    #[test]
+    fn add_and_get_faction() {
+        let mut sys = FactionSystem::new();
+        let id = sys.add_faction("Merchant Guild", 10.0, "Neutral");
+        assert_eq!(id, 0);
+        assert!(sys.factions.contains_key(&id));
+        assert_eq!(sys.factions[&id].name, "Merchant Guild");
     }
 
     #[test]
-    fn initial_reputation_is_zero() {
-        let reg = make_registry();
-        assert_eq!(reg.get_reputation("merchants"), 0);
-        assert_eq!(reg.get_reputation("artisans"), 0);
+    fn set_and_get_relation() {
+        let mut sys = FactionSystem::new();
+        let a = sys.add_faction("A", 5.0, "Good");
+        let b = sys.add_faction("B", 5.0, "Evil");
+        sys.set_relation(a, b, DiplomaticRelation::Hostile, -40);
+        let rel = sys.get_relation(a, b).unwrap();
+        assert_eq!(rel.relation, DiplomaticRelation::Hostile);
+        assert_eq!(rel.score, -40);
+        // Symmetric
+        let rel2 = sys.get_relation(b, a).unwrap();
+        assert_eq!(rel2.relation, DiplomaticRelation::Hostile);
     }
 
     #[test]
-    fn cascade_to_allied_faction() {
-        let mut reg = make_registry();
-        reg.modify_reputation("merchants", 20);
-        // merchants: 20, artisans gets half = 10
-        assert_eq!(reg.get_reputation("merchants"), 20);
-        assert_eq!(reg.get_reputation("artisans"), 10);
+    fn standing_modification() {
+        let mut sys = FactionSystem::new();
+        let fid = sys.add_faction("Artisans", 3.0, "Lawful");
+        sys.modify_standing("player1", fid, 50);
+        let standing = sys.player_standing("player1", fid).unwrap();
+        assert_eq!(standing.reputation, 50);
+        sys.modify_standing("player1", fid, 60); // clamp to 100
+        let standing = sys.player_standing("player1", fid).unwrap();
+        assert_eq!(standing.reputation, 100);
     }
 
     #[test]
-    fn cascade_to_enemy_faction() {
-        let mut reg = make_registry();
-        reg.modify_reputation("merchants", 20);
-        // thieves loses half = -10
-        assert_eq!(reg.get_reputation("thieves"), -10);
+    fn reputation_title_thresholds() {
+        assert_eq!(reputation_title(95), "Exalted");
+        assert_eq!(reputation_title(60), "Revered");
+        assert_eq!(reputation_title(30), "Honored");
+        assert_eq!(reputation_title(10), "Friendly");
+        assert_eq!(reputation_title(0), "Neutral");
+        assert_eq!(reputation_title(-5), "Unfriendly");
+        assert_eq!(reputation_title(-20), "Hostile");
+        assert_eq!(reputation_title(-50), "Hated");
     }
 
     #[test]
-    fn clamp_at_positive_100() {
-        let mut reg = make_registry();
-        reg.modify_reputation("merchants", 80);
-        reg.modify_reputation("merchants", 80);
-        assert_eq!(reg.get_reputation("merchants"), 100);
+    fn declare_war_sets_at_war() {
+        let mut sys = FactionSystem::new();
+        let a = sys.add_faction("Kingdom", 20.0, "Good");
+        let b = sys.add_faction("Empire", 18.0, "Neutral");
+        sys.declare_war(a, b);
+        let rel = sys.get_relation(a, b).unwrap();
+        assert_eq!(rel.relation, DiplomaticRelation::AtWar);
+        assert_eq!(rel.score, -100);
     }
 
     #[test]
-    fn clamp_at_negative_100() {
-        let mut reg = make_registry();
-        reg.modify_reputation("merchants", -80);
-        reg.modify_reputation("merchants", -80);
-        assert_eq!(reg.get_reputation("merchants"), -100);
+    fn declare_war_propagates_to_allies() {
+        let mut sys = FactionSystem::new();
+        let a = sys.add_faction("Kingdom", 20.0, "Good");
+        let b = sys.add_faction("Empire", 18.0, "Neutral");
+        let ally_a = sys.add_faction("KingdomAlly", 5.0, "Good");
+        let ally_b = sys.add_faction("EmpireAlly", 5.0, "Neutral");
+        sys.set_relation(a, ally_a, DiplomaticRelation::Allied, 80);
+        sys.set_relation(b, ally_b, DiplomaticRelation::Allied, 80);
+        sys.declare_war(a, b);
+        // Allies of A should be hostile to allies of B
+        let rel = sys.get_relation(ally_a, ally_b).unwrap();
+        assert_eq!(rel.relation, DiplomaticRelation::Hostile);
     }
 
     #[test]
-    fn reputation_level_mapping() {
-        assert_eq!(ReputationLevel::from_score(-75), ReputationLevel::Hostile);
-        assert_eq!(ReputationLevel::from_score(-25), ReputationLevel::Unfriendly);
-        assert_eq!(ReputationLevel::from_score(10), ReputationLevel::Neutral);
-        assert_eq!(ReputationLevel::from_score(30), ReputationLevel::Friendly);
-        assert_eq!(ReputationLevel::from_score(60), ReputationLevel::Honored);
-        assert_eq!(ReputationLevel::from_score(80), ReputationLevel::Revered);
-        assert_eq!(ReputationLevel::from_score(95), ReputationLevel::Exalted);
+    fn make_peace() {
+        let mut sys = FactionSystem::new();
+        let a = sys.add_faction("A", 10.0, "Good");
+        let b = sys.add_faction("B", 10.0, "Evil");
+        sys.declare_war(a, b);
+        sys.make_peace(a, b);
+        let rel = sys.get_relation(a, b).unwrap();
+        assert_eq!(rel.relation, DiplomaticRelation::Neutral);
+        assert_eq!(rel.score, 0);
     }
 
     #[test]
-    fn discount_tiers() {
-        let mut reg = make_registry();
-        // Below Friendly: no discount
-        assert_eq!(reg.available_discounts("merchants"), 0.0);
-
-        reg.modify_reputation("merchants", 30); // Friendly
-        assert!((reg.available_discounts("merchants") - 0.05).abs() < f64::EPSILON);
-
-        reg.modify_reputation("merchants", 25); // Honored (55 total)
-        assert!((reg.available_discounts("merchants") - 0.10).abs() < f64::EPSILON);
-
-        reg.modify_reputation("merchants", 25); // Revered (80 total)
-        assert!((reg.available_discounts("merchants") - 0.15).abs() < f64::EPSILON);
-
-        reg.modify_reputation("merchants", 15); // Exalted (95 total)
-        assert!((reg.available_discounts("merchants") - 0.20).abs() < f64::EPSILON);
-    }
-
-    #[test]
-    fn unlocked_vendors_returns_friendly_and_above() {
-        let mut reg = make_registry();
-        assert!(reg.unlocked_vendors().is_empty());
-
-        reg.modify_reputation("artisans", 30); // Friendly
-        let vendors = reg.unlocked_vendors();
-        assert!(vendors.contains(&"artisans".to_string()));
-        assert!(!vendors.contains(&"merchants".to_string()));
-    }
-
-    #[test]
-    fn reputation_level_title() {
-        assert_eq!(ReputationLevel::Hostile.title(), "Hostile");
-        assert_eq!(ReputationLevel::Exalted.title(), "Exalted");
-    }
-
-    #[test]
-    fn negative_delta_cascades_correctly() {
-        let mut reg = make_registry();
-        reg.modify_reputation("merchants", -20);
-        // allied artisans lose half = -10
-        assert_eq!(reg.get_reputation("artisans"), -10);
-        // enemy thieves gain half = +10
-        assert_eq!(reg.get_reputation("thieves"), 10);
+    fn faction_strength_with_allies() {
+        let mut sys = FactionSystem::new();
+        let a = sys.add_faction("A", 10.0, "Good");
+        let b = sys.add_faction("B", 5.0, "Good");
+        // Without allies
+        let strength_a = sys.faction_strength(a);
+        assert!((strength_a - 10.0).abs() < 1e-9);
+        // With one ally
+        sys.set_relation(a, b, DiplomaticRelation::Allied, 80);
+        let strength_a_allied = sys.faction_strength(a);
+        assert!((strength_a_allied - 11.0).abs() < 1e-9);
     }
 }
