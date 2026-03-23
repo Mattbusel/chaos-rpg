@@ -58,5 +58,41 @@
     "cause_of_death": "Unknown",
     "misery_score": 7280,
     "timestamp": "2026-03-23 10:26Z"
+  },
+  {
+    "name": "Hero",
+    "class": "Berserker",
+    "misery_index": 1942.0,
+    "floor_reached": 3,
+    "power_tier": "TRANSCENDENT",
+    "spite_spent": 0.0,
+    "defiance_rolls": 0,
+    "cause_of_death": "Unknown",
+    "misery_score": 5826,
+    "timestamp": "2026-03-23 11:03Z"
+  },
+  {
+    "name": "Grungle",
+    "class": "Berserker",
+    "misery_index": 284.0,
+    "floor_reached": 9,
+    "power_tier": "BEYOND MATH",
+    "spite_spent": 0.0,
+    "defiance_rolls": 0,
+    "cause_of_death": "Floor 9 — Fractal Imp hit for 48",
+    "misery_score": 2556,
+    "timestamp": "2026-03-23 11:52Z"
+  },
+  {
+    "name": "Hero",
+    "class": "Berserker",
+    "misery_index": 206.0,
+    "floor_reached": 8,
+    "power_tier": "GODLIKE",
+    "spite_spent": 0.0,
+    "defiance_rolls": 0,
+    "cause_of_death": "Floor 8 — Divergence Tick hit for 114",
+    "misery_score": 1648,
+    "timestamp": "2026-03-23 11:47Z"
   }
 ]

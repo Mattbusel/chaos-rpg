@@ -1,10 +1,10 @@
 {
-  "enemy_name": "Bifurcation King",
-  "floor_killed_at": 25,
+  "enemy_name": "Fractal Imp",
+  "floor_killed_at": 9,
   "times_killed_player": 1,
-  "killer_base_damage": 191,
+  "killer_base_damage": 12,
   "hp_bonus_pct": 30,
   "damage_bonus_pct": 25,
   "kill_method": "physical",
-  "killed_player_class": "Paladin"
+  "killed_player_class": "Berserker"
 }
