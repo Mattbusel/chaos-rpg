@@ -12,6 +12,18 @@
     "timestamp": "2026-03-23 10:09Z"
   },
   {
+    "name": "Hero",
+    "class": "Paladin",
+    "misery_index": 9501.0,
+    "floor_reached": 25,
+    "power_tier": "AXIOM",
+    "spite_spent": 0.0,
+    "defiance_rolls": 0,
+    "cause_of_death": "Unknown",
+    "misery_score": 237525,
+    "timestamp": "2026-03-23 10:36Z"
+  },
+  {
     "name": "Grignus",
     "class": "Necromancer",
     "misery_index": 2871.0,

@@ -1,0 +1,10 @@
+{
+  "enemy_name": "Bifurcation King",
+  "floor_killed_at": 25,
+  "times_killed_player": 1,
+  "killer_base_damage": 191,
+  "hp_bonus_pct": 30,
+  "damage_bonus_pct": 25,
+  "kill_method": "physical",
+  "killed_player_class": "Paladin"
+}
