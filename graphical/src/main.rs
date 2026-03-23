@@ -991,7 +991,7 @@ impl State {
 
         // Fill background
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "", &t);
 
         // Animated banner pulse
         let pulse = ((self.frame as f32 * 0.04).sin() * 0.15 + 0.85) as f32;
@@ -1000,26 +1000,26 @@ impl State {
         let pb = (t.heading.2 as f32 * pulse) as u8;
         let pulsed = RGB::from_u8(ph, pg, pb);
 
-        ctx.print_color(27, 4,  pulsed, bg, " ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗");
-        ctx.print_color(27, 5,  pulsed, bg, "██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝");
-        ctx.print_color(27, 6,  hd,     bg, "██║     ███████║███████║██║   ██║███████╗");
-        ctx.print_color(27, 7,  hd,     bg, "╚██████╗██║  ██║██║  ██║╚██████╔╝███████║");
-        ctx.print_color(27, 8,  hd,     bg, " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝");
+        ctx.print_color(4, 4,  pulsed, bg, " ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗");
+        ctx.print_color(4, 5,  pulsed, bg, "██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝");
+        ctx.print_color(4, 6,  hd,     bg, "██║     ███████║███████║██║   ██║███████╗");
+        ctx.print_color(4, 7,  hd,     bg, "╚██████╗██║  ██║██║  ██║╚██████╔╝███████║");
+        ctx.print_color(4, 8,  hd,     bg, " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝");
 
-        ctx.print_color(27, 9,  dim, bg, "        R P G    ─    Where Math Goes To Die");
+        ctx.print_color(4, 9,  dim, bg, "        R P G    ─    Where Math Goes To Die");
 
         // Decorative separator
-        draw_separator(ctx, 5, 11, 110, &t);
+        draw_separator(ctx, 2, 11, 75, &t);
 
-        ctx.print_color(28, 12, ac, bg, "Graphical Edition  ·  Fullscreen  ·  All Systems");
+        ctx.print_color(5, 12, ac, bg, "Graphical Edition  ·  All Systems  ·  Fullscreen");
 
         // Theme name badge bottom-right
         let tname = format!(" Theme: {} [T] ", t.name);
-        ctx.print_color(119 - tname.len() as i32 - 1, 47, dim, bg, &tname);
+        ctx.print_color(79 - tname.len() as i32 - 1, 47, dim, bg, &tname);
 
         // Menu box
-        let ox = 44i32; let oy = 20i32;
-        draw_subpanel(ctx, ox - 3, oy - 2, 36, 9, "MAIN MENU", &t);
+        let ox = 29i32; let oy = 20i32;
+        draw_subpanel(ctx, ox - 3, oy - 2, 28, 9, "MAIN MENU", &t);
 
         let opts = ["New Game", "Scoreboard", "Quit"];
         for (i, opt) in opts.iter().enumerate() {
@@ -1027,7 +1027,7 @@ impl State {
         }
 
         // Hint bar
-        draw_separator(ctx, 2, 45, 116, &t);
+        draw_separator(ctx, 2, 45, 75, &t);
         print_hint(ctx, 4, 46, "↑↓", " Navigate   ", &t);
         print_hint(ctx, 22, 46, "Enter", " Select   ", &t);
         print_hint(ctx, 40, 46, "T", " Theme   ", &t);
@@ -1047,27 +1047,27 @@ impl State {
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "SELECT MODE", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "SELECT MODE", &t);
 
         let modes = [
-            ("Story Mode",    "10 floors. A complete narrative arc with a final boss.",        "★ Recommended for newcomers"),
-            ("Infinite Mode", "Descend forever. The math gets worse the deeper you go.",       "∞ Score for the global leaderboard"),
-            ("Daily Seed",    "Everyone plays the same dungeon today. Compare your score.",    "◈ Resets at UTC midnight"),
+            ("Story Mode",    "10 floors. Narrative arc with a final boss.",    "★ Recommended for newcomers"),
+            ("Infinite Mode", "Descend forever. Math gets worse every floor.",  "∞ Score for the global leaderboard"),
+            ("Daily Seed",    "Same dungeon for everyone today.",               "◈ Resets at UTC midnight"),
         ];
 
         for (i, (name, desc, hint)) in modes.iter().enumerate() {
             let y = 10 + i as i32 * 10;
             let is_sel = i == self.mode_cursor;
-            let bx = 15i32;
+            let bx = 5i32;
             if is_sel {
-                draw_subpanel(ctx, bx - 2, y - 1, 90, 7, "", &t);
+                draw_subpanel(ctx, bx - 2, y - 1, 72, 7, "", &t);
             }
             print_selectable(ctx, bx, y, is_sel, name, self.frame, &t);
             ctx.print_color(bx + 2, y + 2, dim, bg, desc);
             ctx.print_color(bx + 2, y + 4, if is_sel { ac } else { dim }, bg, hint);
         }
 
-        draw_separator(ctx, 2, 45, 116, &t);
+        draw_separator(ctx, 2, 45, 75, &t);
         print_hint(ctx, 4, 46, "↑↓", " Navigate   ", &t);
         print_hint(ctx, 22, 46, "Enter", " Select   ", &t);
         print_hint(ctx, 38, 46, "Esc", " Back", &t);
@@ -1087,7 +1087,7 @@ impl State {
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "CHARACTER CREATION", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "CHARACTER CREATION", &t);
 
         // ── Class column
         draw_subpanel(ctx, 2, 3, 25, 25, "CLASS  ↑↓", &t);
@@ -1130,13 +1130,14 @@ impl State {
         }
 
         // ── Portrait column
-        draw_subpanel(ctx, 58, 3, 59, 43, "PORTRAIT", &t);
+        draw_subpanel(ctx, 57, 3, 21, 43, "PORTRAIT", &t);
         let portrait = class.ascii_art();
         for (i, l) in portrait.lines().enumerate() {
-            ctx.print_color(60, 5 + i as i32, ac, bg, l);
+            let line: String = l.chars().take(18).collect();
+            ctx.print_color(59, 5 + i as i32, ac, bg, &line);
         }
 
-        draw_separator(ctx, 2, 45, 116, &t);
+        draw_separator(ctx, 2, 45, 75, &t);
         print_hint(ctx, 4, 46, "↑↓", " Class   ", &t);
         print_hint(ctx, 18, 46, "←→", " Background   ", &t);
         print_hint(ctx, 36, 46, "Tab", " Difficulty   ", &t);
@@ -1154,16 +1155,16 @@ impl State {
         let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "CHOOSE YOUR BOON", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "CHOOSE YOUR BOON", &t);
 
-        ctx.print_color(30, 3, dim, bg, "A gift from the chaos engine. Only one. Choose wisely.");
-        draw_separator(ctx, 5, 5, 110, &t);
+        ctx.print_color(5, 3, dim, bg, "A gift from the chaos engine. Only one. Choose wisely.");
+        draw_separator(ctx, 2, 5, 75, &t);
 
         for (i, boon) in self.boon_options.iter().enumerate() {
             let y = 8 + i as i32 * 12;
             let is_sel = i == self.boon_cursor;
             if is_sel {
-                draw_subpanel(ctx, 8, y - 1, 103, 10, "", &t);
+                draw_subpanel(ctx, 2, y - 1, 75, 10, "", &t);
             }
             let key = format!("[{}] ", i + 1);
             ctx.print_color(12, y, if is_sel { ac } else { dim }, bg, &key);
@@ -1171,7 +1172,7 @@ impl State {
             ctx.print_color(16, y + 2, dim, bg, boon.description());
         }
 
-        draw_separator(ctx, 2, 45, 116, &t);
+        draw_separator(ctx, 2, 45, 75, &t);
         print_hint(ctx, 4, 46, "↑↓ / 1-3", " Select   ", &t);
         print_hint(ctx, 28, 46, "Enter", " Confirm   ", &t);
         print_hint(ctx, 44, 46, "Esc", " Back", &t);
@@ -1204,40 +1205,40 @@ impl State {
         };
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "", &t);
 
         // ── Header bar ────────────────────────────────────────────────────────
-        let floor_str = format!(" FLOOR {}  ·  {}  Lv.{}  {} ",
+        let floor_str = format!(" FLOOR {}  {}  Lv.{}  {} ",
             pfloor, pname, plv, pclass);
         ctx.print_color(2, 1, hd, bg, &floor_str);
 
-        // Cursed floor badge
-        if self.is_cursed_floor {
-            ctx.print_color(85, 1, dng, bg, "☠ CURSED FLOOR — INVERTED ☠");
-        }
-
-        // Mode badge
+        // Mode badge (right-aligned)
         let mode_str = match self.game_mode {
             GameMode::Story    => format!("STORY {}/{}", pfloor, 10),
             GameMode::Infinite => "∞ INFINITE".to_string(),
             GameMode::Daily    => "◈ DAILY".to_string(),
         };
-        ctx.print_color(105, 1, ac, bg, &mode_str);
+        ctx.print_color(79 - mode_str.len() as i32 - 1, 1, ac, bg, &mode_str);
 
-        draw_separator(ctx, 1, 2, 118, &t);
+        draw_separator(ctx, 1, 2, 77, &t);
+
+        // Cursed floor badge (below header if active)
+        if self.is_cursed_floor {
+            ctx.print_color(2, 2, dng, bg, "☠ CURSED FLOOR — ALL ENGINES INVERTED ☠");
+        }
 
         // ── Left panel: player stats ───────────────────────────────────────────
-        draw_subpanel(ctx, 1, 3, 42, 20, "STATUS", &t);
+        draw_subpanel(ctx, 1, 3, 27, 20, "STATUS", &t);
 
         let hp_pct = php as f32 / pmhp.max(1) as f32;
         let hp_c = t.hp_color(hp_pct);
         stat_line(ctx, 3, 5, "HP  ", &format!("{}/{}", php, pmhp), hp_c, &t);
-        draw_bar_gradient(ctx, 3, 6, 38, php, pmhp, hp_c, t.muted, &t);
+        draw_bar_gradient(ctx, 3, 6, 24, php, pmhp, hp_c, t.muted, &t);
 
         let mp_pct = self.current_mana as f32 / self.max_mana() as f32;
         let _ = mp_pct;
         stat_line(ctx, 3, 8, "MP  ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
-        draw_bar_solid(ctx, 3, 9, 38, self.current_mana, self.max_mana(), t.mana, &t);
+        draw_bar_solid(ctx, 3, 9, 24, self.current_mana, self.max_mana(), t.mana, &t);
 
         stat_line(ctx, 3, 11, "Gold  ", &format!("{}g", pgold), t.gold, &t);
         stat_line(ctx, 3, 12, "XP    ", &format!("{}", pxp), t.xp, &t);
@@ -1287,28 +1288,28 @@ impl State {
         }
 
         if pcorruption > 0 {
-            stat_line(ctx, 3, 18, "Corruption ", &format!("{}", pcorruption), t.warn, &t);
+            stat_line(ctx, 3, 18, "Corrupt ", &format!("{}", pcorruption), t.warn, &t);
         }
         if !pstatus.is_empty() {
             ctx.print_color(3, 15, RGB::from_u8(t.xp.0, t.xp.1, t.xp.2), bg,
-                &format!("Status: {}", pstatus));
+                &format!("St: {}", &pstatus.chars().take(18).collect::<String>()));
         }
 
         // Hunger / Nemesis warnings
         if pfloor >= 50 && prwk >= 3 {
             let rooms_left = 5u32.saturating_sub(prwk);
             ctx.print_color(3, 17, dng, bg,
-                &format!("HUNGER: {} dry  ({} left)", prwk, rooms_left));
+                &format!("HUNGER: {} dry ({} left)", prwk, rooms_left));
         }
         if let Some(ref nem) = self.nemesis_record {
             ctx.print_color(3, 19, dng, bg,
-                &format!("☠ NEMESIS: {}  (fl.{})", nem.enemy_name, nem.floor_killed_at));
+                &format!("☠ NEM: {} fl.{}", &nem.enemy_name.chars().take(10).collect::<String>(), nem.floor_killed_at));
         }
 
         // ── Minimap ───────────────────────────────────────────────────────────
-        draw_subpanel(ctx, 1, 24, 117, 13, "FLOOR MAP", &t);
+        draw_subpanel(ctx, 1, 24, 77, 13, "FLOOR MAP", &t);
         if let Some(ref floor) = self.floor {
-            let per_row = 22usize;
+            let per_row = 15usize;
             for (i, room) in floor.rooms.iter().enumerate() {
                 let rx = 3 + (i % per_row) as i32 * 5;
                 let ry = 26 + (i / per_row) as i32 * 3;
@@ -1329,29 +1330,30 @@ impl State {
         }
 
         // ── Log panel ─────────────────────────────────────────────────────────
-        draw_subpanel(ctx, 44, 3, 74, 20, "CHAOS LOG", &t);
+        draw_subpanel(ctx, 30, 3, 49, 20, "CHAOS LOG", &t);
         let log_start = self.combat_log.len().saturating_sub(16);
         for (i, line) in self.combat_log[log_start..].iter().enumerate() {
             let fg = if line.contains("BOSS") || line.contains("☠") { dng }
                      else if line.contains("Victory") || line.contains("LEVEL") { gld }
                      else if line.contains('+') { suc }
                      else { dim };
-            ctx.print_color(46, 5 + i as i32, fg, bg, &line.chars().take(70).collect::<String>());
+            ctx.print_color(32, 5 + i as i32, fg, bg, &line.chars().take(44).collect::<String>());
         }
 
         // ── Actions bar ───────────────────────────────────────────────────────
-        draw_separator(ctx, 1, 38, 118, &t);
+        draw_separator(ctx, 1, 38, 77, &t);
         ctx.print_color(2, 39, hd, bg, "ACTIONS");
         let y = 40i32;
         print_hint(ctx, 2, y,   "E",   " Enter Room   ", &t);
         print_hint(ctx, 20, y,  "C",   " Character   ", &t);
-        print_hint(ctx, 36, y,  "S",   " Scoreboard   ", &t);
-        print_hint(ctx, 52, y,  "Q",   " Quit", &t);
+        print_hint(ctx, 36, y,  "S",   " Scores   ", &t);
+        print_hint(ctx, 49, y,  "Q",   " Quit", &t);
         if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
             ctx.print_color(2, y + 1, gld, bg, "  [ D ] Descend to next floor  ▼");
         }
-        draw_separator(ctx, 1, 43, 118, &t);
-        ctx.print_color(2, 44, dim, bg, "[×]=Combat  [★]=Treasure  [$]=Shop  [~]=Shrine  [!]=Trap  [B]=Boss  [^]=Portal  [∞]=Rift  [⚒]=Craft");
+        draw_separator(ctx, 1, 43, 77, &t);
+        ctx.print_color(2, 44, dim, bg, "[×]=Combat [★]=Treasure [$]=Shop [~]=Shrine [!]=Trap");
+        ctx.print_color(2, 45, dim, bg, "[B]=Boss   [^]=Portal   [∞]=Rift [⚒]=Craft");
     }
 
     // ── ROOM VIEW ─────────────────────────────────────────────────────────────
@@ -1389,25 +1391,25 @@ impl State {
         }
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "", &t);
-        draw_subpanel(ctx, 5, 2, 109, 40, "", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "", &t);
+        draw_subpanel(ctx, 2, 2, 75, 40, "", &t);
 
         let title = self.room_event.title.clone();
-        print_center(ctx, 5, 4, 110, t.heading, &t, &title);
-        draw_separator(ctx, 6, 5, 108, &t);
+        print_center(ctx, 2, 4, 75, t.heading, &t, &title);
+        draw_separator(ctx, 3, 5, 73, &t);
 
         for (i, line) in self.room_event.lines.iter().enumerate() {
             let fg = if line.starts_with('[') { sel }
                      else if line.starts_with('+') || line.starts_with("You find") { hd }
                      else { dim };
-            ctx.print_color(8, 7 + i as i32, fg, bg, line);
+            ctx.print_color(5, 7 + i as i32, fg, bg, &line.chars().take(70).collect::<String>());
         }
 
         let has_item  = self.room_event.pending_item.is_some();
         let has_spell = self.room_event.pending_spell.is_some();
         let is_portal = self.room_event.portal_available;
 
-        draw_separator(ctx, 6, 40, 108, &t);
+        draw_separator(ctx, 3, 40, 73, &t);
         let ay = 42i32;
         if has_item  { print_hint(ctx, 8, ay, "[P]", " Pick up item   ", &t); print_hint(ctx, 32, ay, "[Enter]", " Leave it", &t); }
         if has_spell { print_hint(ctx, 8, ay+1, "[L]", " Learn spell   ", &t); print_hint(ctx, 32, ay+1, "[Enter]", " Leave scroll", &t); }
@@ -1443,81 +1445,81 @@ impl State {
         ctx.cls_bg(bg);
 
         // Combat border pulses danger color
-        draw_panel(ctx, 0, 0, 119, 49, "COMBAT", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "COMBAT", &t);
 
         // ── Enemy panel ───────────────────────────────────────────────────────
-        draw_subpanel(ctx, 1, 2, 55, 21, "ENEMY", &t);
+        draw_subpanel(ctx, 1, 2, 38, 21, "ENEMY", &t);
         let boss_lbl = if self.gauntlet_stage > 0 {
             format!(" GAUNTLET {}/3 ", self.gauntlet_stage)
         } else if self.is_boss_fight { " ★ BOSS ★ ".to_string() } else { String::new() };
         if !boss_lbl.is_empty() {
-            ctx.print_color(40, 3, dng, bg, &boss_lbl);
+            ctx.print_color(20, 3, dng, bg, &boss_lbl);
         }
-        ctx.print_color(3, 4, dng, bg, &format!("{} [{}]", ename, etier));
+        ctx.print_color(3, 4, dng, bg, &format!("{} [{}]", &ename.chars().take(20).collect::<String>(), etier));
         let ep = ehp as f32 / emhp.max(1) as f32;
         let ec = t.hp_color(ep);
         stat_line(ctx, 3, 5, "HP ", &format!("{}/{}", ehp, emhp), ec, &t);
-        draw_bar_gradient(ctx, 3, 6, 50, ehp, emhp, ec, t.muted, &t);
+        draw_bar_gradient(ctx, 3, 6, 34, ehp, emhp, ec, t.muted, &t);
 
         // Sprite
         for (i, line) in esprite.lines().enumerate().take(12) {
-            ctx.print_color(3, 8 + i as i32, dim, bg, line);
+            let s: String = line.chars().take(35).collect();
+            ctx.print_color(3, 8 + i as i32, dim, bg, &s);
         }
 
         // ── Player panel ──────────────────────────────────────────────────────
-        draw_subpanel(ctx, 58, 2, 60, 21, "PLAYER", &t);
-        ctx.print_color(60, 4, hd, bg, &format!("{} · Lv.{} {}", pname, plv, pclass));
+        draw_subpanel(ctx, 41, 2, 38, 21, "PLAYER", &t);
+        ctx.print_color(43, 4, hd, bg, &format!("{} Lv.{} {}", &pname.chars().take(8).collect::<String>(), plv, pclass));
         let pp = php as f32 / pmhp.max(1) as f32;
         let pc = t.hp_color(pp);
-        stat_line(ctx, 60, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
-        draw_bar_gradient(ctx, 60, 6, 55, php, pmhp, pc, t.muted, &t);
-        stat_line(ctx, 60, 7, "MP ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
-        draw_bar_solid(ctx, 60, 8, 55, self.current_mana, self.max_mana(), t.mana, &t);
+        stat_line(ctx, 43, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
+        draw_bar_gradient(ctx, 43, 6, 34, php, pmhp, pc, t.muted, &t);
+        stat_line(ctx, 43, 7, "MP ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
+        draw_bar_solid(ctx, 43, 8, 34, self.current_mana, self.max_mana(), t.mana, &t);
         if !pstatus.is_empty() {
-            ctx.print_color(60, 9, xp, bg, &format!("Status: {}", pstatus));
+            ctx.print_color(43, 9, xp, bg, &format!("St: {}", &pstatus.chars().take(28).collect::<String>()));
         }
         if self.is_cursed_floor {
-            ctx.print_color(60, 10, dng, bg, "☠ CURSED FLOOR — engines inverted");
+            ctx.print_color(43, 10, dng, bg, "☠ CURSED — inverted");
         }
 
         // Spells
         if let Some(ref p) = self.player {
             if !p.known_spells.is_empty() {
-                ctx.print_color(60, 12, ac, bg, "SPELLS  [1-8]");
+                ctx.print_color(43, 12, ac, bg, "SPELLS  [1-8]");
                 for (i, spell) in p.known_spells.iter().enumerate().take(8) {
                     let can = self.current_mana >= spell.mana_cost;
                     let fg = if can { mna } else { dim };
-                    ctx.print_color(60, 13 + i as i32, fg, bg,
-                        &format!("[{}] {:<18} {}mp", i+1, spell.name, spell.mana_cost));
+                    ctx.print_color(43, 13 + i as i32, fg, bg,
+                        &format!("[{}] {:<12} {}mp", i+1, &spell.name.chars().take(12).collect::<String>(), spell.mana_cost));
                 }
             }
         }
 
         // ── Actions bar ───────────────────────────────────────────────────────
-        draw_subpanel(ctx, 1, 24, 116, 8, "ACTIONS", &t);
+        draw_subpanel(ctx, 1, 24, 77, 8, "ACTIONS", &t);
         let ay = 26i32;
-        print_hint(ctx, 3, ay, "[A]", " Attack   ", &t);
-        print_hint(ctx, 17, ay, "[H]", " Heavy   ", &t);
-        print_hint(ctx, 29, ay, "[D]", " Defend   ", &t);
-        print_hint(ctx, 42, ay, "[T]", " Taunt   ", &t);
-        print_hint(ctx, 53, ay, "[F]", " Flee   ", &t);
-        print_hint(ctx, 63, ay, "[1-8]", " Spells   ", &t);
-        print_hint(ctx, 79, ay, "[Q-O]", " Items", &t);
+        print_hint(ctx, 3, ay, "[A]", " Attack  ", &t);
+        print_hint(ctx, 15, ay, "[H]", " Heavy  ", &t);
+        print_hint(ctx, 26, ay, "[D]", " Defend  ", &t);
+        print_hint(ctx, 37, ay, "[T]", " Taunt  ", &t);
+        print_hint(ctx, 47, ay, "[F]", " Flee  ", &t);
+        print_hint(ctx, 57, ay, "[1-8]", " Spells", &t);
 
         // Items row
         if let Some(ref p) = self.player {
             let keys = ["Q","W","E","R","Y","U","I","O"];
             let mut ix = 3i32;
             for (i, item) in p.inventory.iter().enumerate().take(8) {
-                if ix > 110 { break; }
-                let label = format!("[{}]{} ", keys[i], &item.name.chars().take(12).collect::<String>());
+                if ix > 74 { break; }
+                let label = format!("[{}]{} ", keys[i], &item.name.chars().take(8).collect::<String>());
                 ctx.print_color(ix, ay + 2, dim, bg, &label);
                 ix += label.len() as i32;
             }
         }
 
         // ── Combat log ────────────────────────────────────────────────────────
-        draw_subpanel(ctx, 1, 33, 116, 14, "CHAOS LOG", &t);
+        draw_subpanel(ctx, 1, 33, 77, 14, "CHAOS LOG", &t);
         let log_start = self.combat_log.len().saturating_sub(13);
         for (i, line) in self.combat_log[log_start..].iter().enumerate() {
             let fg = if line.contains("CRIT") || line.contains("BOSS") || line.contains("☠") { dng }
@@ -1525,7 +1527,7 @@ impl State {
                      else if line.contains("heal") || line.contains('+') { suc }
                      else if line.starts_with("  ") { dim } // engine trace
                      else { RGB::from_u8(t.primary.0, t.primary.1, t.primary.2) };
-            ctx.print_color(3, 35 + i as i32, fg, bg, &line.chars().take(112).collect::<String>());
+            ctx.print_color(3, 35 + i as i32, fg, bg, &line.chars().take(74).collect::<String>());
         }
     }
 
@@ -1541,11 +1543,11 @@ impl State {
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "SHOP", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "SHOP", &t);
 
         let pgold = self.player.as_ref().map(|p| p.gold).unwrap_or(0);
         stat_line(ctx, 3, 3, "Your Gold: ", &format!("{}g", pgold), t.gold, &t);
-        draw_separator(ctx, 1, 4, 118, &t);
+        draw_separator(ctx, 1, 4, 77, &t);
 
         // Heal option
         let heal_row = 5i32;
@@ -1553,18 +1555,18 @@ impl State {
         ctx.print_color(3, heal_row, if can_heal { suc } else { dim }, bg,
             &format!("[H] Healing Potion  +40 HP  ─  {}g", self.shop_heal_cost));
 
-        draw_separator(ctx, 1, 7, 118, &t);
+        draw_separator(ctx, 1, 7, 77, &t);
 
         for (i, (item, price)) in self.shop_items.iter().enumerate() {
             let y = 9 + i as i32 * 5;
             let is_sel = i + 1 == self.shop_cursor;
             let can_buy = self.player.as_ref().map(|p| p.gold >= *price).unwrap_or(false);
-            if is_sel { draw_subpanel(ctx, 2, y - 1, 115, 5, "", &t); }
+            if is_sel { draw_subpanel(ctx, 2, y - 1, 75, 5, "", &t); }
             let name_col = if is_sel { hd } else { dim };
             let price_col = if can_buy { gld } else { dim };
             let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
-            ctx.print_color(3, y, name_col, bg, &format!("{}[{}] {}", pfx, i+1, item.name));
-            ctx.print_color(80, y, price_col, bg, &format!("{}g  ({})", price, item.rarity.name()));
+            ctx.print_color(3, y, name_col, bg, &format!("{}[{}] {}", pfx, i+1, &item.name.chars().take(30).collect::<String>()));
+            ctx.print_color(55, y, price_col, bg, &format!("{}g ({})", price, item.rarity.name()));
             for (j, m) in item.stat_modifiers.iter().enumerate().take(2) {
                 let mc = if m.value > 0 { suc } else { dim };
                 ctx.print_color(8, y + 1 + j as i32, mc, bg,
@@ -1572,7 +1574,7 @@ impl State {
             }
         }
 
-        draw_separator(ctx, 1, 45, 118, &t);
+        draw_separator(ctx, 1, 45, 77, &t);
         print_hint(ctx, 3, 46, "[1-4]", " Buy item   ", &t);
         print_hint(ctx, 22, 46, "[H]", " Heal   ", &t);
         print_hint(ctx, 31, 46, "[Enter/0/Esc]", " Leave", &t);
@@ -1590,18 +1592,18 @@ impl State {
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "CRAFTING BENCH", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "CRAFTING BENCH", &t);
 
         let has_inventory = self.player.as_ref().map(|p| !p.inventory.is_empty()).unwrap_or(false);
         if !has_inventory {
-            print_center(ctx, 10, 22, 100, t.dim, &t, "Your inventory is empty. Nothing to craft.");
-            print_hint(ctx, 55, 25, "[Esc/Enter]", " Leave", &t);
+            print_center(ctx, 2, 22, 75, t.dim, &t, "Your inventory is empty. Nothing to craft.");
+            print_hint(ctx, 30, 25, "[Esc/Enter]", " Leave", &t);
             return;
         }
 
         match self.craft_phase {
             CraftPhase::SelectItem => {
-                draw_subpanel(ctx, 2, 3, 115, 38, "SELECT ITEM TO CRAFT  ↑↓ Navigate · Enter Confirm", &t);
+                draw_subpanel(ctx, 2, 3, 75, 38, "SELECT ITEM  ↑↓ Navigate · Enter Confirm", &t);
                 if let Some(ref p) = self.player {
                     for (i, item) in p.inventory.iter().enumerate() {
                         let is_sel = i == self.craft_item_cursor;
@@ -1617,7 +1619,7 @@ impl State {
                         }
                     }
                 }
-                draw_separator(ctx, 2, 44, 116, &t);
+                draw_separator(ctx, 2, 44, 75, &t);
                 print_hint(ctx, 4, 45, "↑↓", " Navigate   ", &t);
                 print_hint(ctx, 20, 45, "Enter", " Select   ", &t);
                 print_hint(ctx, 35, 45, "Esc", " Leave", &t);
@@ -1628,9 +1630,9 @@ impl State {
                     .map(|i| (i.name.clone(), i.rarity.name()))
                     .unwrap_or_default();
 
-                ctx.print_color(3, 3, hd, bg, &format!("Crafting: {}", item_name));
+                ctx.print_color(3, 3, hd, bg, &format!("Crafting: {}", &item_name.chars().take(50).collect::<String>()));
                 ctx.print_color(3, 4, dim, bg, &format!("Rarity: {}", item_rarity));
-                draw_separator(ctx, 2, 5, 116, &t);
+                draw_separator(ctx, 2, 5, 75, &t);
 
                 let ops = [
                     ("Reforge",    "Chaos-reroll ALL stat modifiers from scratch",     t.warn),
@@ -1643,7 +1645,7 @@ impl State {
                 for (i, (name, desc, col)) in ops.iter().enumerate() {
                     let is_sel = i == self.craft_op_cursor;
                     let y = 8 + i as i32 * 5;
-                    if is_sel { draw_subpanel(ctx, 3, y - 1, 113, 4, "", &t); }
+                    if is_sel { draw_subpanel(ctx, 2, y - 1, 75, 4, "", &t); }
                     let fc = RGB::from_u8(col.0, col.1, col.2);
                     let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
                     ctx.print_color(5, y, if is_sel { fc } else { dim }, bg,
@@ -1652,11 +1654,11 @@ impl State {
                 }
 
                 if !self.craft_message.is_empty() {
-                    draw_separator(ctx, 2, 38, 116, &t);
-                    ctx.print_color(4, 39, gld, bg, &self.craft_message);
+                    draw_separator(ctx, 2, 38, 75, &t);
+                    ctx.print_color(4, 39, gld, bg, &self.craft_message.chars().take(72).collect::<String>());
                 }
 
-                draw_separator(ctx, 2, 44, 116, &t);
+                draw_separator(ctx, 2, 44, 75, &t);
                 print_hint(ctx, 4, 45, "↑↓ / 1-6", " Select op   ", &t);
                 print_hint(ctx, 28, 45, "Enter", " Apply   ", &t);
                 print_hint(ctx, 43, 45, "Esc", " Back", &t);
@@ -1676,41 +1678,41 @@ impl State {
 
         ctx.cls_bg(bg);
         // Danger border
-        ctx.draw_box(0, 0, 119, 49,
+        ctx.draw_box(0, 0, 79, 49,
             RGB::from_u8(t.danger.0, t.danger.1, t.danger.2),
             bg);
 
         // Flashing "YOU DIED" (pulse every 30 frames)
         let pulse = if (self.frame / 30) % 2 == 0 { dng } else { hd };
-        ctx.print_color(37, 5,  pulse, bg, "╔══════════════════════════════════════════╗");
-        ctx.print_color(37, 6,  pulse, bg, "║         Y  O  U     D  I  E  D           ║");
-        ctx.print_color(37, 7,  dng,   bg, "║     The mathematics have consumed you.   ║");
-        ctx.print_color(37, 8,  pulse, bg, "╚══════════════════════════════════════════╝");
+        ctx.print_color(17, 5,  pulse, bg, "╔══════════════════════════════════════════╗");
+        ctx.print_color(17, 6,  pulse, bg, "║         Y  O  U     D  I  E  D           ║");
+        ctx.print_color(17, 7,  dng,   bg, "║     The mathematics have consumed you.   ║");
+        ctx.print_color(17, 8,  pulse, bg, "╚══════════════════════════════════════════╝");
 
         if let Some(ref p) = self.player {
-            draw_subpanel(ctx, 10, 11, 99, 24, "RUN SUMMARY", &t);
-            ctx.print_color(12, 13, hd, bg,
+            draw_subpanel(ctx, 2, 11, 75, 24, "RUN SUMMARY", &t);
+            ctx.print_color(4, 13, hd, bg,
                 &format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
-            stat_line(ctx, 12, 14, "Floor  ", &format!("{}", p.floor),  t.warn, &t);
-            stat_line(ctx, 12, 15, "Kills  ", &format!("{}", p.kills),  t.success, &t);
-            stat_line(ctx, 12, 16, "Gold   ", &format!("{}g", p.gold),  t.gold, &t);
-            stat_line(ctx, 12, 17, "XP     ", &format!("{}", p.xp),     t.xp, &t);
-            stat_line(ctx, 12, 18, "Spells ", &format!("{}", p.spells_cast), t.mana, &t);
-            stat_line(ctx, 12, 19, "Corrupt", &format!("{}", p.corruption), t.danger, &t);
-            draw_separator(ctx, 11, 20, 98, &t);
+            stat_line(ctx, 4, 14, "Floor  ", &format!("{}", p.floor),  t.warn, &t);
+            stat_line(ctx, 4, 15, "Kills  ", &format!("{}", p.kills),  t.success, &t);
+            stat_line(ctx, 4, 16, "Gold   ", &format!("{}g", p.gold),  t.gold, &t);
+            stat_line(ctx, 4, 17, "XP     ", &format!("{}", p.xp),     t.xp, &t);
+            stat_line(ctx, 4, 18, "Spells ", &format!("{}", p.spells_cast), t.mana, &t);
+            stat_line(ctx, 4, 19, "Corrupt", &format!("{}", p.corruption), t.danger, &t);
+            draw_separator(ctx, 3, 20, 73, &t);
             for (i, line) in p.run_summary().iter().enumerate().take(12) {
-                ctx.print_color(12, 21 + i as i32, dim, bg, line);
+                ctx.print_color(4, 21 + i as i32, dim, bg, &line.chars().take(72).collect::<String>());
             }
         }
 
         if let Some(ref nem) = self.nemesis_record {
-            ctx.print_color(10, 37, dng, bg,
-                &format!("☠  {} is now your Nemesis — they will return stronger.", nem.enemy_name));
+            ctx.print_color(2, 37, dng, bg,
+                &format!("☠ {} is now your Nemesis — will return stronger.", &nem.enemy_name.chars().take(30).collect::<String>()));
         }
 
-        draw_separator(ctx, 2, 45, 116, &t);
-        print_hint(ctx, 38, 46, "[Enter]", " Return to title   ", &t);
-        print_hint(ctx, 70, 46, "[S]", " Scoreboard", &t);
+        draw_separator(ctx, 2, 45, 75, &t);
+        print_hint(ctx, 10, 46, "[Enter]", " Return to title   ", &t);
+        print_hint(ctx, 40, 46, "[S]", " Scoreboard", &t);
     }
 
     // ── VICTORY ───────────────────────────────────────────────────────────────
@@ -1725,36 +1727,36 @@ impl State {
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
         ctx.cls_bg(bg);
-        ctx.draw_box(0, 0, 119, 49, gld, bg);
+        ctx.draw_box(0, 0, 79, 49, gld, bg);
 
         // Animated shimmer on victory banner
         let shimmer_t = (self.frame as f32 * 0.05).sin() * 0.2 + 0.8;
         let sc = Theme::lerp(t.gold, t.heading, shimmer_t);
         let shimmer = RGB::from_u8(sc.0, sc.1, sc.2);
 
-        ctx.print_color(33, 5,  shimmer, bg, "╔═══════════════════════════════════════════════╗");
-        ctx.print_color(33, 6,  shimmer, bg, "║   ★  V  I  C  T  O  R  Y  ★                  ║");
-        ctx.print_color(33, 7,  gld,     bg, "║   You solved 10 floors of pure mathematical   ║");
-        ctx.print_color(33, 8,  gld,     bg, "║   chaos. The algorithms bow before you.       ║");
-        ctx.print_color(33, 9,  shimmer, bg, "╚═══════════════════════════════════════════════╝");
+        ctx.print_color(14, 5,  shimmer, bg, "╔═══════════════════════════════════════════════╗");
+        ctx.print_color(14, 6,  shimmer, bg, "║   ★  V  I  C  T  O  R  Y  ★                  ║");
+        ctx.print_color(14, 7,  gld,     bg, "║   You solved 10 floors of pure mathematical   ║");
+        ctx.print_color(14, 8,  gld,     bg, "║   chaos. The algorithms bow before you.       ║");
+        ctx.print_color(14, 9,  shimmer, bg, "╚═══════════════════════════════════════════════╝");
 
         if let Some(ref p) = self.player {
-            draw_subpanel(ctx, 10, 12, 99, 26, "FINAL STATS", &t);
-            ctx.print_color(12, 14, hd, bg,
+            draw_subpanel(ctx, 2, 12, 75, 26, "FINAL STATS", &t);
+            ctx.print_color(4, 14, hd, bg,
                 &format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
-            stat_line(ctx, 12, 15, "Floors    ", &format!("{}", p.floor), t.gold, &t);
-            stat_line(ctx, 12, 16, "Kills     ", &format!("{}", p.kills), t.success, &t);
-            stat_line(ctx, 12, 17, "Gold      ", &format!("{}g", p.gold), t.gold, &t);
-            stat_line(ctx, 12, 18, "XP        ", &format!("{}", p.xp), t.xp, &t);
-            draw_separator(ctx, 11, 19, 98, &t);
+            stat_line(ctx, 4, 15, "Floors    ", &format!("{}", p.floor), t.gold, &t);
+            stat_line(ctx, 4, 16, "Kills     ", &format!("{}", p.kills), t.success, &t);
+            stat_line(ctx, 4, 17, "Gold      ", &format!("{}g", p.gold), t.gold, &t);
+            stat_line(ctx, 4, 18, "XP        ", &format!("{}", p.xp), t.xp, &t);
+            draw_separator(ctx, 3, 19, 73, &t);
             for (i, line) in p.run_summary().iter().enumerate().take(14) {
-                ctx.print_color(12, 20 + i as i32, if i == 0 { suc } else { dim }, bg, line);
+                ctx.print_color(4, 20 + i as i32, if i == 0 { suc } else { dim }, bg, &line.chars().take(72).collect::<String>());
             }
         }
 
-        draw_separator(ctx, 2, 45, 116, &t);
-        print_hint(ctx, 38, 46, "[Enter]", " Return to title   ", &t);
-        print_hint(ctx, 70, 46, "[S]", " Scoreboard", &t);
+        draw_separator(ctx, 2, 45, 75, &t);
+        print_hint(ctx, 10, 46, "[Enter]", " Return to title   ", &t);
+        print_hint(ctx, 40, 46, "[S]", " Scoreboard", &t);
     }
 
     // ── SCOREBOARD ────────────────────────────────────────────────────────────
@@ -1768,16 +1770,16 @@ impl State {
         let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
 
         ctx.cls_bg(bg);
-        draw_panel(ctx, 0, 0, 119, 49, "SCOREBOARD", &t);
+        draw_panel(ctx, 0, 0, 79, 49, "SCOREBOARD", &t);
 
         let scores = load_scores();
         if scores.is_empty() {
-            print_center(ctx, 5, 22, 110, t.dim, &t, "No scores yet. Play and die bravely.");
+            print_center(ctx, 2, 22, 75, t.dim, &t, "No scores yet. Play and die bravely.");
         } else {
-            ctx.print_color(4, 4, dim, bg,
-                &format!("{:<4} {:<12} {:<22} {:<14} {:<6} {:<6}",
-                    "Rank", "Score", "Name", "Class", "Floor", "Kills"));
-            draw_separator(ctx, 3, 5, 113, &t);
+            ctx.print_color(2, 4, dim, bg,
+                &format!("{:<4} {:<10} {:<16} {:<12} {:<5} {:<5}",
+                    "Rank", "Score", "Name", "Class", "Flr", "Kills"));
+            draw_separator(ctx, 2, 5, 75, &t);
             for (i, s) in scores.iter().enumerate().take(20) {
                 let row_col = match i {
                     0 => gld,
@@ -1786,13 +1788,15 @@ impl State {
                     _ => dim,
                 };
                 let medal = match i { 0 => "★ ", 1 => "◆ ", 2 => "● ", _ => "  " };
-                ctx.print_color(4, 6 + i as i32, row_col, bg,
-                    &format!("{}{:<3}  {:<12} {:<22} {:<14} {:<6} {}",
-                        medal, i+1, s.score, s.name, s.class, s.floor_reached, s.enemies_defeated));
+                ctx.print_color(2, 6 + i as i32, row_col, bg,
+                    &format!("{}{:<3}  {:<10} {:<16} {:<12} {:<5} {}",
+                        medal, i+1, s.score, &s.name.chars().take(16).collect::<String>(),
+                        &s.class.chars().take(12).collect::<String>(),
+                        s.floor_reached, s.enemies_defeated));
             }
         }
 
-        draw_separator(ctx, 2, 45, 116, &t);
+        draw_separator(ctx, 2, 45, 75, &t);
         print_hint(ctx, 4, 46, "[Esc/Q]", " Back to title", &t);
     }
 }
@@ -2206,8 +2210,8 @@ impl State {
 fn main() -> BError {
     let builder = BTermBuilder::simple80x50()
         .with_title("CHAOS RPG — Where Math Goes To Die")
-        .with_tile_dimensions(14, 14)
-        .with_dimensions(120, 50)
+        .with_tile_dimensions(12, 12)
+        .with_dimensions(80, 50)
         .with_fps_cap(60.0)
         .with_fullscreen(true);
     main_loop(builder.build()?, State::new())
