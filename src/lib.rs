@@ -29,3 +29,5 @@ pub mod dialogue;
 pub mod faction_system;
 pub mod loot_system;
 pub mod achievement_system;
+pub mod spell_system;
+pub mod character_creation;
