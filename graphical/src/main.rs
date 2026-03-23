@@ -43,8 +43,6 @@ struct SaveState {
     current_mana: i64,
     is_boss_fight: bool,
     game_mode: String,    // "Story" | "Infinite" | "Daily"
-    enemy: Option<Enemy>,
-    combat_state: Option<CombatState>,
     nemesis_spawned: bool,
     combat_log: Vec<String>,
 }
@@ -402,8 +400,6 @@ impl State {
             current_mana: self.current_mana,
             is_boss_fight: self.is_boss_fight,
             game_mode: mode_str.to_string(),
-            enemy: self.enemy.clone(),
-            combat_state: self.combat_state.clone(),
             nemesis_spawned: self.nemesis_spawned,
             combat_log: self.combat_log.clone(),
         };
@@ -414,23 +410,24 @@ impl State {
 
     fn do_load(&mut self) {
         let Some(ss) = read_save() else { return; };
-        self.player        = Some(ss.player);
-        self.floor         = ss.floor;
-        self.floor_num     = ss.floor_num;
-        self.floor_seed    = ss.floor_seed;
-        self.seed          = ss.seed;
-        self.current_mana  = ss.current_mana;
-        self.is_boss_fight = ss.is_boss_fight;
-        self.game_mode     = match ss.game_mode.as_str() {
-            "Story"    => GameMode::Story,
-            "Daily"    => GameMode::Daily,
-            _          => GameMode::Infinite,
+        self.player          = Some(ss.player);
+        self.floor           = ss.floor;
+        self.floor_num       = ss.floor_num;
+        self.floor_seed      = ss.floor_seed;
+        self.seed            = ss.seed;
+        self.current_mana    = ss.current_mana;
+        self.is_boss_fight   = ss.is_boss_fight;
+        self.game_mode       = match ss.game_mode.as_str() {
+            "Story"  => GameMode::Story,
+            "Daily"  => GameMode::Daily,
+            _        => GameMode::Infinite,
         };
-        self.enemy         = ss.enemy;
-        self.combat_state  = ss.combat_state;
         self.nemesis_spawned = ss.nemesis_spawned;
-        self.combat_log    = ss.combat_log;
-        self.screen        = AppScreen::FloorNav;
+        self.combat_log      = ss.combat_log;
+        // Always restore to floor nav — mid-combat state is not saved
+        self.enemy           = None;
+        self.combat_state    = None;
+        self.screen          = AppScreen::FloorNav;
         self.push_log("Save loaded — welcome back.".to_string());
     }
 
