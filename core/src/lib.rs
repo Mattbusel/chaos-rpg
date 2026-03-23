@@ -55,3 +55,5 @@ pub mod dialogue_system;
 pub mod map_generator;
 pub mod merchant_system;
 pub mod crafting_system_v2;
+pub mod magic_system;
+pub mod relationship_system;
