@@ -1,10 +1,10 @@
 {
-  "enemy_name": "Collatz Shade",
-  "floor_killed_at": 12,
+  "enemy_name": "Logic Wraith",
+  "floor_killed_at": 24,
   "times_killed_player": 1,
-  "killer_base_damage": 10,
+  "killer_base_damage": 111,
   "hp_bonus_pct": 30,
   "damage_bonus_pct": 25,
   "kill_method": "physical",
-  "killed_player_class": "Necromancer"
+  "killed_player_class": "Berserker"
 }

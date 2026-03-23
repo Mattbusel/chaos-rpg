@@ -1502,11 +1502,7 @@ fn do_combat_encounter(
         ui::clear_screen();
         ui::show_combat_menu(player, enemy, state.turn + 1);
 
-        let action = if ui::is_auto_mode() {
-            ui::auto_combat_action(player)
-        } else {
-            ui::read_combat_action()
-        };
+        let action = ui::read_combat_action();
         // Capture display name before action is moved into resolve_action
         let action_label = combat_action_label(&action);
 

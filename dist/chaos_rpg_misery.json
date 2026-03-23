@@ -1,5 +1,17 @@
 [
   {
+    "name": "Hero",
+    "class": "Berserker",
+    "misery_index": 16526.0,
+    "floor_reached": 24,
+    "power_tier": "GODLIKE",
+    "spite_spent": 0.0,
+    "defiance_rolls": 13,
+    "cause_of_death": "Unknown",
+    "misery_score": 396624,
+    "timestamp": "2026-03-23 10:09Z"
+  },
+  {
     "name": "Grignus",
     "class": "Necromancer",
     "misery_index": 2871.0,

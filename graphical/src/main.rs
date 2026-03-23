@@ -2107,7 +2107,7 @@ impl State {
     //   • GameOver / Victory (nothing to advance)
     //
     fn tick_auto_play(&mut self, _ctx: &mut BTerm) {
-        const AUTO_DELAY: u64 = 20; // ~0.33 s at 60 fps — readable but fast
+        const AUTO_DELAY: u64 = 60; // ~1 s at 60 fps
         if self.frame.saturating_sub(self.auto_last_action) < AUTO_DELAY {
             return;
         }
@@ -2139,11 +2139,9 @@ impl State {
                 self.auto_last_action = self.frame;
             }
 
-            // ── Combat ───────────────────────────────────────────────────────
+            // ── Combat — player always picks manually, even in auto mode ─────
             AppScreen::Combat => {
-                let action = self.auto_combat_action();
-                self.resolve_combat_action(action);
-                self.auto_last_action = self.frame;
+                // Do nothing; input is handled in draw_combat key handler.
             }
 
             // ── Non-item room events — auto-accept ───────────────────────────

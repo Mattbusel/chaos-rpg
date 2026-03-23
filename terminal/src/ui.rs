@@ -163,7 +163,9 @@ pub fn prompt(msg: &str) -> String {
 
 pub fn press_enter(msg: &str) {
     if is_auto_mode() {
-        return; // no pause in auto mode
+        // Brief pause so the player can read what happened before auto-advancing.
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        return;
     }
     print!("{}", msg);
     let _ = io::stdout().flush();
