@@ -906,14 +906,18 @@ impl State {
 // ─── CONST LISTS ──────────────────────────────────────────────────────────────
 
 const CLASSES: &[(&str, CharacterClass)] = &[
-    ("Mage",        CharacterClass::Mage),
-    ("Berserker",   CharacterClass::Berserker),
-    ("Ranger",      CharacterClass::Ranger),
-    ("Thief",       CharacterClass::Thief),
-    ("Necromancer", CharacterClass::Necromancer),
-    ("Alchemist",   CharacterClass::Alchemist),
-    ("Paladin",     CharacterClass::Paladin),
-    ("VoidWalker",  CharacterClass::VoidWalker),
+    ("Mage",         CharacterClass::Mage),
+    ("Berserker",    CharacterClass::Berserker),
+    ("Ranger",       CharacterClass::Ranger),
+    ("Thief",        CharacterClass::Thief),
+    ("Necromancer",  CharacterClass::Necromancer),
+    ("Alchemist",    CharacterClass::Alchemist),
+    ("Paladin",      CharacterClass::Paladin),
+    ("VoidWalker",   CharacterClass::VoidWalker),
+    ("Warlord",      CharacterClass::Warlord),
+    ("Trickster",    CharacterClass::Trickster),
+    ("Runesmith",    CharacterClass::Runesmith),
+    ("Chronomancer", CharacterClass::Chronomancer),
 ];
 
 const BACKGROUNDS: &[(&str, Background)] = &[
@@ -1102,18 +1106,18 @@ impl State {
         ctx.cls_bg(bg);
         draw_panel(ctx, 0, 0, 79, 49, "CHARACTER CREATION", &t);
 
-        // ── Class column
-        draw_subpanel(ctx, 2, 3, 25, 25, "CLASS  ↑↓", &t);
+        // ── Class column (scrollable — show up to 12 classes at 1 row each)
+        draw_subpanel(ctx, 2, 3, 25, 32, "CLASS  ↑↓", &t);
         for (i, (name, _)) in CLASSES.iter().enumerate() {
             print_selectable(ctx, 4, 5 + i as i32 * 2, i == self.cc_class, name, self.frame, &t);
         }
 
         // Class passive description
         let class = &CLASSES[self.cc_class].1;
-        draw_subpanel(ctx, 2, 30, 25, 14, "PASSIVE ABILITY", &t);
-        ctx.print_color(4, 32, ac, bg, class.passive_name());
+        draw_subpanel(ctx, 2, 37, 25, 7, "PASSIVE ABILITY", &t);
+        ctx.print_color(4, 39, ac, bg, class.passive_name());
         let desc = class.passive_desc();
-        let mut row = 34i32;
+        let mut row = 40i32;
         let mut line = String::new();
         for w in desc.split_whitespace() {
             if line.len() + w.len() + 1 > 20 {
@@ -1630,9 +1634,12 @@ impl State {
         }
 
         // ── Combat log ────────────────────────────────────────────────────────
-        draw_subpanel(ctx, 1, 33, 77, 14, "CHAOS LOG", &t);
+        // Panel: y=33, h=16 → bottom border at y=48 (fits inside outer 49-row panel)
+        // Inner rows: y=35 to y=47 = 13 usable lines
+        draw_subpanel(ctx, 1, 33, 77, 16, "CHAOS LOG", &t);
         let log_start = self.combat_log.len().saturating_sub(13);
         for (i, line) in self.combat_log[log_start..].iter().enumerate() {
+            if i >= 13 { break; }
             let fg = if line.contains("CRIT") || line.contains("BOSS") || line.contains("☠") { dng }
                      else if line.contains("Victory") || line.contains("LEVEL") { gld }
                      else if line.contains("heal") || line.contains('+') { suc }

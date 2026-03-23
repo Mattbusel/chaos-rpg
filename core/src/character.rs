@@ -23,6 +23,11 @@ pub enum CharacterClass {
     Alchemist,
     Paladin,
     VoidWalker,
+    // Extended roster
+    Warlord,
+    Trickster,
+    Runesmith,
+    Chronomancer,
 }
 
 impl CharacterClass {
@@ -35,7 +40,11 @@ impl CharacterClass {
             CharacterClass::Necromancer => "Necromancer",
             CharacterClass::Alchemist => "Alchemist",
             CharacterClass::Paladin => "Paladin",
-            CharacterClass::VoidWalker => "VoidWalker",
+            CharacterClass::VoidWalker  => "VoidWalker",
+            CharacterClass::Warlord     => "Warlord",
+            CharacterClass::Trickster   => "Trickster",
+            CharacterClass::Runesmith   => "Runesmith",
+            CharacterClass::Chronomancer => "Chronomancer",
         }
     }
 
@@ -65,6 +74,18 @@ impl CharacterClass {
             CharacterClass::VoidWalker => {
                 "Exists between the Mandelbrot boundary and everywhere else. Phase-dodges attacks."
             }
+            CharacterClass::Warlord => {
+                "Commands through raw authority. High FORCE+VIT. War Cry boosts every stat for 3 rounds."
+            }
+            CharacterClass::Trickster => {
+                "Fights through misdirection. Illusion strikes CUNNING+LUCK. Redirects 20% of attacks."
+            }
+            CharacterClass::Runesmith => {
+                "Inscribes chaos equations into weapons. ENTROPY+FORCE. Each inscription stacks +10% dmg."
+            }
+            CharacterClass::Chronomancer => {
+                "Warps the action sequence. MANA+ENTROPY. 15% chance to act twice per combat round."
+            }
         }
     }
 
@@ -77,7 +98,11 @@ impl CharacterClass {
             CharacterClass::Necromancer => "  ___\n (x_x)\n  |||",
             CharacterClass::Alchemist => "  ___\n [~~~]\n  |||",
             CharacterClass::Paladin => "  [+]\n  |||\n  |/|",
-            CharacterClass::VoidWalker => "  ...\n (~_~)\n  ~~~",
+            CharacterClass::VoidWalker   => "  ...\n (~_~)\n  ~~~",
+            CharacterClass::Warlord      => " [WAR]\n  | |\n  |_|",
+            CharacterClass::Trickster    => "  {?}\n /||\\\n  ||",
+            CharacterClass::Runesmith    => "  ᚱᚢᚾ\n [###]\n  |||",
+            CharacterClass::Chronomancer => "  ⌚\n (∞)\n  |||",
         }
     }
 
@@ -90,7 +115,11 @@ impl CharacterClass {
             CharacterClass::Necromancer => "Death Drain",
             CharacterClass::Alchemist => "Transmutation",
             CharacterClass::Paladin => "Divine Regen",
-            CharacterClass::VoidWalker => "Phase Shift",
+            CharacterClass::VoidWalker   => "Phase Shift",
+            CharacterClass::Warlord      => "War Cry",
+            CharacterClass::Trickster    => "Misdirection",
+            CharacterClass::Runesmith    => "Runic Etch",
+            CharacterClass::Chronomancer => "Time Dilation",
         }
     }
 
@@ -103,7 +132,11 @@ impl CharacterClass {
             CharacterClass::Necromancer => "On kill: absorb 8% of enemy max HP as your own",
             CharacterClass::Alchemist => "Items and potions grant 50% more effect",
             CharacterClass::Paladin => "Regenerate (3 + VIT/20) HP at start of each round",
-            CharacterClass::VoidWalker => "15% + LCK/400 chance to phase-dodge any attack",
+            CharacterClass::VoidWalker   => "15% + LCK/400 chance to phase-dodge any attack",
+            CharacterClass::Warlord      => "Every 5 kills: +3 FORCE and +3 VIT permanently this run",
+            CharacterClass::Trickster    => "20% + CUN/300 chance to redirect incoming hit to enemy",
+            CharacterClass::Runesmith    => "On kill: etch +10% weapon damage (stacks, max 10 times)",
+            CharacterClass::Chronomancer => "15% + ENT/400 chance to take an extra action each round",
         }
     }
 
@@ -180,6 +213,42 @@ impl CharacterClass {
                 precision: 85,
                 entropy: 90,
                 luck: 90,
+            },
+            CharacterClass::Warlord => StatBlock {
+                vitality: 80,
+                force: 85,
+                mana: 40,
+                cunning: 65,
+                precision: 60,
+                entropy: 30,
+                luck: 45,
+            },
+            CharacterClass::Trickster => StatBlock {
+                vitality: 45,
+                force: 35,
+                mana: 60,
+                cunning: 85,
+                precision: 80,
+                entropy: 65,
+                luck: 90,
+            },
+            CharacterClass::Runesmith => StatBlock {
+                vitality: 55,
+                force: 70,
+                mana: 65,
+                cunning: 50,
+                precision: 60,
+                entropy: 80,
+                luck: 40,
+            },
+            CharacterClass::Chronomancer => StatBlock {
+                vitality: 40,
+                force: 30,
+                mana: 90,
+                cunning: 60,
+                precision: 70,
+                entropy: 85,
+                luck: 65,
             },
         }
     }

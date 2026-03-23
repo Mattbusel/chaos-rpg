@@ -764,7 +764,11 @@ impl PlayerPassives {
             CharacterClass::Necromancer => &["vitality",  "mana"],
             CharacterClass::Alchemist   => &["luck",      "mana"],
             CharacterClass::Paladin     => &["vitality",  "force"],
-            CharacterClass::VoidWalker  => &["entropy",   "cunning"],
+            CharacterClass::VoidWalker   => &["entropy",   "cunning"],
+            CharacterClass::Warlord      => &["force",     "vitality"],
+            CharacterClass::Trickster    => &["cunning",   "luck"],
+            CharacterClass::Runesmith    => &["entropy",   "force"],
+            CharacterClass::Chronomancer => &["mana",      "entropy"],
         };
 
         let mut messages = Vec::new();
