@@ -11,6 +11,8 @@ pub mod items;
 pub mod math_engines;
 pub mod npcs;
 pub mod passive_tree;
+pub mod quest;
+pub mod save_system;
 pub mod scoreboard;
 pub mod skill_checks;
 pub mod spells;
