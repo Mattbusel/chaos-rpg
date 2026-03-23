@@ -44,7 +44,11 @@ pub fn draw_panel(ctx: &mut BTerm, x: i32, y: i32, w: i32, h: i32, title: &str, 
 
 /// Inner panel using single box (sub-panel inside a double-box).
 pub fn draw_subpanel(ctx: &mut BTerm, x: i32, y: i32, w: i32, h: i32, title: &str, t: &Theme) {
-    let fg = RGB::from_u8(t.primary.0, t.primary.1, t.primary.2);
+    // Dim the border slightly from the outer box to create visual depth
+    let r = (t.border.0 as u16 * 55 / 100) as u8;
+    let g = (t.border.1 as u16 * 55 / 100) as u8;
+    let b = (t.border.2 as u16 * 55 / 100) as u8;
+    let fg = RGB::from_u8(r, g, b);
     let bg = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
     ctx.draw_box(x, y, w, h, fg, bg);
     if !title.is_empty() {
@@ -132,11 +136,14 @@ pub fn print_selectable(ctx: &mut BTerm, x: i32, y: i32, selected: bool,
                         text: &str, frame: u64, t: &Theme) {
     let bg = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
     if selected {
-        // Highlight bar across width
+        // Highlight bar — use a faint version of accent as background tint
         let bar_w = (text.len() as i32 + 4).min(80);
+        let bg_r = (t.accent.0 as u16 * 12 / 100) as u8;
+        let bg_g = (t.accent.1 as u16 * 12 / 100) as u8;
+        let bg_b = (t.accent.2 as u16 * 12 / 100) as u8;
         for i in 0..bar_w {
             ctx.set(x + i - 2, y, RGB::from_u8(t.bg.0, t.bg.1, t.bg.2),
-                    RGB::from_u8(t.primary.0 / 6, t.primary.1 / 6, t.primary.2 / 6), 32u16);
+                    RGB::from_u8(bg_r, bg_g, bg_b), 32u16);
         }
         let pfx = format!("{} ", cursor_char(frame));
         ctx.print_color(x, y, RGB::from_u8(t.accent.0, t.accent.1, t.accent.2), bg, &pfx);

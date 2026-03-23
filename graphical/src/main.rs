@@ -182,6 +182,9 @@ struct State {
     hit_shake: u32,             // frames of outer-border shake flash on big crits
     spell_beam: u32,            // frames of beam animation
     spell_beam_col: (u8,u8,u8),
+    // ── Kill linger ──
+    kill_linger: u32,                       // frames to stay on combat after kill
+    post_combat_screen: Option<AppScreen>,  // screen to go to after linger
 }
 
 impl State {
@@ -220,6 +223,8 @@ impl State {
             hit_shake: 0,
             spell_beam: 0,
             spell_beam_col: (80, 120, 255),
+            kill_linger: 0,
+            post_combat_screen: None,
         }
     }
 
@@ -929,8 +934,8 @@ impl State {
 
                 self.gauntlet_stage = 0;
                 self.enemy = None;
-                // Show loot if pending, else floor nav
-                if self.loot_pending.is_some() {
+                // Show loot if pending, else floor nav — but linger on combat first
+                let next_screen = if self.loot_pending.is_some() {
                     let loot = self.loot_pending.take().unwrap();
                     self.room_event = RoomEvent::empty();
                     self.room_event.title = "★ LOOT DROPPED ★".to_string();
@@ -944,13 +949,17 @@ impl State {
                     self.room_event.lines.push(String::new());
                     self.room_event.lines.push("[P] Pick up   [Enter] Leave".to_string());
                     self.room_event.pending_item = Some(loot);
-                    self.screen = AppScreen::RoomView;
+                    AppScreen::RoomView
                 } else {
                     self.advance_floor_room();
-                    if self.screen != AppScreen::GameOver && self.screen != AppScreen::Victory {
-                        self.screen = AppScreen::FloorNav;
+                    if self.screen == AppScreen::GameOver || self.screen == AppScreen::Victory {
+                        self.screen.clone()
+                    } else {
+                        AppScreen::FloorNav
                     }
-                }
+                };
+                self.kill_linger = 35;
+                self.post_combat_screen = Some(next_screen);
             }
 
             CombatOutcome::PlayerDied => {
@@ -1080,6 +1089,18 @@ impl GameState for State {
 
         if self.auto_mode {
             self.tick_auto_play(ctx);
+        }
+
+        // Kill-linger: hold combat screen after victory so effects can finish
+        if self.kill_linger > 0 {
+            self.kill_linger -= 1;
+            self.draw_combat(ctx);
+            if self.kill_linger == 0 {
+                if let Some(next) = self.post_combat_screen.take() {
+                    self.screen = next;
+                }
+            }
+            return;
         }
 
         match self.screen.clone() {
@@ -1696,8 +1717,10 @@ impl State {
 
         ctx.cls_bg(bg);
 
-        // Combat border pulses danger color
-        draw_panel(ctx, 0, 0, 79, 49, "COMBAT", &t);
+        // Combat border with floor/kill context in title bar
+        let floor_kills = self.player.as_ref().map(|p| (p.floor, p.kills)).unwrap_or((1, 0));
+        let combat_title = format!("COMBAT  ─  Floor {}  ─  Kills: {}", floor_kills.0, floor_kills.1);
+        draw_panel(ctx, 0, 0, 79, 49, &combat_title, &t);
 
         // ── Enemy panel ───────────────────────────────────────────────────────
         draw_subpanel(ctx, 1, 2, 38, 21, "ENEMY", &t);
@@ -1707,7 +1730,9 @@ impl State {
         if !boss_lbl.is_empty() {
             ctx.print_color(20, 3, dng, bg, &boss_lbl);
         }
-        ctx.print_color(3, 4, dng, bg, &format!("{} [{}]", &ename.chars().take(20).collect::<String>(), etier));
+        let etier_s: String = etier.chars().take(12).collect();
+        let ename_s: String = ename.chars().take(18).collect();
+        ctx.print_color(3, 4, dng, bg, &format!("{} [{}]", ename_s, etier_s));
         let ep = ehp as f32 / emhp.max(1) as f32;
         let ec = t.hp_color(ep);
         stat_line(ctx, 3, 5, "HP ", &format!("{}/{}", ehp, emhp), ec, &t);
@@ -1721,7 +1746,9 @@ impl State {
 
         // ── Player panel ──────────────────────────────────────────────────────
         draw_subpanel(ctx, 41, 2, 38, 21, "PLAYER", &t);
-        ctx.print_color(43, 4, hd, bg, &format!("{} Lv.{} {}", &pname.chars().take(8).collect::<String>(), plv, pclass));
+        let pname_s: String = pname.chars().take(10).collect();
+        let pclass_s: String = pclass.chars().take(12).collect();
+        ctx.print_color(43, 4, hd, bg, &format!("{} Lv.{} {}", pname_s, plv, pclass_s));
         let pp = php as f32 / pmhp.max(1) as f32;
         let pc = t.hp_color(pp);
         stat_line(ctx, 43, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
@@ -1781,23 +1808,40 @@ impl State {
 
         // ── Actions bar ───────────────────────────────────────────────────────
         draw_subpanel(ctx, 1, 24, 77, 8, "ACTIONS", &t);
+        // Row 1: action keys + labels
         let ay = 26i32;
-        print_hint(ctx, 3, ay, "[A]", " Attack  ", &t);
-        print_hint(ctx, 15, ay, "[H]", " Heavy  ", &t);
-        print_hint(ctx, 26, ay, "[D]", " Defend  ", &t);
-        print_hint(ctx, 37, ay, "[T]", " Taunt  ", &t);
-        print_hint(ctx, 47, ay, "[F]", " Flee  ", &t);
-        print_hint(ctx, 57, ay, "[1-8]", " Spells", &t);
+        // Each action: key col + desc col
+        let actions: &[(&str, &str, &str)] = &[
+            ("[A]", "Attack",  "normal hit"),
+            ("[H]", "Heavy",   "1.5x, -acc"),
+            ("[D]", "Defend",  "+40 block"),
+            ("[T]", "Taunt",   "lure+debuff"),
+            ("[F]", "Flee",    "escape"),
+        ];
+        let col_w = 14i32;
+        for (i, (key, label, hint)) in actions.iter().enumerate() {
+            let x = 3 + i as i32 * col_w;
+            ctx.print_color(x, ay,     RGB::from_u8(t.accent.0, t.accent.1, t.accent.2),  bg, key);
+            ctx.print_color(x + key.len() as i32, ay, RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg, &format!(" {}", label));
+            ctx.print_color(x, ay + 1, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2),    bg, hint);
+        }
+        print_hint(ctx, 3 + 5 * col_w, ay, "[1-8]", " Spells", &t);
+        ctx.print_color(3 + 5 * col_w, ay + 1, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg, "cast spell");
 
         // Items row
         if let Some(ref p) = self.player {
-            let keys = ["Q","W","E","R","Y","U","I","O"];
-            let mut ix = 3i32;
-            for (i, item) in p.inventory.iter().enumerate().take(8) {
-                if ix > 74 { break; }
-                let label = format!("[{}]{} ", keys[i], &item.name.chars().take(8).collect::<String>());
-                ctx.print_color(ix, ay + 2, dim, bg, &label);
-                ix += label.len() as i32;
+            if !p.inventory.is_empty() {
+                let keys = ["Q","W","E","R","Y","U","I","O"];
+                let mut ix = 3i32;
+                ctx.print_color(ix, ay + 3, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg, "Items:");
+                ix += 7;
+                for (i, item) in p.inventory.iter().enumerate().take(8) {
+                    if ix > 73 { break; }
+                    let name_s: String = item.name.chars().take(9).collect();
+                    let label = format!("[{}]{} ", keys[i], name_s);
+                    ctx.print_color(ix, ay + 3, dim, bg, &label);
+                    ix += label.len() as i32;
+                }
             }
         }
 
