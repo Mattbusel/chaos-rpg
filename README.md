@@ -5,7 +5,7 @@
 A terminal ASCII roguelike where **every single outcome** -- character creation, combat, items, spells, skill checks -- is determined by chaining 4-10 real mathematical algorithms together. The output of one feeds into the next. The result is a game where you can roll a character that is literally God incarnate, or the reanimated corpse of the weakest being to ever exist. Both outcomes are mathematically valid.
 
 [![CI](https://github.com/Mattbusel/chaos-rpg/actions/workflows/ci.yml/badge.svg)](https://github.com/Mattbusel/chaos-rpg/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 
 ---
 
@@ -472,6 +472,6 @@ Multi-slot saves using a plain key=value text format with `[SLOT N]` headers -- 
 
 ---
 
-## License
+
 
 MIT -- see [LICENSE](LICENSE) for details.
