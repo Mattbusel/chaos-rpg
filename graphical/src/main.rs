@@ -24,6 +24,8 @@ use chaos_rpg_core::{
     world::{generate_floor, room_enemy, Floor, RoomType},
     achievements::{AchievementStore, RunSummary, CombatSnapshot},
     run_history::{RunHistory, RunRecord},
+    chaos_config::ChaosConfig,
+    daily_leaderboard::{LocalDailyStore, DailyEntry, LeaderboardRow, submit_score, fetch_scores},
 };
 
 mod renderer;
@@ -108,6 +110,7 @@ enum AppScreen {
     Scoreboard,
     Achievements,
     RunHistory,
+    DailyLeaderboard,
 }
 
 // ─── ROOM EVENT ───────────────────────────────────────────────────────────────
@@ -253,6 +256,13 @@ struct State {
     // ── Item filter (crafting) ──
     item_filter: String,
     item_filter_active: bool,
+    // ── Mod config ──
+    config: ChaosConfig,
+    // ── Daily leaderboard ──
+    daily_store: LocalDailyStore,
+    daily_rows: Vec<LeaderboardRow>,
+    daily_status: String,           // "Fetching…" / "Rank #N" / error message
+    daily_submitted: bool,          // already submitted this session
 }
 
 impl State {
@@ -305,6 +315,11 @@ impl State {
             chaos_viz_open: false,
             item_filter: String::new(),
             item_filter_active: false,
+            config: ChaosConfig::load(),
+            daily_store: LocalDailyStore::load(),
+            daily_rows: Vec::new(),
+            daily_status: String::new(),
+            daily_submitted: false,
         }
     }
 
@@ -358,12 +373,28 @@ impl State {
         let diff  = DIFFICULTIES[self.cc_diff].1.clone();
         let seed  = match self.game_mode {
             GameMode::Daily => Self::daily_seed(),
+            GameMode::Infinite if self.config.gameplay.infinite_seed_override != 0
+                => self.config.gameplay.infinite_seed_override,
             _ => self.seed,
         };
         self.seed = seed;
         self.floor_seed = seed;
         let mut player = Character::roll_new("Hero".to_string(), class, bg, seed, diff);
         player.apply_boon(self.boon_options[self.boon_cursor]);
+        // Apply config bonuses
+        if self.config.gameplay.starting_gold_bonus > 0 {
+            player.gold += self.config.gameplay.starting_gold_bonus;
+        }
+        if self.config.loaded_from_file {
+            self.achievements.check_event("config_loaded", 1);
+            if self.config.gameplay.starting_gold_bonus > 0 {
+                self.achievements.check_event("config_gold_bonus", 1);
+            }
+            if self.config.gameplay.difficulty_modifier >= 2.0 {
+                self.achievements.check_event("config_hard_mode", 1);
+            }
+            self.achievements.save();
+        }
         self.player = Some(player);
         self.floor_num = 1;
         self.max_floor = if self.game_mode == GameMode::Story { 10 } else { u32::MAX };
@@ -1282,6 +1313,37 @@ impl State {
 
             // Build shareable recap text
             self.last_recap_text = build_recap_text(p, score_val, misery, tier.name(), &epitaph, mode_str, p.seed);
+
+            // Daily leaderboard auto-submit
+            if self.game_mode == GameMode::Daily && !self.daily_submitted {
+                let entry = DailyEntry {
+                    date:  chrono_date_simple(),
+                    name:  if !self.config.meta.player_name.is_empty() {
+                        self.config.meta.player_name.clone()
+                    } else { p.name.clone() },
+                    class: p.class.name().to_string(),
+                    floor: p.floor,
+                    score: score_val,
+                    kills: p.kills as u64,
+                    seed:  p.seed,
+                    won:   self.screen == AppScreen::Victory,
+                };
+                let improved = self.daily_store.record(entry.clone());
+                if improved && self.config.leaderboard.submit_daily {
+                    let url = self.config.leaderboard.url.clone();
+                    match submit_score(&url, &entry) {
+                        Ok(rank) => {
+                            self.daily_status = format!("Submitted! Rank #{}", rank);
+                            self.achievements.check_event("daily_submitted", rank as i64);
+                            if rank == 1 { self.achievements.check_event("daily_rank1", 1); }
+                            if rank <= 3 { self.achievements.check_event("daily_top3", 1); }
+                        }
+                        Err(e) => self.daily_status = format!("Submit failed: {}", &e.chars().take(40).collect::<String>()),
+                    }
+                }
+                self.daily_submitted = true;
+                self.achievements.check_event("daily_first", 1);
+            }
         }
     }
 }
@@ -1359,6 +1421,7 @@ impl GameState for State {
             AppScreen::Victory          => self.draw_victory(ctx),
             AppScreen::Achievements     => self.draw_achievements(ctx),
             AppScreen::RunHistory       => self.draw_run_history(ctx),
+            AppScreen::DailyLeaderboard => self.draw_daily_leaderboard(ctx),
             AppScreen::Scoreboard       => self.draw_scoreboard(ctx),
         }
 
@@ -1503,13 +1566,14 @@ impl State {
 
         // ── Hint bar ──────────────────────────────────────────────────────
         draw_separator(ctx, 2, 44, 75, &t);
-        print_hint(ctx, 2,  45, "↑↓",   " Nav  ",     &t);
-        print_hint(ctx, 14, 45, "Enter"," Select  ",  &t);
-        print_hint(ctx, 28, 45, "T",    " Theme  ",   &t);
-        print_hint(ctx, 36, 45, "?",    " Tutorial  ",&t);
-        print_hint(ctx, 49, 45, "J",    " Achiev  ",  &t);
-        print_hint(ctx, 61, 45, "H",    " History  ", &t);
-        print_hint(ctx, 72, 45, "Q",    " Quit",       &t);
+        print_hint(ctx, 2,  45, "↑↓",   " Nav  ",    &t);
+        print_hint(ctx, 12, 45, "Enter"," Select  ", &t);
+        print_hint(ctx, 26, 45, "T",    " Theme  ",  &t);
+        print_hint(ctx, 34, 45, "?",    " Tut  ",    &t);
+        print_hint(ctx, 44, 45, "J",    " Achiev  ", &t);
+        print_hint(ctx, 55, 45, "H",    " History ",&t);
+        print_hint(ctx, 65, 45, "D",    " Daily  ",  &t);
+        print_hint(ctx, 74, 45, "Q",    " Quit",      &t);
 
         // ── Theme badge & tagline ──────────────────────────────────────────
         let tname = format!(" {} [T] ", t.name);
@@ -3427,6 +3491,23 @@ impl State {
                 }
                 VirtualKeyCode::J => self.screen = AppScreen::Achievements,
                 VirtualKeyCode::H => { self.history_scroll = 0; self.screen = AppScreen::RunHistory; }
+                VirtualKeyCode::D => {
+                    // Open daily leaderboard — fetch in background
+                    self.daily_rows.clear();
+                    self.daily_status = "Fetching leaderboard...".to_string();
+                    self.screen = AppScreen::DailyLeaderboard;
+                    let url  = self.config.leaderboard.url.clone();
+                    let date = chrono_date_simple();
+                    if self.config.leaderboard.fetch_on_open {
+                        match fetch_scores(&url, &date) {
+                            Ok(rows) => {
+                                self.daily_status = format!("Updated — {} entries", rows.len());
+                                self.daily_rows = rows;
+                            }
+                            Err(e) => self.daily_status = format!("Fetch error: {}", &e.chars().take(40).collect::<String>()),
+                        }
+                    }
+                }
                 _ => {}
             },
 
@@ -3594,7 +3675,14 @@ impl State {
                     VirtualKeyCode::U => Some(CombatAction::UseItem(5)),
                     VirtualKeyCode::I => Some(CombatAction::UseItem(6)),
                     VirtualKeyCode::O => Some(CombatAction::UseItem(7)),
-                    VirtualKeyCode::V => { self.chaos_viz_open = !self.chaos_viz_open; None }
+                    VirtualKeyCode::V => {
+                        self.chaos_viz_open = !self.chaos_viz_open;
+                        if self.chaos_viz_open {
+                            self.achievements.check_event("chaos_engine_viz", 1);
+                            self.achievements.save();
+                        }
+                        None
+                    }
                     _ => None,
                 };
                 if let Some(act) = action {
@@ -3716,6 +3804,8 @@ impl State {
                             VirtualKeyCode::Slash => {
                                 self.item_filter_active = true;
                                 self.item_filter.clear();
+                                self.achievements.check_event("item_filter_used", 1);
+                                self.achievements.save();
                             }
                             VirtualKeyCode::Escape => {
                                 if !self.item_filter.is_empty() {
@@ -3843,6 +3933,26 @@ impl State {
             AppScreen::RunHistory => match key {
                 VirtualKeyCode::Up   => { if self.history_scroll > 0 { self.history_scroll -= 1; } }
                 VirtualKeyCode::Down => { self.history_scroll = (self.history_scroll + 1).min(self.run_history.runs.len().saturating_sub(1)); }
+                VirtualKeyCode::Escape | VirtualKeyCode::Q | VirtualKeyCode::Return => {
+                    self.screen = AppScreen::Title;
+                }
+                _ => {}
+            },
+
+            AppScreen::DailyLeaderboard => match key {
+                VirtualKeyCode::R => {
+                    // Manual refresh
+                    self.daily_status = "Fetching...".to_string();
+                    let url  = self.config.leaderboard.url.clone();
+                    let date = chrono_date_simple();
+                    match fetch_scores(&url, &date) {
+                        Ok(rows) => {
+                            self.daily_status = format!("Updated — {} entries", rows.len());
+                            self.daily_rows = rows;
+                        }
+                        Err(e) => self.daily_status = format!("Error: {}", &e.chars().take(40).collect::<String>()),
+                    }
+                }
                 VirtualKeyCode::Escape | VirtualKeyCode::Q | VirtualKeyCode::Return => {
                     self.screen = AppScreen::Title;
                 }
@@ -4281,6 +4391,94 @@ impl State {
         draw_separator(ctx, 2, 46, 75, &t);
         print_hint(ctx, 4,  47, "↑↓",    " Scroll   ",    &t);
         print_hint(ctx, 18, 47, "Esc",   " Back to title", &t);
+    }
+}
+
+// ─── DAILY LEADERBOARD SCREEN ────────────────────────────────────────────────
+
+impl State {
+    fn draw_daily_leaderboard(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let gld  = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+        let dim  = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let suc  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
+        let dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
+        let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
+
+        ctx.cls_bg(bg);
+        let today = chrono_date_simple();
+        draw_panel(ctx, 0, 0, 79, 49, &format!("DAILY LEADERBOARD — {}", today), &t);
+
+        // Today's seed
+        let daily_seed = State::daily_seed();
+        ctx.print_color(4, 2, muted, bg, &format!("Today's seed: {}   ", daily_seed));
+        ctx.print_color(4, 3, dim, bg,
+            "Same dungeon for everyone today. Rankings by score.");
+
+        // Status line
+        let status_col = if self.daily_status.starts_with("Error") || self.daily_status.starts_with("Fetch error") {
+            dng
+        } else if self.daily_status.starts_with("Submit") || self.daily_status.starts_with("Updated") {
+            suc
+        } else { dim };
+        ctx.print_color(4, 4, status_col, bg, &self.daily_status.chars().take(70).collect::<String>());
+
+        draw_separator(ctx, 2, 5, 75, &t);
+
+        // My best today
+        if let Some(best) = self.daily_store.best_for_today(&today) {
+            ctx.print_color(4, 6, hd, bg, "Your best today:");
+            ctx.print_color(4, 7, gld, bg, &format!(
+                "  {}/{} — Floor {}  Score {}  Kills {}  {}",
+                best.name, best.class, best.floor, best.score, best.kills,
+                if best.won { "[WON]" } else { "" }
+            ));
+            draw_separator(ctx, 2, 8, 75, &t);
+        }
+
+        // Remote rows
+        let rows_y_start = 9i32;
+        if self.daily_rows.is_empty() {
+            ctx.print_color(4, rows_y_start + 2, muted, bg,
+                "No scores loaded. Press [R] to refresh, or play a Daily run to appear here.");
+        } else {
+            // Headers
+            ctx.print_color(4,  rows_y_start, ac, bg, "Rank");
+            ctx.print_color(11, rows_y_start, ac, bg, "Name/Class");
+            ctx.print_color(32, rows_y_start, ac, bg, "Floor");
+            ctx.print_color(39, rows_y_start, ac, bg, "Score");
+            ctx.print_color(51, rows_y_start, ac, bg, "Kills");
+            ctx.print_color(58, rows_y_start, ac, bg, "Result");
+            draw_separator(ctx, 2, rows_y_start + 1, 75, &t);
+
+            for (i, row) in self.daily_rows.iter().enumerate().take(32) {
+                let y = rows_y_start + 2 + i as i32;
+                let rank_col = match row.rank {
+                    1 => gld,
+                    2 => RGB::from_u8(192, 192, 192),
+                    3 => RGB::from_u8(205, 127, 50),
+                    _ => muted,
+                };
+                let result_col = if row.won { suc } else { dng };
+                ctx.print_color(4,  y, rank_col, bg, &format!("#{:<4}", row.rank));
+                let ident = format!("{}/{}", &row.name.chars().take(9).collect::<String>(),
+                                             &row.class.chars().take(9).collect::<String>());
+                ctx.print_color(11, y, hd,       bg, &ident);
+                ctx.print_color(32, y, gld,      bg, &format!("{}", row.floor));
+                ctx.print_color(39, y, ac,       bg, &format!("{}", row.score));
+                ctx.print_color(51, y, suc,      bg, &format!("{}", row.kills));
+                ctx.print_color(58, y, result_col, bg, if row.won { "WON" } else { "died" });
+            }
+        }
+
+        draw_separator(ctx, 2, 46, 75, &t);
+        print_hint(ctx, 4,  47, "[R]",   " Refresh   ", &t);
+        print_hint(ctx, 18, 47, "[Esc]", " Back to title", &t);
+        ctx.print_color(40, 47, muted, bg,
+            &format!("Endpoint: {}", &self.config.leaderboard.url.chars().take(36).collect::<String>()));
     }
 }
 

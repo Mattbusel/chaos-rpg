@@ -291,8 +291,42 @@ impl AchievementStore {
 
         // Meta
         if r.total_runs >= 10  { self.unlock("try_try_again"); }
+        if r.total_runs >= 25  { self.unlock("runs_25"); }
+        if r.total_runs >= 50  { self.unlock("runs_50"); }
         if r.total_runs >= 100 { self.unlock("veteran"); }
+        if r.total_runs >= 200 { self.unlock("runs_200"); }
+        if r.total_runs >= 500 { self.unlock("runs_500"); }
         if r.total_deaths >= 1000 { self.unlock("thousand_deaths"); }
+
+        // Floor milestones (new)
+        if r.floor >= 15  { self.unlock("floor_15"); }
+        if r.floor >= 30  { self.unlock("floor_30"); }
+        if r.floor >= 150 { self.unlock("floor_150"); }
+        if r.floor >= 250 { self.unlock("floor_250"); }
+        if r.floor >= 300 { self.unlock("floor_300"); }
+        if r.floor >= 500 { self.unlock("omega_long_run"); }
+
+        // Spell counts
+        if r.spells_cast >= 100  { self.unlock("spells_100"); }
+        if r.spells_cast >= 1000 { self.unlock("spells_1000"); }
+
+        // Score milestones
+        if r.kills >= 2000 { self.unlock("max_kills_run"); }
+
+        // Wins
+        if r.won {
+            self.unlock("first_clear");
+            match r.difficulty.as_str() {
+                "Easy"   => { self.unlock("easy_clear"); }
+                "Normal" => { self.unlock("normal_clear"); }
+                "Brutal" => { self.unlock("brutal_clear"); }
+                "Chaos"  => { self.unlock("chaos_clear"); self.unlock("chaos_conquered"); }
+                _ => {}
+            }
+        }
+
+        // Difficulty at depth
+        if r.difficulty == "Chaos" && r.floor >= 50 { self.unlock("chaos_floor50"); }
 
         // Power tier
         if r.power_tier.contains("OMEGA") { self.unlock("omega_tier"); }
@@ -350,7 +384,37 @@ impl AchievementStore {
                 if value >= 30 { self.unlock("streak"); }
             }
             "keystone_alloc"   => { self.unlock("keystone"); }
-            "modded_config"    => { self.unlock("modder"); }
+            "modded_config"        => { self.unlock("modder"); }
+            "config_loaded"        => { self.unlock("config_loaded"); }
+            "config_gold_bonus"    => { self.unlock("config_gold_bonus"); }
+            "config_hard_mode"     => { self.unlock("config_hard_mode"); }
+            "chaos_engine_viz"     => { self.unlock("chaos_engine_viz"); }
+            "item_filter_used"     => { self.unlock("item_filter_used"); }
+            "shatter_first"        => { self.unlock("shatter_first"); }
+            "imbue_first"          => { self.unlock("imbue_first"); }
+            "craft_op"             => {
+                // value = cumulative craft count
+                if value >= 10  { self.unlock("craft_10"); }
+                if value >= 100 { self.unlock("craft_100"); }
+                if value >= 500 { self.unlock("craft_500"); }
+            }
+            "daily_first"          => { self.unlock("daily_first"); }
+            "daily_submitted"      => {
+                // value = rank
+                if value == 1 { self.unlock("daily_rank1"); self.unlock("daily_top3"); }
+                if value <= 3 { self.unlock("daily_top3"); }
+            }
+            "first_spell"          => { self.unlock("first_spell"); }
+            "spells_cumulative"    => {
+                if value >= 100  { self.unlock("spells_100"); }
+                if value >= 1000 { self.unlock("spells_1000"); }
+            }
+            "runs_cumulative"      => {
+                if value >= 25  { self.unlock("runs_25"); }
+                if value >= 50  { self.unlock("runs_50"); }
+                if value >= 200 { self.unlock("runs_200"); }
+                if value >= 500 { self.unlock("runs_500"); }
+            }
             _ => {}
         }
     }
@@ -467,5 +531,131 @@ pub fn all_achievements() -> Vec<Achievement> {
         Achievement::new("omega_long_run",    "OMEGA: The Long Run",  "Reach Floor 500 in Infinite mode",                             Omega),
         Achievement::new("omega_boss_rush",   "OMEGA: Boss Rush",     "Defeat all 12 bosses in a single Infinite run",                Omega),
         Achievement::new("omega_the_algorithm","OMEGA: The Algorithm","Defeat The Algorithm Reborn with negative stats, CHAOS diff, corruption 400+", Omega),
+
+        // ── Class mastery ─────────────────────────────────────────────────────
+        Achievement::new("mage_first",        "Arcane Initiate",      "Complete a run as Mage",                                       Common),
+        Achievement::new("berserker_first",   "Blood Rage",           "Complete a run as Berserker",                                  Common),
+        Achievement::new("ranger_first",      "Distant Shot",         "Complete a run as Ranger",                                     Common),
+        Achievement::new("thief_first",       "Five-Finger Discount", "Complete a run as Thief",                                      Common),
+        Achievement::new("necro_first",       "Undying",              "Complete a run as Necromancer",                                Common),
+        Achievement::new("alchemist_first",   "Volatile Mixtures",    "Complete a run as Alchemist",                                  Common),
+        Achievement::new("paladin_first",     "Holy Chaos",           "Complete a run as Paladin",                                    Common),
+        Achievement::new("voidwalker_first",  "Into the Void",        "Complete a run as VoidWalker",                                 Common),
+        Achievement::new("warlord_first",     "Warcry",               "Complete a run as Warlord",                                    Common),
+        Achievement::new("trickster_first",   "Smoke and Mirrors",    "Complete a run as Trickster",                                  Common),
+        Achievement::new("runesmith_first",   "Etched in Chaos",      "Complete a run as Runesmith",                                  Common),
+        Achievement::new("chrono_first",      "Temporal Drift",       "Complete a run as Chronomancer",                               Common),
+        Achievement::new("all_classes",       "Class Dismissed",      "Win at least one run with every class",                        Legendary),
+        Achievement::new("mage_chaos",        "Pure Chaos",           "Win a run as Mage on CHAOS difficulty",                        Epic),
+        Achievement::new("berserker_floor100","Unhinged",             "Reach Floor 100 as Berserker",                                 Rare),
+
+        // ── Combat depth ──────────────────────────────────────────────────────
+        Achievement::new("no_flee",           "Stand and Fight",      "Complete a run without fleeing once",                          Uncommon),
+        Achievement::new("pacifist",          "Diplomacy Failed",     "Flee from 50 encounters in a single run",                      Rare),
+        Achievement::new("kill_spree_5",      "On a Roll",            "Kill 5 enemies in a row without taking damage",                Common),
+        Achievement::new("kill_spree_20",     "Unstoppable",          "Kill 20 enemies in a row without taking damage",               Rare),
+        Achievement::new("combo_crits",       "Chaos Cascade",        "Land 3 critical hits in a row",                                Uncommon),
+        Achievement::new("survive_1hp",       "Barely Made It",       "Survive a hit that would have reduced you to 0 HP",            Uncommon),
+        Achievement::new("one_hp_win",        "One in a Million",     "Defeat a boss with exactly 1 HP remaining",                    Epic),
+        Achievement::new("taunt_master",      "Aggro King",           "Use Taunt 100 times across all runs",                          Uncommon),
+        Achievement::new("heavy_carry",       "Heavy Lifter",         "Deal 500+ damage with a single Heavy Attack",                  Rare),
+        Achievement::new("defend_100",        "Iron Turtle",          "Block 10,000 total damage across all runs",                    Rare),
+        Achievement::new("max_kills_run",     "Extinction Event",     "Kill 2,000 enemies in a single Infinite run",                  Legendary),
+        Achievement::new("nemesis_kill",      "Nemesis Slain",        "Kill your own Nemesis",                                        Rare),
+        Achievement::new("nemesis_kill_3",    "The Cycle Ends",       "Kill 3 different Nemesis enemies across all runs",             Epic),
+
+        // ── Spells & Magic ────────────────────────────────────────────────────
+        Achievement::new("first_spell",       "Spellcaster",          "Cast your first spell",                                        Common),
+        Achievement::new("spells_100",        "Apprentice Mage",      "Cast 100 spells across all runs",                              Uncommon),
+        Achievement::new("spells_1000",       "Archmage",             "Cast 1,000 spells across all runs",                            Rare),
+        Achievement::new("backfire_survivor", "Backfire Proof",       "Survive a catastrophic spell backfire",                        Uncommon),
+        Achievement::new("backfire_10",       "The Price of Power",   "Suffer 10 spell backfires in one run",                         Rare),
+        Achievement::new("full_mana_always",  "Mana Battery",         "End 10 consecutive fights at full mana",                       Uncommon),
+        Achievement::new("mana_zero_kill",    "Last Drop",            "Kill an enemy with exactly 1 mana remaining",                  Rare),
+        Achievement::new("spell_overkill",    "Arcane Explosion",     "Kill an enemy with a spell dealing 5x their max HP",           Epic),
+
+        // ── Items & Economy ───────────────────────────────────────────────────
+        Achievement::new("items_50_run",      "Pack Rat",             "Hold 50 items across a single run",                            Uncommon),
+        Achievement::new("sell_all",          "Liquidation Sale",     "Sell everything in your inventory at a shop",                  Uncommon),
+        Achievement::new("gold_zero",         "Broke",                "Spend your last gold coin",                                    Common),
+        Achievement::new("gold_50k",          "Mogul",                "Accumulate 50,000 gold in one run",                            Epic),
+        Achievement::new("charged_item_use",  "Charged Up",           "Use an Imbued (charged) item",                                 Common),
+        Achievement::new("shatter_epic",      "Entropy Transfer",     "Shatter an Epic or higher item",                               Rare),
+        Achievement::new("full_sockets",      "Socket Maximalist",    "Have an item with 6 filled gem sockets",                       Rare),
+        Achievement::new("divine_item",       "Divine Intervention",  "Obtain a Divine rarity item",                                  Epic),
+        Achievement::new("artifact_item",     "Beyond Rarity",        "Obtain an Artifact rarity item",                               Legendary),
+
+        // ── Crafting depth ────────────────────────────────────────────────────
+        Achievement::new("craft_10",          "Tinkerer",             "Perform 10 crafting operations",                               Common),
+        Achievement::new("craft_100",         "Craftsman",            "Perform 100 crafting operations",                              Uncommon),
+        Achievement::new("craft_500",         "Grandmaster",          "Perform 500 crafting operations across all runs",              Rare),
+        Achievement::new("shatter_first",     "Scattershot",          "Shatter your first item",                                      Common),
+        Achievement::new("imbue_first",       "Imbued",               "Imbue your first item with charges",                           Common),
+        Achievement::new("engine_lock_3",     "Locked In",            "Apply 3 Engine Locks to one item",                             Rare),
+        Achievement::new("reforge_legendary", "Chaos Perfectionist",  "Reforge a Legendary item",                                     Rare),
+        Achievement::new("augment_to_max",    "Modifier Hoarder",     "Augment an item to 6 stat modifiers",                         Rare),
+
+        // ── Exploration ───────────────────────────────────────────────────────
+        Achievement::new("all_room_types",    "Room Service",         "Enter every room type in a single run",                        Uncommon),
+        Achievement::new("chaos_rift_3",      "Rift Walker",          "Find 3 Chaos Rifts in one run",                                Uncommon),
+        Achievement::new("clear_100_rooms",   "Dungeon Crawler",      "Clear 100 rooms in a single run",                              Uncommon),
+        Achievement::new("clear_1000_rooms",  "Delver of Depths",     "Clear 1,000 rooms across all runs",                            Rare),
+        Achievement::new("floor_25_no_gold",  "Ascetic",              "Reach Floor 25 without spending any gold",                     Rare),
+        Achievement::new("no_items_floor50",  "Bare Hands",           "Reach Floor 50 with an empty inventory",                       Epic),
+        Achievement::new("gauntlet_flawless", "Gauntlet Perfection",  "Complete a 3-fight Boss Gauntlet without taking damage",        Epic),
+        Achievement::new("portal_chain",      "Portal Hopper",        "Use 3 portals in a row (consecutive rooms)",                   Uncommon),
+
+        // ── Floor milestones ──────────────────────────────────────────────────
+        Achievement::new("floor_15",          "Getting Serious",      "Reach Floor 15",                                               Common),
+        Achievement::new("floor_30",          "Veteran Delver",       "Reach Floor 30",                                               Uncommon),
+        Achievement::new("floor_150",         "Deep Dive",            "Reach Floor 150",                                              Rare),
+        Achievement::new("floor_250",         "The Abyss Stares Back","Reach Floor 250",                                              Epic),
+        Achievement::new("floor_300",         "Unstoppable Force",    "Reach Floor 300",                                              Epic),
+
+        // ── Chaos Engine stats ────────────────────────────────────────────────
+        Achievement::new("chain_10",          "Deep Pipeline",        "Have a chaos roll with a chain depth of 10+",                  Rare),
+        Achievement::new("all_positive_chain","All Green",            "Have every step in a chain be positive",                       Uncommon),
+        Achievement::new("all_negative_chain","All Red",              "Have every step in a chain be negative",                       Uncommon),
+        Achievement::new("perfect_zero",      "Null Result",          "Get a chaos final value within 0.001 of 0.000",                Epic),
+        Achievement::new("max_value",         "Overflow",             "Get a chaos final value of 1.000",                             Rare),
+        Achievement::new("min_value",         "Underflow",            "Get a chaos final value of -1.000",                            Rare),
+        Achievement::new("pi_roll",           "Pi in the Sky",        "Have a chaos roll output approximately 3.14159",               Epic),
+
+        // ── Difficulty ────────────────────────────────────────────────────────
+        Achievement::new("easy_clear",        "Warming Up",           "Win a run on Easy difficulty",                                 Common),
+        Achievement::new("normal_clear",      "By the Book",          "Win a run on Normal difficulty",                               Common),
+        Achievement::new("brutal_clear",      "Brutal Efficiency",    "Win a run on Brutal difficulty",                               Rare),
+        Achievement::new("chaos_clear",       "Chaos Conquered",      "Win a run on CHAOS difficulty",                                Epic),
+        Achievement::new("chaos_floor50",     "Madness Maintained",   "Reach Floor 50 on CHAOS difficulty",                           Rare),
+        Achievement::new("chaos_all_classes", "Perfect Madness",      "Win on CHAOS difficulty with all 12 classes",                  Omega),
+
+        // ── Daily seed ────────────────────────────────────────────────────────
+        Achievement::new("daily_first",       "Daily Player",         "Complete your first daily seed run",                           Common),
+        Achievement::new("daily_win",         "Daily Victor",         "Win a daily seed run",                                         Rare),
+        Achievement::new("daily_top3",        "Podium",               "Finish in the top 3 on the daily leaderboard",                 Epic),
+        Achievement::new("daily_rank1",       "Number One",           "Finish #1 on the daily leaderboard",                          Legendary),
+        Achievement::new("daily_30",          "Dedicated",            "Play 30 daily seed runs",                                      Uncommon),
+
+        // ── Mod / config ──────────────────────────────────────────────────────
+        Achievement::new("config_loaded",     "Modder",               "Load and play with a custom chaos_config.toml",                Rare),
+        Achievement::new("config_gold_bonus", "Cheat Mode?",          "Play with starting_gold_bonus > 0 in config",                  Common),
+        Achievement::new("config_hard_mode",  "Self Imposed Misery",  "Play with difficulty_modifier >= 2.0 in config",               Rare),
+
+        // ── Meta / misc ───────────────────────────────────────────────────────
+        Achievement::new("runs_25",           "Persistent",           "Complete 25 runs",                                             Common),
+        Achievement::new("runs_50",           "Seasoned",             "Complete 50 runs",                                             Uncommon),
+        Achievement::new("runs_200",          "Obsessed",             "Complete 200 runs",                                            Epic),
+        Achievement::new("runs_500",          "Cannot Stop",          "Complete 500 runs",                                            Legendary),
+        Achievement::new("score_1m",          "Score Millionaire",    "Achieve a score of 1,000,000 in one run",                      Rare),
+        Achievement::new("score_10m",         "High Score Hunter",    "Achieve a score of 10,000,000 in one run",                     Epic),
+        Achievement::new("all_boons",         "Boon Collector",       "Use every boon at least once across all runs",                 Rare),
+        Achievement::new("level_50",          "Power Spike",          "Reach level 50",                                               Uncommon),
+        Achievement::new("level_75",          "Ascended",             "Reach level 75",                                               Rare),
+        Achievement::new("passive_50",        "Node Farmer",          "Allocate 50 passive points in one run",                        Rare),
+        Achievement::new("passive_100",       "Tree Hugger",          "Allocate 100 passive points in one run",                       Epic),
+        Achievement::new("multi_nemesis",     "They Never Rest",      "Have 5+ Nemesis entries across all characters",                Rare),
+        Achievement::new("story_perfect",     "Story Complete",       "Win Story mode with 0 deaths in the run",                      Epic),
+        Achievement::new("chaos_engine_viz",  "I See the Pattern",    "Open the Chaos Engine Visualizer",                             Common),
+        Achievement::new("item_filter_used",  "Organised Chaos",      "Use the item filter in the crafting bench",                    Common),
     ]
 }

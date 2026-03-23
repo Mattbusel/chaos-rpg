@@ -1,0 +1,14 @@
+name = "chaos-rpg-leaderboard"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# After running `wrangler kv:namespace create LEADERBOARD`, paste the id here:
+[[kv_namespaces]]
+binding = "LEADERBOARD"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Preview namespace for `wrangler dev` (optional but recommended):
+# preview_id = "REPLACE_WITH_YOUR_PREVIEW_KV_NAMESPACE_ID"
+
+[vars]
+ENVIRONMENT = "production"

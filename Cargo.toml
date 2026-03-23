@@ -25,3 +25,5 @@ macroquad = "0.4"
 chaos-rpg-core = { path = "core" }
 chaos-rpg-audio = { path = "audio" }
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
+toml = "0.8"
+ureq = { version = "2", features = ["json"] }

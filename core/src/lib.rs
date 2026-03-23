@@ -13,6 +13,8 @@ pub mod legacy_system;
 pub mod achievement_system;
 pub mod achievements;
 pub mod run_history;
+pub mod chaos_config;
+pub mod daily_leaderboard;
 pub mod io_util;
 pub mod atlas;
 pub mod body;
