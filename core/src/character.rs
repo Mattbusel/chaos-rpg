@@ -1428,11 +1428,7 @@ impl Character {
             format!("  Gold collected:   {}", self.gold),
             format!("  Final level:      {}", self.level),
             format!("  Difficulty:       {}", self.difficulty.name()),
-            format!(
-                "  Power tier:       {}{}\x1b[0m",
-                self.power_tier().ansi_color(),
-                self.power_tier().name()
-            ),
+            format!("  Power tier:       {}", self.power_tier().name()),
         ]
     }
 
@@ -1475,6 +1471,15 @@ impl Character {
         self.status_effects
             .iter()
             .map(|e| format!("{}{}\x1b[0m", e.color(), e.badge()))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
+    /// Plain-text status badges with no ANSI codes — use in graphical frontends.
+    pub fn status_badges_plain(&self) -> String {
+        self.status_effects
+            .iter()
+            .map(|e| e.badge())
             .collect::<Vec<_>>()
             .join(" ")
     }

@@ -1770,7 +1770,7 @@ impl State {
                 let tier = p.power_tier();
                 (p.name.clone(), p.class.name(), p.level, p.floor,
                  p.kills, p.gold, p.xp, p.current_hp, p.max_hp,
-                 p.status_badge_line(), p.corruption, p.rooms_without_kill,
+                 p.status_badges_plain(), p.corruption, p.rooms_without_kill,
                  tier, p.misery.misery_index, p.underdog_multiplier(),
                  p.misery.defiance_rolls)
             }
@@ -2114,7 +2114,7 @@ impl State {
         let xp  = RGB::from_u8(t.xp.0,     t.xp.1,     t.xp.2);
 
         let (pname, pclass, plv, php, pmhp, pstatus) = match &self.player {
-            Some(p) => (p.name.clone(), p.class.name(), p.level, p.current_hp, p.max_hp, p.status_badge_line()),
+            Some(p) => (p.name.clone(), p.class.name(), p.level, p.current_hp, p.max_hp, p.status_badges_plain()),
             None => { self.screen = AppScreen::Title; return; }
         };
         let (ename, etier, ehp, emhp, esprite) = match &self.enemy {
