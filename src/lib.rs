@@ -21,3 +21,5 @@ pub mod spells;
 pub mod status_effects;
 pub mod ui;
 pub mod world;
+pub mod world_map;
+pub mod recipes;
