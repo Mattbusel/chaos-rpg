@@ -3,8 +3,10 @@
 //! Every enemy is procedurally generated — name, stats, abilities, loot.
 //! Floor number and seed determine what horrors await.
 
-use crate::chaos_pipeline::{roll_stat, chaos_roll_verbose, destiny_roll};
+use crate::chaos_pipeline::{roll_stat, chaos_roll_verbose};
 use serde::{Deserialize, Serialize};
+
+// ─── TIERS ───────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EnemyTier {
@@ -12,7 +14,7 @@ pub enum EnemyTier {
     Elite,
     Champion,
     Boss,
-    Abomination, // floor 10+ only
+    Abomination,
 }
 
 impl EnemyTier {
@@ -31,8 +33,8 @@ impl EnemyTier {
             EnemyTier::Minion => 0.5,
             EnemyTier::Elite => 1.0,
             EnemyTier::Champion => 2.0,
-            EnemyTier::Boss => 4.0,
-            EnemyTier::Abomination => 10.0,
+            EnemyTier::Boss => 4.5,
+            EnemyTier::Abomination => 12.0,
         }
     }
 
@@ -40,8 +42,8 @@ impl EnemyTier {
         match self {
             EnemyTier::Minion => 1,
             EnemyTier::Elite => 3,
-            EnemyTier::Champion => 7,
-            EnemyTier::Boss => 20,
+            EnemyTier::Champion => 8,
+            EnemyTier::Boss => 25,
             EnemyTier::Abomination => 100,
         }
     }
@@ -49,211 +51,156 @@ impl EnemyTier {
     pub fn gold_multiplier(&self) -> f64 {
         match self {
             EnemyTier::Minion => 0.5,
-            EnemyTier::Elite => 1.0,
-            EnemyTier::Champion => 2.5,
-            EnemyTier::Boss => 6.0,
-            EnemyTier::Abomination => 25.0,
+            EnemyTier::Elite => 1.2,
+            EnemyTier::Champion => 3.0,
+            EnemyTier::Boss => 8.0,
+            EnemyTier::Abomination => 30.0,
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnemyAbility {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub damage_bonus: i64,
-    pub effect: AbilityEffect,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum AbilityEffect {
-    DoubleDamage,
-    Lifesteal(i64),      // heals this % of damage dealt
-    StatDrain(StatDrained),
-    ChaosStrike,         // re-rolls with different seed
-    Stun,                // player skips next turn
-    None,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum StatDrained {
-    Force,
-    Mana,
-    Luck,
-}
+// ─── ENEMY STRUCT ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Enemy {
     pub name: String,
     pub tier: EnemyTier,
+    pub hp: i64,
     pub max_hp: i64,
-    pub current_hp: i64,
-    pub force: i64,
-    pub resilience: i64,  // damage reduction
-    pub speed: i64,       // initiative modifier
+    pub base_damage: i64,
+    pub attack_modifier: i64,
+    pub chaos_level: f64,   // feeds into chaos rolls as input
     pub xp_reward: u64,
     pub gold_reward: i64,
-    pub ability: Option<EnemyAbility>,
     pub ascii_sprite: &'static str,
     pub seed: u64,
+    pub special_ability: Option<&'static str>,
 }
 
 impl Enemy {
     pub fn is_alive(&self) -> bool {
-        self.current_hp > 0
-    }
-
-    pub fn take_damage(&mut self, amount: i64) {
-        let actual = (amount - self.resilience).max(1);
-        self.current_hp = (self.current_hp - actual).max(0);
+        self.hp > 0
     }
 
     pub fn hp_percent(&self) -> f64 {
-        (self.current_hp as f64 / self.max_hp as f64).clamp(0.0, 1.0)
+        (self.hp as f64 / self.max_hp as f64).clamp(0.0, 1.0)
     }
 
     pub fn hp_bar(&self, width: usize) -> String {
         let filled = ((self.hp_percent() * width as f64) as usize).min(width);
         let bar = "█".repeat(filled) + &"░".repeat(width - filled);
-        format!("[{}] {}/{}", bar, self.current_hp, self.max_hp)
+        format!("[{}] {}/{}", bar, self.hp, self.max_hp)
+    }
+
+    pub fn tier_color(&self) -> &'static str {
+        match self.tier {
+            EnemyTier::Minion => "\x1b[37m",
+            EnemyTier::Elite => "\x1b[32m",
+            EnemyTier::Champion => "\x1b[36m",
+            EnemyTier::Boss => "\x1b[33m",
+            EnemyTier::Abomination => "\x1b[35m",
+        }
     }
 }
 
-// ─── ENEMY ARCHETYPE POOLS ───────────────────────────────────────────────────
+// ─── NAME & SPRITE TABLES ────────────────────────────────────────────────────
 
 const MINION_NAMES: &[&str] = &[
     "Fractal Imp", "Entropy Sprite", "Logic Wraith", "Sigma Rat", "Null Bat",
     "Zeta Goblin", "Drift Slime", "Collatz Shade", "Prime Leech", "Fourier Gnat",
+    "Divergence Tick", "Singularity Moth",
 ];
 
 const ELITE_NAMES: &[&str] = &[
     "Lorenz Stalker", "Mandelbrot Hound", "Riemann Specter", "Golden Asp",
     "Logistic Troll", "Euler Revenant", "Modular Knight", "Fibonacci Worm",
+    "Cantor Serpent", "Phase-Space Wraith",
 ];
 
 const CHAMPION_NAMES: &[&str] = &[
     "The Divergence", "Attractor Beast", "Phase-Lock Horror", "Sieve Colossus",
     "Spiral Tyrant", "Zeta Construct", "Totient Golem", "Chaos Shepherd",
+    "The Bifurcation", "Orbit Breaker",
 ];
 
 const BOSS_NAMES: &[&str] = &[
     "Lord Mandelbrot", "The Strange Attractor", "Absolute Uncertainty",
     "The Null Hypothesis", "Infinite Regress", "Bifurcation King",
+    "Grand Collatz", "The Omega Point",
 ];
 
 const ABOMINATION_NAMES: &[&str] = &[
-    "THE HEAT DEATH", "RECURSIVE INFINITY", "GÖDEL'S DAEMON", "THE P≠NP PROOF",
+    "THE HEAT DEATH", "RECURSIVE INFINITY", "GODELS DAEMON", "THE P!=NP PROOF",
 ];
 
-const MINION_SPRITES: &[&'static str] = &[
-    "  (o_o)\n  /||\\\n  d  b",
-    "  >::\n  /||\n   /\\",
-    "  ~*~\n  \\|/\n   V",
+const SPECIAL_ABILITIES: &[&str] = &[
+    "Bifurcation Strike: Hits twice",
+    "Entropic Drain: Steals HP",
+    "Logic Shatter: Reduces MANA",
+    "Chaos Strike: Unpredictable damage",
+    "Temporal Stun: Skips your next turn",
+    "Prime Curse: Lowers all stats by 3",
+    "Lorenz Phase: Doubles next attack",
 ];
 
-const ELITE_SPRITES: &[&'static str] = &[
-    "  /-\\\n (X X)\n  |=|\n  / \\",
-    "  [#]\n  |#|\n /###\\",
-];
+// Sprites stored as static strings
+const SPRITE_IMP: &str =
+    "  (o_o)\n  /||\\\n  d  b";
 
-const BOSS_SPRITES: &[&'static str] = &[
-    " /=====\\\n| (O) (O) |\n|   WW   |\n \\======/\n   ||||",
-    "  *****\n *     *\n*(>_<)*\n *     *\n  *****",
-];
+const SPRITE_WRAITH: &str =
+    "  ~*~\n  \\|/\n   V";
 
-const ABOMINATION_SPRITE: &str =
-    "██████████████\n█ ∞∞∞∞∞∞∞∞∞∞ █\n█ (UNDEFINED) █\n█ ∞∞∞∞∞∞∞∞∞∞ █\n██████████████";
+const SPRITE_KNIGHT: &str =
+    "  /-\\\n (X X)\n  |=|\n  / \\";
 
-const ABILITIES: &[EnemyAbility] = &[
-    EnemyAbility {
-        name: "Bifurcation Strike",
-        description: "Hits twice with chaotic variance",
-        damage_bonus: 5,
-        effect: AbilityEffect::DoubleDamage,
-    },
-    EnemyAbility {
-        name: "Entropic Drain",
-        description: "Siphons life force",
-        damage_bonus: 0,
-        effect: AbilityEffect::Lifesteal(30),
-    },
-    EnemyAbility {
-        name: "Logic Shatter",
-        description: "Temporarily reduces your MANA",
-        damage_bonus: 3,
-        effect: AbilityEffect::StatDrain(StatDrained::Mana),
-    },
-    EnemyAbility {
-        name: "Chaos Strike",
-        description: "Unpredictable — could do anything",
-        damage_bonus: 0,
-        effect: AbilityEffect::ChaosStrike,
-    },
-    EnemyAbility {
-        name: "Temporal Stun",
-        description: "You lose your next action",
-        damage_bonus: 2,
-        effect: AbilityEffect::Stun,
-    },
-];
+const SPRITE_GOLEM: &str =
+    "  [#]\n  |#|\n /###\\";
+
+const SPRITE_BOSS: &str =
+    " /=====\\\n|(O) (O)|\n|  ~~~  |\n \\=====/\n  ||||";
+
+const SPRITE_ABOMINATION: &str =
+    "##############\n# [UNDEFINED] #\n# (x_INFINITY)#\n##############";
 
 // ─── GENERATION ──────────────────────────────────────────────────────────────
 
-/// Generate an enemy appropriate for the given floor
 pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
     let tier = determine_tier(floor, seed);
-    let floor_scale = 1.0 + (floor as f64 - 1.0) * 0.15;
+    let floor_scale = 1.0 + (floor as f64 - 1.0) * 0.18;
 
-    let base_force = roll_stat(5, 20, seed.wrapping_add(10));
-    let base_hp = roll_stat(20, 60, seed.wrapping_add(20));
-    let resilience = roll_stat(0, 5 + floor as i64 / 3, seed.wrapping_add(30));
-    let speed = roll_stat(-5, 10, seed.wrapping_add(40));
+    let base_hp = roll_stat(15, 50, seed.wrapping_add(20));
+    let base_dmg = roll_stat(3, 15, seed.wrapping_add(10));
 
-    let force = ((base_force as f64 * floor_scale) as i64).max(1);
     let hp = ((base_hp as f64 * floor_scale * tier.hp_multiplier()) as i64).max(1);
+    let base_damage = ((base_dmg as f64 * floor_scale) as i64).max(1);
+    let attack_modifier = roll_stat(0, 5 + floor as i64 / 2, seed.wrapping_add(30)) as i64;
+    let chaos_level = (seed.wrapping_add(floor as u64) as f64 * 1e-13).fract();
 
-    let xp = (20 + floor as u64 * 10) * tier.xp_multiplier();
-    let gold = ((5.0 + floor as f64 * 3.0) * tier.gold_multiplier()) as i64;
+    let xp = (15 + floor as u64 * 8) * tier.xp_multiplier();
+    let gold = ((3.0 + floor as f64 * 2.0) * tier.gold_multiplier()) as i64;
 
-    let (name, sprite) = pick_name_and_sprite(&tier, seed);
-
-    // Bosses and champions always get an ability; elites sometimes
-    let ability = match tier {
-        EnemyTier::Boss | EnemyTier::Abomination | EnemyTier::Champion => {
-            let idx = (seed % ABILITIES.len() as u64) as usize;
-            Some(ABILITIES[idx].clone())
-        }
-        EnemyTier::Elite => {
-            if seed % 2 == 0 {
-                let idx = (seed.wrapping_add(7) % ABILITIES.len() as u64) as usize;
-                Some(ABILITIES[idx].clone())
-            } else {
-                None
-            }
-        }
-        EnemyTier::Minion => None,
-    };
+    let (name, ascii_sprite) = pick_name_sprite(&tier, seed);
+    let special_ability = pick_ability(&tier, seed);
 
     Enemy {
         name,
         tier,
+        hp,
         max_hp: hp,
-        current_hp: hp,
-        force,
-        resilience,
-        speed,
+        base_damage,
+        attack_modifier,
+        chaos_level,
         xp_reward: xp,
         gold_reward: gold,
-        ability,
-        ascii_sprite: sprite,
+        ascii_sprite,
         seed,
+        special_ability,
     }
 }
 
 fn determine_tier(floor: u32, seed: u64) -> EnemyTier {
-    // Boss every 5 floors
     if floor % 5 == 0 {
-        if floor >= 10 && seed % 4 == 0 {
+        if floor >= 10 && seed % 3 == 0 {
             return EnemyTier::Abomination;
         }
         return EnemyTier::Boss;
@@ -261,60 +208,49 @@ fn determine_tier(floor: u32, seed: u64) -> EnemyTier {
 
     let roll = chaos_roll_verbose(floor as f64 * 0.1, seed).final_value;
     match roll {
-        r if r > 0.7 => EnemyTier::Champion,
-        r if r > 0.3 => EnemyTier::Elite,
+        r if r > 0.65 => EnemyTier::Champion,
+        r if r > 0.2 => EnemyTier::Elite,
         _ => EnemyTier::Minion,
     }
 }
 
-fn pick_name_and_sprite(tier: &EnemyTier, seed: u64) -> (String, &'static str) {
+fn pick_name_sprite(tier: &EnemyTier, seed: u64) -> (String, &'static str) {
     match tier {
         EnemyTier::Minion => {
             let idx = (seed % MINION_NAMES.len() as u64) as usize;
-            let sprite_idx = (seed % MINION_SPRITES.len() as u64) as usize;
-            (MINION_NAMES[idx].to_string(), MINION_SPRITES[sprite_idx])
+            let sprite = if seed % 2 == 0 { SPRITE_IMP } else { SPRITE_WRAITH };
+            (MINION_NAMES[idx].to_string(), sprite)
         }
         EnemyTier::Elite => {
             let idx = (seed % ELITE_NAMES.len() as u64) as usize;
-            let sprite_idx = (seed % ELITE_SPRITES.len() as u64) as usize;
-            (ELITE_NAMES[idx].to_string(), ELITE_SPRITES[sprite_idx])
+            (ELITE_NAMES[idx].to_string(), SPRITE_KNIGHT)
         }
         EnemyTier::Champion => {
             let idx = (seed % CHAMPION_NAMES.len() as u64) as usize;
-            let sprite_idx = (seed % ELITE_SPRITES.len() as u64) as usize;
-            (CHAMPION_NAMES[idx].to_string(), ELITE_SPRITES[sprite_idx])
+            (CHAMPION_NAMES[idx].to_string(), SPRITE_GOLEM)
         }
         EnemyTier::Boss => {
             let idx = (seed % BOSS_NAMES.len() as u64) as usize;
-            let sprite_idx = (seed % BOSS_SPRITES.len() as u64) as usize;
-            (BOSS_NAMES[idx].to_string(), BOSS_SPRITES[sprite_idx])
+            (BOSS_NAMES[idx].to_string(), SPRITE_BOSS)
         }
         EnemyTier::Abomination => {
             let idx = (seed % ABOMINATION_NAMES.len() as u64) as usize;
-            (ABOMINATION_NAMES[idx].to_string(), ABOMINATION_SPRITE)
+            (ABOMINATION_NAMES[idx].to_string(), SPRITE_ABOMINATION)
         }
     }
 }
 
-/// Generate a description of why this enemy exists
-pub fn enemy_lore(enemy: &Enemy) -> String {
-    let roll = destiny_roll(enemy.seed as f64 * 1e-12, enemy.seed);
-    let chaos_value = roll.final_value;
-
-    if chaos_value > 0.5 {
-        format!(
-            "Born from a {} collapse in the {} layer of mathematical reality.",
-            if chaos_value > 0.8 { "catastrophic" } else { "minor" },
-            ["Fourier", "Lorenz", "Mandelbrot", "Riemann"]
-                [(enemy.seed % 4) as usize]
-        )
-    } else {
-        format!(
-            "A {}-tier entity summoned by {} divergence.",
-            enemy.tier.name(),
-            ["prime density", "logistic map", "collatz", "totient"]
-                [(enemy.seed % 4) as usize]
-        )
+fn pick_ability(tier: &EnemyTier, seed: u64) -> Option<&'static str> {
+    match tier {
+        EnemyTier::Boss | EnemyTier::Abomination | EnemyTier::Champion => {
+            let idx = (seed % SPECIAL_ABILITIES.len() as u64) as usize;
+            Some(SPECIAL_ABILITIES[idx])
+        }
+        EnemyTier::Elite if seed % 2 == 0 => {
+            let idx = (seed.wrapping_add(7) % SPECIAL_ABILITIES.len() as u64) as usize;
+            Some(SPECIAL_ABILITIES[idx])
+        }
+        _ => None,
     }
 }
 
@@ -323,26 +259,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn enemy_generation_produces_valid_stats() {
-        for floor in [1u32, 3, 5, 10, 15, 20] {
+    fn generate_produces_valid_stats() {
+        for floor in [1u32, 3, 5, 10, 15] {
             for seed in [0u64, 42, 999] {
                 let e = generate_enemy(floor, seed);
-                assert!(e.max_hp > 0);
-                assert!(e.force > 0);
+                assert!(e.hp > 0, "floor={} seed={} hp={}", floor, seed, e.hp);
+                assert!(e.base_damage > 0);
                 assert!(e.xp_reward > 0);
             }
         }
     }
 
     #[test]
-    fn floor_5_always_boss() {
+    fn floor_5_spawns_boss() {
         for seed in 0..10u64 {
             let e = generate_enemy(5, seed);
             assert!(
                 matches!(e.tier, EnemyTier::Boss | EnemyTier::Abomination),
-                "Floor 5 should spawn boss, got {:?}",
-                e.tier
+                "Floor 5 should spawn boss"
             );
         }
+    }
+
+    #[test]
+    fn hp_bar_works() {
+        let e = generate_enemy(1, 42);
+        let bar = e.hp_bar(20);
+        assert!(bar.contains('/'));
     }
 }

@@ -1,7 +1,13 @@
 pub mod math_engines;
 pub mod chaos_pipeline;
 pub mod character;
+pub mod items;
+pub mod spells;
 pub mod enemy;
 pub mod combat;
 pub mod ui;
+pub mod skill_checks;
+pub mod world;
+pub mod npcs;
+pub mod tutorial;
 pub mod scoreboard;

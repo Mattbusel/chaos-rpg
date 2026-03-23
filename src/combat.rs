@@ -5,7 +5,7 @@
 
 use crate::chaos_pipeline::{chaos_roll_verbose, biased_chaos_roll, roll_damage, ChaosRollResult};
 use crate::character::{Character, CharacterClass};
-use crate::enemies::Enemy;
+use crate::enemy::Enemy;
 use serde::{Deserialize, Serialize};
 
 // ─── COMBAT ACTIONS ──────────────────────────────────────────────────────────
@@ -180,9 +180,10 @@ pub fn resolve_action(
                 _ => 0,
             };
 
+            let actual = (damage - enemy.resilience).max(1);
             state.last_roll = Some(roll.clone());
-            enemy.hp -= damage.min(enemy.hp);
-            events.push(CombatEvent::PlayerAttack { damage, is_crit });
+            enemy.current_hp = (enemy.current_hp - actual).max(0);
+            events.push(CombatEvent::PlayerAttack { damage: actual, is_crit });
         }
 
         CombatAction::HeavyAttack => {
@@ -208,8 +209,9 @@ pub fn resolve_action(
 
             state.last_roll = Some(roll);
             if damage > 0 {
-                enemy.hp -= damage.min(enemy.hp);
-                events.push(CombatEvent::PlayerAttack { damage, is_crit });
+                let actual = (damage - enemy.resilience).max(1);
+                enemy.current_hp = (enemy.current_hp - actual).max(0);
+                events.push(CombatEvent::PlayerAttack { damage: actual, is_crit });
             }
         }
 
@@ -239,9 +241,8 @@ pub fn resolve_action(
                 events.push(CombatEvent::StatusApplied { name: "STUNNED (enemy)".to_string() });
             } else if taunt_roll.is_catastrophe() {
                 // Taunt backfires: enemy gets enraged
-                enemy.attack_modifier += 10;
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your taunt ENRAGES the enemy! Their attack +10.".to_string(),
+                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you.".to_string(),
                 });
             }
         }
@@ -256,7 +257,7 @@ pub fn resolve_action(
     }
 
     // ── Check enemy death ────────────────────────────────────────────────────
-    if enemy.hp <= 0 {
+    if enemy.current_hp <= 0 {
         let xp = enemy.xp_reward;
         let gold = enemy.gold_reward;
         events.push(CombatEvent::EnemyDied { xp, gold });
@@ -269,11 +270,10 @@ pub fn resolve_action(
     // ── ENEMY TURN ───────────────────────────────────────────────────────────
     if !state.enemy_stunned {
         let enemy_seed = state.next_seed();
-        let enemy_roll = chaos_roll_verbose(enemy.chaos_level, enemy_seed);
+        let enemy_roll = chaos_roll_verbose(enemy.force as f64 * 0.01, enemy_seed);
         let is_crit = enemy_roll.is_critical();
 
-        let base_enemy_dmg = enemy.base_damage + enemy.attack_modifier;
-        let mut enemy_dmg = roll_damage(base_enemy_dmg, enemy.attack_modifier + 50, enemy_seed);
+        let mut enemy_dmg = roll_damage(enemy.force, enemy.force, enemy_seed);
 
         if is_crit {
             enemy_dmg = (enemy_dmg as f64 * 1.5) as i64;
@@ -325,7 +325,7 @@ fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u6
         }
         1 => {
             let dmg = roll_damage(10, player.stats.entropy, *seed);
-            enemy.hp -= dmg.min(enemy.hp);
+            enemy.current_hp = (enemy.current_hp - dmg).max(0);
             CombatEvent::ChaosEvent {
                 description: format!("Reality fractures! Enemy takes {} chaos damage.", dmg),
             }
@@ -337,9 +337,9 @@ fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u6
             description: "Fibonacci spiral surrounds you! +1 armor this turn.".to_string(),
         },
         4 => {
-            enemy.attack_modifier = (enemy.attack_modifier - 10).max(0);
+            // Confuse enemy briefly
             CombatEvent::ChaosEvent {
-                description: "Collatz sequence confuses the enemy! Their attack reduced.".to_string(),
+                description: "Collatz sequence confuses the enemy! They hesitate.".to_string(),
             }
         }
         _ => CombatEvent::ChaosEvent {
@@ -352,7 +352,7 @@ fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u6
 mod tests {
     use super::*;
     use crate::character::{Background, CharacterClass};
-    use crate::enemies::generate_enemy;
+    use crate::enemy::generate_enemy;
 
     fn make_player() -> Character {
         Character::roll_new(
@@ -369,10 +369,10 @@ mod tests {
         let mut enemy = generate_enemy(1, 42);
         let mut state = CombatState::new(999);
 
-        let initial_hp = enemy.hp;
+        let initial_hp = enemy.current_hp;
         let (events, _) = resolve_action(&mut player, &mut enemy, CombatAction::Attack, &mut state);
         assert!(events.iter().any(|e| matches!(e, CombatEvent::PlayerAttack { .. })));
-        assert!(enemy.hp < initial_hp || enemy.hp == 0);
+        assert!(enemy.current_hp < initial_hp || enemy.current_hp == 0);
     }
 
     #[test]
