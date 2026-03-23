@@ -14,50 +14,136 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build-windows:
+  # ── Terminal (ratatui TUI) ───────────────────────────────────────────────────
+  build-terminal-windows:
+    name: Terminal — Windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build Windows .exe
-        run: cargo build --release
-      - name: Upload Windows exe
-        uses: actions/upload-artifact@v4
+      - name: Build
+        run: cargo build --release -p chaos-rpg
+      - uses: actions/upload-artifact@v4
         with:
-          name: chaos-rpg-windows-x64
+          name: chaos-rpg-terminal-windows-x64
           path: target/release/chaos-rpg.exe
 
-  build-linux:
+  build-terminal-linux:
+    name: Terminal — Linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build Linux binary
-        run: cargo build --release
-      - name: Upload Linux binary
-        uses: actions/upload-artifact@v4
+      - name: Build
+        run: cargo build --release -p chaos-rpg
+      - uses: actions/upload-artifact@v4
         with:
-          name: chaos-rpg-linux-x64
+          name: chaos-rpg-terminal-linux-x64
           path: target/release/chaos-rpg
 
-  build-macos:
+  build-terminal-macos:
+    name: Terminal — macOS
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build macOS binary
-        run: cargo build --release
-      - name: Upload macOS binary
-        uses: actions/upload-artifact@v4
+      - name: Build
+        run: cargo build --release -p chaos-rpg
+      - uses: actions/upload-artifact@v4
         with:
-          name: chaos-rpg-macos-x64
+          name: chaos-rpg-terminal-macos-x64
           path: target/release/chaos-rpg
 
+  # ── Graphical (bracket-lib OpenGL window) ──────────────────────────────────
+  build-graphical-windows:
+    name: Graphical — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p chaos-rpg-graphical
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-graphical-windows-x64
+          path: target/release/chaos-rpg-graphical.exe
+
+  build-graphical-linux:
+    name: Graphical — Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install OpenGL deps
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libgl1-mesa-dev libxi-dev
+      - name: Build
+        run: cargo build --release -p chaos-rpg-graphical
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-graphical-linux-x64
+          path: target/release/chaos-rpg-graphical
+
+  build-graphical-macos:
+    name: Graphical — macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p chaos-rpg-graphical
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-graphical-macos-x64
+          path: target/release/chaos-rpg-graphical
+
+  # ── Web (macroquad native + WASM) ──────────────────────────────────────────
+  build-web-native-windows:
+    name: Web/Native — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release -p chaos-rpg-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-web-windows-x64
+          path: target/release/chaos-rpg-web.exe
+
+  build-web-wasm:
+    name: Web — WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build WASM
+        run: cargo build --release -p chaos-rpg-web --target wasm32-unknown-unknown
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-wasm
+          path: target/wasm32-unknown-unknown/release/chaos-rpg-web.wasm
+
+  # ── GitHub Release (on version tag) ────────────────────────────────────────
   create-release:
-    needs: [build-windows, build-linux, build-macos]
+    needs:
+      - build-terminal-windows
+      - build-terminal-linux
+      - build-terminal-macos
+      - build-graphical-windows
+      - build-graphical-linux
+      - build-graphical-macos
+      - build-web-native-windows
+      - build-web-wasm
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -67,32 +153,54 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Rename binaries for release
+      - name: Rename binaries
         run: |
-          mv artifacts/chaos-rpg-linux-x64/chaos-rpg artifacts/chaos-rpg-linux-x64/chaos-rpg-linux
-          mv artifacts/chaos-rpg-macos-x64/chaos-rpg artifacts/chaos-rpg-macos-x64/chaos-rpg-macos
+          mv artifacts/chaos-rpg-terminal-linux-x64/chaos-rpg      artifacts/chaos-rpg-terminal-linux-x64/chaos-rpg-linux
+          mv artifacts/chaos-rpg-terminal-macos-x64/chaos-rpg      artifacts/chaos-rpg-terminal-macos-x64/chaos-rpg-macos
+          mv artifacts/chaos-rpg-graphical-linux-x64/chaos-rpg-graphical  artifacts/chaos-rpg-graphical-linux-x64/chaos-rpg-graphical-linux
+          mv artifacts/chaos-rpg-graphical-macos-x64/chaos-rpg-graphical  artifacts/chaos-rpg-graphical-macos-x64/chaos-rpg-graphical-macos
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create ${{ github.ref_name }} \
-            artifacts/chaos-rpg-windows-x64/chaos-rpg.exe \
-            artifacts/chaos-rpg-linux-x64/chaos-rpg-linux \
-            artifacts/chaos-rpg-macos-x64/chaos-rpg-macos \
+            "artifacts/chaos-rpg-terminal-windows-x64/chaos-rpg.exe#chaos-rpg-terminal-windows.exe" \
+            "artifacts/chaos-rpg-terminal-linux-x64/chaos-rpg-linux#chaos-rpg-terminal-linux" \
+            "artifacts/chaos-rpg-terminal-macos-x64/chaos-rpg-macos#chaos-rpg-terminal-macos" \
+            "artifacts/chaos-rpg-graphical-windows-x64/chaos-rpg-graphical.exe#chaos-rpg-graphical-windows.exe" \
+            "artifacts/chaos-rpg-graphical-linux-x64/chaos-rpg-graphical-linux#chaos-rpg-graphical-linux" \
+            "artifacts/chaos-rpg-graphical-macos-x64/chaos-rpg-graphical-macos#chaos-rpg-graphical-macos" \
+            "artifacts/chaos-rpg-web-windows-x64/chaos-rpg-web.exe#chaos-rpg-web-windows.exe" \
+            "artifacts/chaos-rpg-wasm/chaos-rpg-web.wasm#chaos-rpg-web.wasm" \
             --title "CHAOS RPG ${{ github.ref_name }}" \
             --notes "## CHAOS RPG ${{ github.ref_name }}
 
-          Every outcome determined by chaining 4-10 mathematical algorithms.
+          Every outcome — character creation, combat, loot, spells — is determined by chaining
+          4–10 real mathematical algorithms. The output of one feeds into the next.
 
           ### Downloads
-          - **chaos-rpg.exe** — Windows 64-bit
-          - **chaos-rpg-linux** — Linux 64-bit
-          - **chaos-rpg-macos** — macOS 64-bit
 
-          ### Usage
+          | Frontend | Platform | File |
+          |----------|----------|------|
+          | Terminal (ratatui TUI) | Windows | chaos-rpg-terminal-windows.exe |
+          | Terminal (ratatui TUI) | Linux   | chaos-rpg-terminal-linux |
+          | Terminal (ratatui TUI) | macOS   | chaos-rpg-terminal-macos |
+          | Graphical (OpenGL window) | Windows | chaos-rpg-graphical-windows.exe |
+          | Graphical (OpenGL window) | Linux   | chaos-rpg-graphical-linux |
+          | Graphical (OpenGL window) | macOS   | chaos-rpg-graphical-macos |
+          | Web/Native (macroquad)  | Windows | chaos-rpg-web-windows.exe |
+          | Web (WASM)              | Browser | chaos-rpg-web.wasm |
+
+          ### Quick Start
           \`\`\`
-          chaos-rpg.exe
-          CHAOS_SEED=31337 chaos-rpg.exe    # reproducible run
+          # Windows — just double-click, or:
+          chaos-rpg-terminal-windows.exe
+
+          # Seeded run (reproducible):
+          set CHAOS_SEED=31337 && chaos-rpg-terminal-windows.exe
+
+          # Linux/macOS:
+          chmod +x chaos-rpg-terminal-linux && ./chaos-rpg-terminal-linux
           \`\`\`
 
           Same seed = same fate. Share seeds. The math does not care about your expectations."

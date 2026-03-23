@@ -2,476 +2,310 @@
 
 > *Where Math Goes To Die*
 
-A terminal ASCII roguelike where **every single outcome** -- character creation, combat, items, spells, skill checks -- is determined by chaining 4-10 real mathematical algorithms together. The output of one feeds into the next. The result is a game where you can roll a character that is literally God incarnate, or the reanimated corpse of the weakest being to ever exist. Both outcomes are mathematically valid.
+A roguelike where **every single outcome** — character creation, combat, items, spells, skill checks, loot, world generation — is determined by chaining 4–10 real mathematical algorithms together. The output of one feeds into the next. You can roll a character that is literally God incarnate, or the reanimated corpse of the weakest being to ever exist. Both are mathematically valid.
 
 [![CI](https://github.com/Mattbusel/chaos-rpg/actions/workflows/ci.yml/badge.svg)](https://github.com/Mattbusel/chaos-rpg/actions/workflows/ci.yml)
-
+[![Release](https://github.com/Mattbusel/chaos-rpg/actions/workflows/release.yml/badge.svg)](https://github.com/Mattbusel/chaos-rpg/actions/workflows/release.yml)
 
 ---
 
-## Quick Start
+## Download & Run (No Rust Required)
+
+Pre-built binaries are attached to every [GitHub Release](https://github.com/Mattbusel/chaos-rpg/releases).
+
+| Frontend | Platform | How to run |
+|----------|----------|-----------|
+| **Terminal** (ratatui TUI) | Windows | Double-click `chaos-rpg-terminal-windows.exe` |
+| **Terminal** (ratatui TUI) | Linux | `chmod +x chaos-rpg-terminal-linux && ./chaos-rpg-terminal-linux` |
+| **Terminal** (ratatui TUI) | macOS | `chmod +x chaos-rpg-terminal-macos && ./chaos-rpg-terminal-macos` |
+| **Graphical** (OpenGL window) | Windows | Double-click `chaos-rpg-graphical-windows.exe` |
+| **Graphical** (OpenGL window) | Linux | `chmod +x chaos-rpg-graphical-linux && ./chaos-rpg-graphical-linux` |
+| **Graphical** (OpenGL window) | macOS | `chmod +x chaos-rpg-graphical-macos && ./chaos-rpg-graphical-macos` |
+| **Web/Native** (macroquad) | Windows | `chaos-rpg-web-windows.exe` |
+| **Web** (WASM) | Browser | Serve `chaos-rpg-web.wasm` + `index.html` via any HTTP server |
+
+> **Windows tip:** Use [Windows Terminal](https://aka.ms/terminal) for the best color experience on the TUI frontend. The old `cmd.exe` works but looks worse.
+
+> **macOS tip:** If you get "unidentified developer", right-click → Open, or run `xattr -d com.apple.quarantine ./chaos-rpg-terminal-macos`.
+
+A legacy single-binary is also kept at `dist/chaos-rpg.exe` in the repo for quick access.
+
+---
+
+## Build from Source
+
+### Requirements
+
+- [Rust](https://rustup.rs/) stable 1.75+
+- Windows Terminal / any ANSI terminal (80×24 minimum for TUI)
+- OpenGL 3.3+ capable GPU (for graphical frontend only)
+
+### Clone and build
 
 ```bash
 git clone https://github.com/Mattbusel/chaos-rpg
 cd chaos-rpg
-cargo run --release
 ```
 
-A pre-built Windows binary is available at `dist/chaos-rpg.exe` if you do not have Rust installed.
+#### Terminal frontend (ratatui TUI — recommended)
 
-**Requirements:** Rust stable 1.70+, any terminal with ANSI color support, 80x24 minimum size.
+```bash
+cargo run --release -p chaos-rpg
+```
 
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Windows | Supported | Use Windows Terminal for best results |
-| Linux | Primary | Full color, all features |
-| macOS | Supported | Same as Linux |
+#### Graphical frontend (bracket-lib OpenGL window)
+
+```bash
+cargo run --release -p chaos-rpg-graphical
+```
+
+#### Web / macroquad frontend (native)
+
+```bash
+cargo run --release -p chaos-rpg-web
+```
+
+#### Web frontend → WASM
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo build --release -p chaos-rpg-web --target wasm32-unknown-unknown
+# Then serve target/wasm32-unknown-unknown/release/chaos-rpg-web.wasm + an index.html
+```
+
+#### Build everything at once
+
+```bash
+cargo build --release --workspace
+```
 
 ---
 
 ## Seeded Runs
 
 ```bash
-CHAOS_SEED=666 cargo run --release
+# Linux / macOS
+CHAOS_SEED=666 cargo run --release -p chaos-rpg
+
+# Windows (PowerShell)
+$env:CHAOS_SEED=666; cargo run --release -p chaos-rpg
+
+# Windows (cmd.exe)
+set CHAOS_SEED=666 && cargo run --release -p chaos-rpg
 ```
 
-Same seed produces the same character stats, enemies, and loot every time. Share cursed seeds.
+Same seed → same character stats, same enemies, same loot, every time. Share cursed seeds.
 
 ---
 
-## The 10 Sacred Algorithms
+## Tutorial
 
-Every roll chains 4-10 of these in sequence. The full chain is printed after every action.
+### First Launch
 
-| # | Algorithm | Why it's chaotic |
-|---|-----------|-----------------|
-| 1 | **Lorenz Attractor** | The butterfly effect. sigma=10, rho=28, beta=8/3. Tiny input change produces massive output change. |
-| 2 | **Fourier Harmonic Series** | Sums N sinusoids with chaotic phase shifts. Constructive interference spikes values; destructive interference zeros them. |
-| 3 | **Prime Density Sieve** | Counts primes in a window, compares to Prime Number Theorem prediction. Deviations drive the output. |
-| 4 | **Riemann Zeta Partial Sum** | Partial sums of zeta(s) on the critical line. The imaginary part oscillates wildly. |
-| 5 | **Fibonacci Golden Spiral** | Maps through phi=(1+sqrt(5))/2. The golden ratio is irrational in the deepest sense -- it never repeats. |
-| 6 | **Mandelbrot Escape Velocity** | Escape iteration count near the Mandelbrot boundary. Points inside the set return negative values (cursed). |
-| 7 | **Logistic Map Bifurcation** | x_{n+1} = r*x*(1-x) at r~3.9. Period doubling to infinity. Fully chaotic regime. |
-| 8 | **Euler's Totient Function** | phi(n)/n is wildly irregular. Primes give near-1 ratios; highly composite numbers give low ratios. |
-| 9 | **Collatz Conjecture Chain** | 3n+1. Some numbers orbit to insane altitudes before collapsing. The altitude ratio creates huge swings. |
-| 10 | **Modular Exponentiation Hash** | a^b mod p. The avalanche effect of modular arithmetic. Smoothly varying inputs produce pseudo-random outputs. |
+When you start the game you land on the **title screen**. Use arrow keys (TUI) or mouse (graphical/web) to navigate. Select **New Game**.
 
----
+### Character Creation
 
-## Inline Engine Trace
+Pick a class, background, and difficulty. Stats are rolled by chaining a Destiny Roll → Lorenz Attractor → full chaos pipeline. The same class can produce wildly different stat spreads on each run.
 
-After every combat action, the full algorithm chain is printed automatically:
+**Classes:**
+
+| Class | Passive Ability |
+|-------|----------------|
+| Mage | Critical spells deal ENTROPY/10 bonus damage |
+| Berserker | Below 30% HP: +40% damage, attack twice on crit |
+| Ranger | PRECISION/20 bonus accuracy on every attack |
+| Thief | CUNNING/200 + 10% dodge chance on incoming hits |
+| Necromancer | On kill: absorb 8% of enemy max HP |
+| Alchemist | Items and potions grant 50% more effect |
+| Paladin | Regenerate (3 + VIT/20) HP at start of each round |
+| VoidWalker | ENTROPY% chance to phase through any attack |
+
+**Backgrounds:** Scholar (+mana/cunning), Wanderer (balanced), Gladiator (+force/vitality), Outcast (+entropy/luck)
+
+**Difficulties:** Normal → Hard → Chaos (exponential enemy scaling)
+
+### The Floor
+
+Each floor is a procedurally generated map of rooms. Navigate with arrow keys or WASD.
+
+| Symbol | Room Type | What happens |
+|--------|-----------|--------------|
+| `!` | Combat | Fight an enemy. No free escape. |
+| `?` | Treasure | Free loot — sometimes cursed. |
+| `+` | Rest | Heal HP. Always safe. |
+| `$` | Shop | Spend gold on items and spells. |
+| `>` | Stairs | Descend. Enemies scale harder. |
+| `B` | Boss | Boss room. Very bad. Very rewarding. |
+
+### Combat
 
 ```
-  +--------------------------------------------------------+
-  | ATTACK (6 engines)                                     |
-  |  Lorenz Attractor    +0.847  [##############      ]   |
-  |    -> The butterfly snaps its wings. Chaos amplified.  |
-  |  Prime Density       -0.213  [########            ]   |
-  |    -> The primes thin out here. Fortune wavers.        |
-  |  Collatz Chain       +0.931  [################    ]   |
-  |    -> 27 took 111 steps to fall. So does this hit.     |
-  |  Riemann Zeta        +0.612  [############        ]   |
-  |    -> A zero of the zeta function aligns. Power flows. |
-  |  Fibonacci Spiral    -0.044  [#####               ]   |
-  |    -> The golden ratio finds no resonance here.        |
-  |  Modular Hash        +0.778  [##############      ]   |
-  |    -> The avalanche completes. Output locked.          |
-  +-- CRITICAL HIT: 1,847 damage -------------------------+
+Round structure:
+  1. You choose an action
+  2. Your action resolves  (damage = force × chaos_roll / 50)
+  3. Enemy counter-attacks (if still alive)
+  4. Status effects tick   (burn, freeze, stun, bleed, etc.)
+  5. Passive abilities fire (Paladin regen, Berserker frenzy, etc.)
+```
 
-  Fractal Imp: Euler -> Lorenz -> Collatz [missed, -12 HP]
+**Combat actions:**
+
+| Key | Action | Notes |
+|-----|--------|-------|
+| `A` | Attack | Basic attack. Scales with force stat. |
+| `H` | Heal | Use a health item from inventory. |
+| `D` | Defend | Raise shield; reduce incoming damage this round. |
+| `T` | Status | Open equipment/status screen mid-combat. |
+| `F` | Flee | Luck + cunning roll to escape. Fails often on high floors. |
+| `1–9` | Spell | Cast a known spell. Costs mana. Crits apply class bonuses. |
+| `I` | Item | Use a non-healing item (bomb, scroll, etc.). |
+
+### The Chaos Pipeline
+
+Every number — damage, dodge, loot quality, enemy stats — runs through this chain:
+
+```
+Input seed
+  → Lorenz Attractor      (chaotic differential equations)
+  → Mandelbrot Escape     (fractal depth check)
+  → Bifurcation Map       (logistic map iteration)
+  → Entropy Mixer         (XOR + bit rotations)
+  → Gaussian Normalizer
+  → Final value           (usually −100..100, but not capped)
+```
+
+The **Engine Trace panel** in the TUI shows every step in real time during combat. Watch it spike into absurdity on critical hits.
+
+### Corruption
+
+Every kill adds 1 corruption stack. Every 50 stacks, the chaos pipeline gains a permanent mutation — shifted seeds, altered weights. By stage 4 you are no longer playing the same game. By stage 8, the math is unrecognizable.
+
+Corruption stage and progress are shown on the character sheet once they begin.
+
+### The Nemesis System
+
+If you flee from an enemy or barely survive a fight, that enemy may be **promoted to Nemesis**:
+- They remember how you fought
+- They gain bonus HP, damage, and a unique ability based on that encounter
+- They can reappear on later floors with a title ("Slayer of [your name]")
+- Defeating a nemesis gives dramatically increased rewards
+
+### Boss Gauntlets
+
+Every 5 floors is a boss room. Every 10 floors is a gauntlet (multiple bosses, no rest between).
+
+The 12 unique bosses include:
+
+- **The Fractal King** — splits into smaller copies at 50% HP
+- **Entropy Incarnate** — randomizes your stats each round
+- **The Void Mirror** — copies your own stats and fights you with them
+- **Mathbreaker** — forces integer overflow rolls; damage wraps around
+- **The Recursive Lich** — heals for a fraction of all damage dealt to it
+- *(and 7 more)*
+
+### Leveling Up
+
+Gain XP from combat. On level-up:
+- All stats increase (amount based on chaos roll, not a fixed table)
+- You learn a new spell
+- You receive skill points for the **Passive Tree** (Path of Exile-style node grid)
+
+### Items & Crafting
+
+Items drop from enemies and treasure rooms. Combine them at a **Crafting Bench** room:
+
+```
+Health Potion + Chaos Shard  →  Overloaded Potion (heal + random chaos effect)
+Iron Sword    + Fire Gem     →  Flameblade (+fire damage on attacks)
+```
+
+Full recipe list in [`MATH_MANIFESTO.md`](MATH_MANIFESTO.md).
+
+### Saving & Scoreboard
+
+The game auto-saves between floors. On death, your run is written to `~/.chaos-rpg/scores.json`. View the scoreboard from the main menu — top 20 runs, sorted by score.
+
+Score = kills × floor_reached × difficulty_multiplier × chaos_bonus.
+
+---
+
+## Project Structure
+
+```
+chaos-rpg/
+├── core/                    # chaos-rpg-core — all game logic (library crate, no UI)
+│   └── src/
+│       ├── character.rs         stat rolling, leveling, passive abilities
+│       ├── combat.rs            hit resolution, round loop
+│       ├── chaos_pipeline.rs    Lorenz → Mandelbrot → bifurcation chain
+│       ├── enemy.rs             enemy generation + exponential floor scaling
+│       ├── bosses.rs            12 unique bosses + gauntlet system
+│       ├── nemesis.rs           nemesis promotion + memory system
+│       ├── world.rs             floor + room procedural generation
+│       ├── items.rs             item definitions
+│       ├── spells.rs            spell generation
+│       ├── passive_tree.rs      skill tree nodes
+│       ├── crafting.rs          recipe system
+│       ├── scoreboard.rs        score persistence
+│       ├── io_util.rs           ANSI constants + prompt() for non-UI use
+│       └── ...                  (30+ modules total)
+│
+├── terminal/                # ratatui TUI frontend
+│   └── src/
+│       ├── main.rs              game loop, screen routing
+│       ├── ui.rs                menus, character sheet, floor nav (ANSI)
+│       └── ratatui_screens.rs   full ratatui layout (combat, engine trace,
+│                                Unicode portraits, HP bars, scoreboard)
+│
+├── graphical/               # bracket-lib CP437 OpenGL frontend
+│   └── src/
+│       ├── main.rs              game loop, all 6 screens
+│       ├── renderer.rs          titled-box and progress-bar helpers
+│       ├── sprites.rs           CP437 sprite definitions (player + enemies)
+│       └── ui_overlay.rs        damage floats, tooltips, status banners
+│
+├── web/                     # macroquad frontend — native desktop + WASM
+│   └── src/
+│       └── main.rs              full game loop, particle system,
+│                                immediate-mode 2D UI, damage floats
+│
+├── assets/
+│   ├── tilesets/                CP437 and custom PNG tilesets
+│   ├── sprites/classes/         per-class player sprites
+│   ├── sprites/enemies/         enemy sprites
+│   └── fonts/                   bitmap fonts
+│
+├── dist/
+│   └── chaos-rpg.exe            pre-built Windows binary (legacy)
+│
+├── .github/workflows/
+│   ├── ci.yml                   test + check on every push
+│   └── release.yml              build all 3 frontends × 3 platforms + WASM on tag
+│
+└── MATH_MANIFESTO.md        deep-dive on every algorithm used
 ```
 
 ---
 
-## Character Classes
+## The Math
 
-8 classes, each with a unique passive ability. Stats are fully unbounded -- FORCE can be -4,000 or 99,999. Both are mathematically reachable.
+Full breakdown of every algorithm, why it was chosen, and what it means for gameplay: [`MATH_MANIFESTO.md`](MATH_MANIFESTO.md).
 
-| Class | Role | Passive |
-|-------|------|---------|
-| **Mage** | Bends chaos through pure mathematical will | Arcane Overflow: critical spells deal ENTROPY/10 bonus damage |
-| **Berserker** | Channels pain into exponential power | Blood Frenzy: below 30% HP, +40% damage and attack twice on crit |
-| **Ranger** | Reads prime number patterns in nature | Prime Sight: PRECISION/20 bonus accuracy on every attack |
-| **Thief** | Exploits logistic map phase transitions | Chaos Dodge: CUNNING/200 + 10% chance to dodge incoming hits |
-| **Necromancer** | Death is not an end -- it's a variable | Death Drain: on kill, absorb 8% of enemy max HP as your own |
-| **Alchemist** | The logistic map of chemical chaos | Transmutation: items and potions grant 50% more effect |
-| **Paladin** | A divine constant in a chaotic universe | Divine Regen: regenerate (3 + VIT/20) HP at start of each round |
-| **VoidWalker** | Exists between the Mandelbrot boundary and everywhere else | Phase Shift: 15% + LCK/400 chance to phase-dodge any attack |
+Short version: every number the game produces is a lie told by differential equations. The lie is consistent. The consistency is the game.
 
 ---
 
-## Backgrounds
+## Contributing
 
-Pick a background at character creation for a flat stat bonus (or penalty).
-
-| Background | Effect |
-|-----------|--------|
-| Scholar | +15 MANA, +10 ENTROPY |
-| Wanderer | +15 LUCK, +10 PRECISION |
-| Gladiator | +15 FORCE, +10 VITALITY |
-| Outcast | +15 CUNNING, +10 ENTROPY |
-| Merchant | +15 CUNNING, +10 LUCK |
-| Cultist | +20 MANA, +20 ENTROPY, -10 VITALITY |
-| Exile | +20 CUNNING, +10 ENTROPY, -10 MANA |
-| Oracle | +20 LUCK, +10 MANA, -15 FORCE |
+PRs welcome. Rules:
+1. **No bare RNG** — all randomness must route through `chaos_pipeline::chaos_roll_verbose`.
+2. **No UI code in `core/`** — only `io_util.rs` exceptions (ANSI constants + `prompt()`).
+3. New bosses go in `core/src/bosses.rs`. New enemies in `core/src/enemy.rs`.
+4. `cargo test --workspace` must pass before submitting.
 
 ---
 
-## Boons
+## License
 
-At the start of each run, three boons are randomly offered. Pick one. They are permanent.
-
-| Boon | Effect |
-|------|--------|
-| Blood Pact | +50 max HP. Take 2 HP damage entering each room. |
-| Chaos Blessing | +10 Luck. Chaos rolls biased in your favor. |
-| Gold Vein | Start with 200 gold. |
-| Scholar's Gift | Start with 3 extra chaos-generated spells. |
-| Warrior's Blessing | +20 Force, +15 Vitality. |
-| Lucky Birth | +30 Luck. |
-| Entropic Soul | 2x Entropy and Mana, half Vitality. |
-| Crystal Skin | Start with an 80 HP shield. |
-| Math Savant | All spell damage x1.75. |
-| Void Touched | All stats x1.5. |
-| Prime Blood | Each kill: +1 to your highest stat. |
-| Shadow Start | Start at 50% HP. All XP x3. |
-
----
-
-## Difficulty
-
-| Difficulty | Enemy Damage | Gold | XP | Score Multiplier |
-|-----------|-------------|------|----|-----------------|
-| Easy | 70% | 130% | 80% | x1 |
-| Normal | 100% | 100% | 100% | x2 |
-| Brutal | 140% | 75% | 120% | x4 |
-| Chaos | 200% | 50% | 200% | x10 |
-
----
-
-## Body System
-
-Every character has 12 independent body parts, each with its own HP pool.
-
-```
-  HEAD         [  82/  82] ok
-  TORSO        [ 220/ 220] ok
-  LEFT ARM     [  61/  61] ok
-  RIGHT ARM    [  61/  61] [FRACTURED] Force -8, Precision -5
-  LEFT LEG     [  74/  74] ok
-  RIGHT LEG    [  74/  74] [SHATTERED] Speed penalty
-  LEFT HAND    [  45/  45] ok
-  RIGHT HAND   [  45/  45] ok
-  LEFT FOOT    [  38/  38] ok
-  RIGHT FOOT   [  38/  38] ok
-  LEFT EYE     [  18/  18] ok
-  RIGHT EYE    [   0/  18] [SEVERED] Precision -20
-```
-
-- Attacks hit a weighted random location. Head gets fewer hits but crits route there more often.
-- Injuries have five severities: **Bruised -> Fractured -> Shattered -> Severed -> Mathematically Absent**
-- Injuries apply stat penalties (arm injuries reduce Force, eye injuries reduce Precision, leg injuries reduce flee chance)
-- Body parts can drop below 0 HP into negative territory -- **cursed** parts drain HP each turn
-- Losing your head is instant death regardless of total HP
-- Armor equips to specific body slots and reduces damage to that part only
-
----
-
-## Passive Skill Tree
-
-82 nodes arranged around 8 class starting positions. Path of Exile style.
-
-- **Stat nodes** -- bonus is chaos-rolled at allocation time. You don't know if you get +3 Force or +47 Force until you spend the point.
-- **Engine nodes** -- permanently modify how a specific chaos engine behaves for your character (ForcePositive, Volatile, BoundaryMagnet, DoubleOutput, etc.)
-- **Synergy clusters** -- 3 weak nodes that together activate a powerful bonus
-- **Keystones** -- 4 build-defining choices at the far edge of the tree:
-  - **Chaos Immunity** -- immune to all negative chaos effects, lose all positive ones too
-  - **Glass Cannon Infinite** -- unlimited damage ceiling, 1 HP cap
-  - **Mathematical Certainty** -- rolls always return 0.5, no crits, no disasters
-  - **Entropy Inversion** -- all negative rolls become positive; all positive rolls become negative
-
-Use `P` in game to open the ASCII tree navigator. `WASD` to move cursor, `E` to allocate.
-
----
-
-## Gem and Socket System
-
-Items can have up to 4 sockets. Sockets can be linked. Gems slot into sockets and modify combat.
-
-**Skill gems** activate new moves in combat. **Support gems** modify linked skills.
-
-```
-  [S]--[S]  [S]     <- socket layout (-- = linked)
-```
-
-- Linked supports apply to the skill in the same link group
-- Items can have engine locks: a specific chaos engine is permanently forced into or out of that item's roll chain
-- Sockets and links are chaos-rolled on item generation -- rare items tend to have more
-
----
-
-## Crafting
-
-Six operations at any Crafting bench (found in Crafting zones and some NPC hubs):
-
-| Operation | Effect | Cost |
-|-----------|--------|------|
-| **Reforge** | Reroll all stat modifiers (keeps base type) | 120 gold |
-| **Augment** | Add one chaos-rolled stat modifier | 60 gold |
-| **Annul** | Remove one random stat modifier | 80 gold |
-| **Corrupt** | Destiny roll the entire item (can add unique implicits, double stats, or brick it) | 150 gold |
-| **Fuse** | Attempt to add a socket link (chaos-rolled, fails possible) | 100 gold |
-| **Engine Lock** | Permanently lock an engine into/out of this item's rolls | 200+ gold |
-
-Corrupted items cannot be crafted further.
-
-**Corruption implicits** include: ExtraEngines, DoublePrimary, TripleStat, SelfAware, StatMirror, CritStatusProc, GoldSyphon, and MathematicalError (bricked).
-
----
-
-## Factions
-
-Three factions, each aligned with a mathematical philosophy.
-
-| Faction | Philosophy | Pact (Trusted+) |
-|---------|-----------|-----------------|
-| **Order of Convergence** | "Chaos is a disease. We are the cure." | Chain length -1 (min 3). More predictable rolls. |
-| **Cult of Divergence** | "The ceiling is a suggestion. We remove suggestions." | Chain length +2. Higher ceiling, lower floor. |
-| **Watchers of the Boundary** | "The boundary between order and chaos is where everything interesting happens." | Crit threshold lowered to 65. Near-zero rolls trigger bonus effects. |
-
-- Rep tiers: Hostile / Neutral / Recognized / Trusted / Exalted
-- Gaining rep with Order or Cult penalizes the other (-1/3 of the gain)
-- Watchers are politically neutral
-- Each faction offers quests scaled to your floor with gold and rep rewards
-- Vendor dialogue changes based on your standing
-
----
-
-## Deep Status Effects
-
-Six additional ailments beyond the standard 11. These interact directly with the chaos pipeline itself.
-
-| Effect | Badge | Description |
-|--------|-------|-------------|
-| Fracture | [FRC] | Some rolls use only 1 engine (extreme volatility in both directions) |
-| Resonance | [RES] | Roll N output feeds roll N+1 input (streak amplification) |
-| Phase Lock | [PLK] | All rolls use the same seed (good run = invincible, bad run = stuck) |
-| Dimensional Bleed | [DLB] | Enemies use your own stat biases against you |
-| Recursive | [RCV] | Each engine runs twice -- chaos depth doubled |
-| Nullified | [NUL] | All rolls return 0.0 -- base stats only, no crits, no math |
-
----
-
-## Standard Status Effects
-
-| Effect | Badge | Description |
-|--------|-------|-------------|
-| Burning | [FIRE] | Takes 8 HP damage per round |
-| Poisoned | [PSN] | Takes 3 HP damage per round |
-| Stunned | [STN] | Skips next action |
-| Cursed | [CRS] | Reduced effectiveness on all rolls |
-| Blessed | [BLS] | Bonus to all rolls |
-| Shielded | [SHD] | Absorbs incoming damage |
-| Enraged | [RAG] | Bonus damage, reduced defense |
-| Frozen | [FRZ] | Movement and action restricted |
-| Regenerating | [REG] | Heals each round based on Vitality |
-| Phasing | [PHS] | Chance to avoid attacks entirely |
-| Empowered | [EMP] | All damage amplified |
-
----
-
-## Combo System
-
-Consecutive attacks build a combo streak. Each hit in a streak adds +20% damage, capped at x2.5. Heavy Attack consumes the streak as a finisher multiplier and resets the counter.
-
----
-
-## The Infinite Atlas
-
-The endgame. A procedurally generated map of zones stretching to depth 100 and beyond.
-
-- Every zone has 1-3 **zone modifiers** (chaos-rolled) that alter the rules of that zone
-- Clear a zone to reveal adjacent zones. High Luck reveals secret anomaly zones.
-- Every 10 clears, an **engine-themed Conqueror** spawns -- one for each of the 10 algorithms
-- At depth 100: **The Algorithm** -- the chaos pipeline itself. It has no HP. You must destabilize it by manipulating its engine chain until output exceeds input threshold.
-
-**Zone modifiers include:**
-
-| Modifier | Effect |
-|----------|--------|
-| Collatz Even | Chains start from even numbers -- less volatile |
-| Mandelbrot Inside | All Mandelbrot outputs negative |
-| Enemy Double Engines | Enemies use twice as many engines |
-| Bonus Sockets | All drops have +2 sockets |
-| Gravity Reversed | Force/Luck swap; Precision/Cunning swap |
-| Squared Outputs | All engine outputs squared (negatives become positive) |
-| Lorenz Amplified | sigma=20, rho=50. The butterfly has grown. |
-| Reduced Engines | All chains use 2 fewer engines (min 2) |
-| Gold Rush | Gold drops x3 |
-| Blood Pact | Player and enemies start at 50% HP |
-| Hair Trigger | Crits at roll > 50 instead of 90 |
-| Engine Shuffle | Engine order randomized every round |
-| Open Wounds | Injuries do not recover between fights |
-| Empowered Gear | All equipment stat bonuses doubled |
-
-**Daily Seed:** Each day has a globally fixed seed. Everyone playing on the same day gets the same map. Track your best score.
-
----
-
-## Power Level Tiers
-
-Your character's total stat sum determines your power tier.
-
-| Stat Total | Tier |
-|-----------|------|
-| Below -1000 | **ABYSSAL** -- "The math has forsaken you. You exist only through spite." |
-| -1000 to -300 | **DAMNED** -- "The algorithms hate you specifically. Keep going." |
-| -300 to -1 | **CURSED** -- "Even rats pity you. Negative stats are technically valid." |
-| 0 to 99 | **Mortal** -- "Statistically average. The Logistic Map is neutral on you." |
-| 100 to 299 | **Awakened** -- "The prime numbers notice you. That is an improvement." |
-| 300 to 599 | **Champion** -- "The Lorenz attractor bends in your favor." |
-| 600 to 999 | **Legendary** -- "The Riemann zeros align. You are an anomaly." |
-| 1000 to 2999 | **Transcendent** -- "The Mandelbrot boundary recognizes your face." |
-| 3000 to 9999 | **GODLIKE** -- "You ARE the chaos engine. The math screams." |
-| 10000+ | **BEYOND MATH** -- "ERROR: STAT OVERFLOW. YOU HAVE BROKEN THE ALGORITHM." |
-
----
-
-## Color Themes
-
-| Theme | Description |
-|-------|-------------|
-| Classic | Standard ANSI terminal colors |
-| Neon | Bright electric cyberpunk |
-| Blood | Deep reds and dark tones |
-| Void | Purple and shadow |
-| Monochrome | Grayscale only |
-
----
-
-## Combat Controls
-
-| Key | Action |
-|-----|--------|
-| `A` | Attack (builds combo streak) |
-| `H` | Heavy Attack (consumes combo streak as finisher) |
-| `D` | Defend (reduce incoming damage by VIT/3 + FOR/5) |
-| `T` | Taunt (draw attack, boost next hit) |
-| `F` | Flee (LCK-based escape; leg injuries penalize chance) |
-| `S1`-`S9` | Cast spell from known spells list |
-| `I1`-`I9` | Use inventory item by number |
-| `?` | Show inline combat action reference |
-
-Engine trace prints automatically after every action -- no key needed.
-
-## Floor Navigation
-
-| Key | Action |
-|-----|--------|
-| `E` | Enter the current room |
-| `C` | View full character sheet (stats, boon, passive, faction rep, body) |
-| `B` | View body chart (all 12 parts, injuries, HP) |
-| `P` | Open passive skill tree allocator |
-| `F` | View faction reputation screen (ORDER / CULT / WATCH) |
-| `T` | Show last chaos engine trace |
-| `D` | Descend to next floor (available after all rooms cleared) |
-
----
-
-## Quest System
-
-The quest log tracks objectives through their full lifecycle: NotStarted -> InProgress -> Completed / Failed / Abandoned.
-
-**Objective types:**
-- Kill N enemies of a specific type
-- Collect N of a specific item
-- Reach a location
-- Talk to an NPC
-- Survive N rounds
-
-Quests can have prerequisites -- completing earlier quests unlocks later ones. Rewards include gold, XP, and items.
-
----
-
-## Magic System
-
-Six spell schools with distinct effect types:
-
-| School | Effect types |
-|--------|-------------|
-| Fire | Damage with variance |
-| Ice | AoE slow + damage |
-| Lightning | High variance damage |
-| Arcane | Buffs, summons |
-| Nature | Heals, area effects |
-| Shadow | Debuffs, DoT |
-
-The SpellBook tracks known spells, cooldown countdowns, and mana cost. The ManaPool manages current/max mana and per-turn regeneration.
-
----
-
-## Enemy AI
-
-Enemies use a finite state machine with 7 states:
-
-| State | Description |
-|-------|-------------|
-| Idle | Unaware of player |
-| Patrol | Moving between waypoints |
-| Alerted | Heard/glimpsed player; searching |
-| Chasing | Actively pursuing |
-| Attacking | Melee engagement |
-| Fleeing | Below HP flee threshold; retreating |
-| Dead | Terminal state |
-
-Each enemy has an aggression factor, detection radius, and flee threshold. Archetype presets (Aggressive, Cautious, Berserker, Support) configure these automatically.
-
----
-
-## World Map
-
-Room-based overworld graph with BFS pathfinding and bidirectional connections. Rooms have types (Dungeon, Town, Wilderness, Cave, Temple, Port) and track visited state. The starter world ships with 6 connected locations (Thornwall, Mirewood Forest, Gloomhaven Cave, The Sunken Gate, Crossroads Market, Saltbreak Port).
-
----
-
-## Recipe Crafting
-
-Ingredient-based item creation distinct from the chaos-crafting (modify) system. Combine ingredients at crafting stations to produce items from scratch.
-
-| Station | Recipes |
-|---------|---------|
-| Anvil | Iron sword, arrow bundle |
-| Alchemist | Health potion |
-| Workbench | Lockpick |
-| Magic Forge | Magic staff |
-
-Crafters above level 10 produce bonus-quality results. The RecipeBook validates ingredient availability before attempting a craft.
-
----
-
-## Save System
-
-Multi-slot saves using a plain key=value text format with `[SLOT N]` headers -- no external crates, no binary formats. Fields include player name, level, gold, floor, HP, attack, defense, XP, inventory list, and completed quest IDs. SaveManager supports list, load, and save across multiple slots.
-
----
-
-## Game Modes
-
-**Story Mode** -- 20-30 rooms with a procedurally generated quest. The final boss rolls its power level via the Destiny Roll (all 10 engines). It might be weaker than a floor-1 rat. It might be a god.
-
-**Infinite Mode** -- Endless floors. Enemy difficulty scales with depth. Score is tracked and saved to `~/.chaos_rpg_scores.json`.
-
-**Daily Seed** -- Fixed global seed for the current date. Same map for everyone. Race for the high score.
-
----
-
-## See Also
-
-- [MATH_MANIFESTO.md](MATH_MANIFESTO.md) -- Deep dive into every algorithm
-
----
-
-
-
-MIT -- see [LICENSE](LICENSE) for details.
+MIT

@@ -38,3 +38,5 @@ pub mod world;
 pub mod world_map;
 pub mod weather_system;
 pub mod economy;
+pub mod skill_tree_v2;
+pub mod inventory_system;
