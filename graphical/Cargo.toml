@@ -14,4 +14,5 @@ chaos-rpg-core.workspace = true
 chaos-rpg-audio.workspace = true
 bracket-lib.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 rand.workspace = true

@@ -29,6 +29,49 @@ mod sprites;
 mod theme;
 mod ui_overlay;
 
+// ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
+
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+struct SaveState {
+    player: Character,
+    floor: Option<Floor>,
+    floor_num: u32,
+    floor_seed: u64,
+    seed: u64,
+    current_mana: i64,
+    is_boss_fight: bool,
+    game_mode: String,    // "Story" | "Infinite" | "Daily"
+    enemy: Option<Enemy>,
+    combat_state: Option<CombatState>,
+    nemesis_spawned: bool,
+    combat_log: Vec<String>,
+}
+
+fn save_path() -> std::path::PathBuf {
+    // Prefer next to the exe; fall back to current dir
+    let mut p = std::env::current_exe().unwrap_or_default();
+    p.pop();
+    p.push("chaos_rpg_save.json");
+    p
+}
+
+fn write_save(s: &SaveState) {
+    if let Ok(json) = serde_json::to_string_pretty(s) {
+        let _ = std::fs::write(save_path(), json);
+    }
+}
+
+fn read_save() -> Option<SaveState> {
+    let data = std::fs::read_to_string(save_path()).ok()?;
+    serde_json::from_str(&data).ok()
+}
+
+fn delete_save() {
+    let _ = std::fs::remove_file(save_path());
+}
+
 use theme::{Theme, THEMES};
 
 // ─── GAME MODE ────────────────────────────────────────────────────────────────
@@ -46,6 +89,7 @@ enum CraftPhase { SelectItem, SelectOp }
 #[derive(Debug, Clone, PartialEq)]
 enum AppScreen {
     Title,
+    Tutorial,
     ModeSelect,
     CharacterCreation,
     BoonSelect,
@@ -188,6 +232,9 @@ struct State {
     post_combat_screen: Option<AppScreen>,  // screen to go to after linger
     // ── Passive tree browser ──
     passive_scroll: usize,                  // scroll offset for passive tree list
+    // ── Tutorial ──
+    tutorial_slide: usize,                  // 0 = inactive, 1-N = showing slide N
+    save_exists: bool,                      // whether a save file was found at startup
 }
 
 impl State {
@@ -229,6 +276,8 @@ impl State {
             kill_linger: 0,
             post_combat_screen: None,
             passive_scroll: 0,
+            tutorial_slide: 0,
+            save_exists: save_path().exists(),
         }
     }
 
@@ -333,6 +382,56 @@ impl State {
         if let Some(ref mut p) = self.player {
             p.floor = self.floor_num;
         }
+    }
+
+    // ── SAVE / LOAD ───────────────────────────────────────────────────────────
+
+    fn do_save(&mut self) {
+        let Some(ref player) = self.player else { return; };
+        let mode_str = match self.game_mode {
+            GameMode::Story    => "Story",
+            GameMode::Infinite => "Infinite",
+            GameMode::Daily    => "Daily",
+        };
+        let ss = SaveState {
+            player: player.clone(),
+            floor: self.floor.clone(),
+            floor_num: self.floor_num,
+            floor_seed: self.floor_seed,
+            seed: self.seed,
+            current_mana: self.current_mana,
+            is_boss_fight: self.is_boss_fight,
+            game_mode: mode_str.to_string(),
+            enemy: self.enemy.clone(),
+            combat_state: self.combat_state.clone(),
+            nemesis_spawned: self.nemesis_spawned,
+            combat_log: self.combat_log.clone(),
+        };
+        write_save(&ss);
+        self.save_exists = true;
+        self.push_log("Game saved. [F5] to save · [L] on title to continue".to_string());
+    }
+
+    fn do_load(&mut self) {
+        let Some(ss) = read_save() else { return; };
+        self.player        = Some(ss.player);
+        self.floor         = ss.floor;
+        self.floor_num     = ss.floor_num;
+        self.floor_seed    = ss.floor_seed;
+        self.seed          = ss.seed;
+        self.current_mana  = ss.current_mana;
+        self.is_boss_fight = ss.is_boss_fight;
+        self.game_mode     = match ss.game_mode.as_str() {
+            "Story"    => GameMode::Story,
+            "Daily"    => GameMode::Daily,
+            _          => GameMode::Infinite,
+        };
+        self.enemy         = ss.enemy;
+        self.combat_state  = ss.combat_state;
+        self.nemesis_spawned = ss.nemesis_spawned;
+        self.combat_log    = ss.combat_log;
+        self.screen        = AppScreen::FloorNav;
+        self.push_log("Save loaded — welcome back.".to_string());
     }
 
     fn advance_floor_room(&mut self) {
@@ -812,6 +911,47 @@ impl State {
             }
         }
 
+        // ── Audio: emit per-event SFX ────────────────────────────────────────
+        {
+            use chaos_rpg_core::combat::CombatEvent;
+            use chaos_rpg_core::audio_events::AudioEvent as AE;
+            for ev in &events {
+                match ev {
+                    CombatEvent::PlayerAttack { damage, is_crit } => {
+                        self.emit_audio(AE::DamageDealt { amount: *damage as i32, is_crit: *is_crit });
+                        if *is_crit { self.emit_audio(AE::EngineCritical); }
+                    }
+                    CombatEvent::EnemyAttack { damage, is_crit } => {
+                        self.emit_audio(AE::EnemyAttack);
+                        self.emit_audio(AE::DamageDealt { amount: *damage as i32, is_crit: *is_crit });
+                        if *is_crit { self.emit_audio(AE::EngineCritical); }
+                    }
+                    CombatEvent::PlayerHealed { amount } => {
+                        self.emit_audio(AE::HealApplied { amount: *amount as i32 });
+                    }
+                    CombatEvent::EnemyDied { .. } => {
+                        self.emit_audio(AE::EntityDied { is_player: false });
+                    }
+                    CombatEvent::StatusApplied { .. } => {
+                        self.emit_audio(AE::StatusApplied);
+                    }
+                    _ => {}
+                }
+            }
+            // Chaos engine audio from the roll chain
+            if let Some(ref roll) = self.last_roll.clone() {
+                for (i, step) in roll.chain.iter().enumerate() {
+                    self.emit_audio(AE::ChaosEngineRoll { engine_id: (i % 10) as u8 });
+                }
+                if roll.chain.len() > 3 {
+                    self.emit_audio(AE::ChaosCascade { depth: roll.chain.len() as u8 });
+                }
+                if roll.is_critical() {
+                    self.emit_audio(AE::EngineCritical);
+                }
+            }
+        }
+
         // ── Misery event wiring ───────────────────────────────────────────────
         if let Some(ref mut p) = self.player {
             use chaos_rpg_core::combat::CombatEvent;
@@ -1106,6 +1246,7 @@ impl GameState for State {
 
         match self.screen.clone() {
             AppScreen::Title            => self.draw_title(ctx),
+            AppScreen::Tutorial         => self.draw_tutorial(ctx),
             AppScreen::ModeSelect       => self.draw_mode_select(ctx),
             AppScreen::CharacterCreation => self.draw_char_creation(ctx),
             AppScreen::BoonSelect       => self.draw_boon_select(ctx),
@@ -1160,58 +1301,91 @@ impl State {
     fn draw_title(&mut self, ctx: &mut BTerm) {
         let t = self.theme().clone();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
-        let brd = RGB::from_u8(t.border.0,  t.border.1,  t.border.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
-        let sel = RGB::from_u8(t.selected.0,t.selected.1,t.selected.2);
+        let muted = RGB::from_u8(t.muted.0, t.muted.1,   t.muted.2);
+        let danger = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
-        // Fill background
         ctx.cls_bg(bg);
         draw_panel(ctx, 0, 0, 79, 49, "", &t);
 
-        // Animated banner pulse
+        // ── Math symbol rain (background flavor) ──────────────────────────
+        let math_chars = ["∫","∂","∑","∏","∇","λ","Ω","ε","δ","π","μ","ζ","⊕","∞","√","≈","≠","±","∧","∨"];
+        // 20 columns of falling math symbols — positions seeded from frame
+        for col_i in 0..20usize {
+            let col_seed = col_i as u64 * 2654435761;
+            let x = 2 + (col_seed % 74) as i32;
+            let speed = 1 + (col_seed % 3) as u64;
+            let offset = col_seed % 50;
+            let y = ((self.frame / speed.max(1) + offset) % 48) as i32;
+            if y < 2 || y > 47 { continue; }
+            let sym_i = ((col_seed.wrapping_add(self.frame / 8)) % math_chars.len() as u64) as usize;
+            // Fade based on y — near top = brighter, near bottom = dimmer
+            let fade = (y as f32 / 48.0).clamp(0.1, 0.9);
+            let rc = (t.muted.0 as f32 * (1.0 - fade) + t.dim.0 as f32 * fade * 0.4) as u8;
+            let gc = (t.muted.1 as f32 * (1.0 - fade) + t.dim.1 as f32 * fade * 0.4) as u8;
+            let bc = (t.muted.2 as f32 * (1.0 - fade) + t.dim.2 as f32 * fade * 0.4) as u8;
+            ctx.print_color(x, y, RGB::from_u8(rc, gc, bc), bg, math_chars[sym_i]);
+        }
+
+        // ── Animated banner pulse ──────────────────────────────────────────
         let pulse = ((self.frame as f32 * 0.04).sin() * 0.15 + 0.85) as f32;
         let ph = (t.heading.0 as f32 * pulse) as u8;
         let pg = (t.heading.1 as f32 * pulse) as u8;
         let pb = (t.heading.2 as f32 * pulse) as u8;
         let pulsed = RGB::from_u8(ph, pg, pb);
 
-        ctx.print_color(4, 4,  pulsed, bg, " ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗");
-        ctx.print_color(4, 5,  pulsed, bg, "██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝");
-        ctx.print_color(4, 6,  hd,     bg, "██║     ███████║███████║██║   ██║███████╗");
-        ctx.print_color(4, 7,  hd,     bg, "╚██████╗██║  ██║██║  ██║╚██████╔╝███████║");
-        ctx.print_color(4, 8,  hd,     bg, " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝");
+        ctx.print_color(4, 3,  pulsed, bg, " ██████╗██╗  ██╗ █████╗  ██████╗ ███████╗");
+        ctx.print_color(4, 4,  pulsed, bg, "██╔════╝██║  ██║██╔══██╗██╔═══██╗██╔════╝");
+        ctx.print_color(4, 5,  hd,     bg, "██║     ███████║███████║██║   ██║███████╗");
+        ctx.print_color(4, 6,  hd,     bg, "╚██████╗██║  ██║██║  ██║╚██████╔╝███████║");
+        ctx.print_color(4, 7,  hd,     bg, " ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚══════╝");
 
-        ctx.print_color(4, 9,  dim, bg, "        R P G    ─    Where Math Goes To Die");
+        ctx.print_color(4, 8, dim, bg, "        R P G    ─    Where Math Goes To Die");
 
-        // Decorative separator
-        draw_separator(ctx, 2, 11, 75, &t);
+        draw_separator(ctx, 2, 10, 75, &t);
 
-        ctx.print_color(5, 12, ac, bg, "Graphical Edition  ·  All Systems  ·  Fullscreen");
+        // ── Chaos engine one-liner ─────────────────────────────────────────
+        ctx.print_color(4, 11, ac, bg,
+            "Every action rolls a recursive chain of chaotic math modifiers.");
+        ctx.print_color(4, 12, dim, bg,
+            "The deeper the chain, the wilder the output. Embrace the cascade.");
 
-        // Theme name badge bottom-right
-        let tname = format!(" Theme: {} [T] ", t.name);
-        ctx.print_color(79 - tname.len() as i32 - 1, 47, dim, bg, &tname);
+        // ── Continue notice (if save exists) ──────────────────────────────
+        if self.save_exists {
+            let flash = if (self.frame / 20) % 2 == 0 { ac } else { hd };
+            ctx.print_color(4, 14, flash, bg, "► SAVE DETECTED — press [L] to Continue");
+        }
 
-        // Menu box
-        let ox = 29i32; let oy = 20i32;
-        draw_subpanel(ctx, ox - 3, oy - 2, 28, 9, "MAIN MENU", &t);
+        // ── Menu box ──────────────────────────────────────────────────────
+        let num_opts: usize = if self.save_exists { 4 } else { 3 };
+        let menu_h = (num_opts as i32) * 2 + 3;
+        let ox = 28i32; let oy = 18i32;
+        draw_subpanel(ctx, ox - 3, oy - 2, 30, menu_h, "MAIN MENU", &t);
 
-        let opts = ["New Game", "Scoreboard", "Quit"];
+        let mut opts: Vec<&str> = Vec::new();
+        if self.save_exists { opts.push("Continue"); }
+        opts.push("New Game");
+        opts.push("Scoreboard");
+        opts.push("Quit");
+
         for (i, opt) in opts.iter().enumerate() {
             print_selectable(ctx, ox, oy + i as i32 * 2, i == self.selected_menu, opt, self.frame, &t);
         }
 
-        // Hint bar
-        draw_separator(ctx, 2, 45, 75, &t);
-        print_hint(ctx, 4, 46, "↑↓", " Navigate   ", &t);
-        print_hint(ctx, 22, 46, "Enter", " Select   ", &t);
-        print_hint(ctx, 40, 46, "T", " Theme   ", &t);
-        print_hint(ctx, 52, 46, "Q", " Quit", &t);
+        // ── Hint bar ──────────────────────────────────────────────────────
+        draw_separator(ctx, 2, 44, 75, &t);
+        print_hint(ctx, 4,  45, "↑↓",    " Navigate  ", &t);
+        print_hint(ctx, 22, 45, "Enter",  " Select  ",  &t);
+        print_hint(ctx, 38, 45, "T",      " Theme  ",   &t);
+        print_hint(ctx, 47, 45, "?",      " Tutorial  ", &t);
+        print_hint(ctx, 62, 45, "Q",      " Quit",       &t);
 
-        // Tagline
-        ctx.print_color(4, 47, dim, bg, &format!("\"{}\"", t.tagline));
+        // ── Theme badge & tagline ──────────────────────────────────────────
+        let tname = format!(" {} [T] ", t.name);
+        ctx.print_color(78 - tname.len() as i32, 47, muted, bg, &tname);
+        ctx.print_color(4, 47, muted, bg, &format!("\"{}\"", t.tagline));
     }
 
     // ── MODE SELECT ───────────────────────────────────────────────────────────
@@ -1666,7 +1840,7 @@ impl State {
         }
         draw_separator(ctx, 1, 43, 77, &t);
         ctx.print_color(2, 44, dim, bg, "[×]=Fight  [★]=Loot  [$]=Shop  [~]=Shrine  [!]=Trap  [^]=Portal  [⚒]=Craft");
-        ctx.print_color(2, 45, dim, bg, "Tip: [C] = Sheet+Passives  [B] = Body HP  [N] = Spend skill points");
+        ctx.print_color(2, 45, dim, bg, "[C]=Sheet  [B]=Body  [N]=Passives  [F5]=Save  [L]=Load on title");
     }
 
     // ── ROOM VIEW ─────────────────────────────────────────────────────────────
@@ -2289,6 +2463,144 @@ impl State {
         print_hint(ctx, 47, 46, "[Esc]", " Back", &t);
     }
 
+    // ── TUTORIAL ─────────────────────────────────────────────────────────────
+
+    fn draw_tutorial(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg    = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd    = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac    = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let dim   = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let sel   = RGB::from_u8(t.selected.0,t.selected.1,t.selected.2);
+        let warn  = RGB::from_u8(t.warn.0,    t.warn.1,    t.warn.2);
+        let succ  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
+        let danger= RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
+
+        ctx.cls_bg(bg);
+        let slide = self.tutorial_slide.max(1);
+
+        // Outer panel
+        draw_panel(ctx, 0, 0, 79, 49,
+            &format!("CHAOS ENGINE — HOW TO PLAY  [{}/5]", slide), &t);
+
+        // Progress dots
+        for i in 1..=5usize {
+            let dot = if i == slide { "◆" } else { "◇" };
+            let col = if i == slide { ac } else { dim };
+            ctx.print_color(35 + (i as i32 - 1) * 3, 2, col, bg, dot);
+        }
+
+        const TOTAL_SLIDES: usize = 5;
+
+        match slide {
+            // ── Slide 1: What is the Chaos Engine? ────────────────────────
+            1 => {
+                ctx.print_color(4, 5,  hd,   bg, "SLIDE 1 — THE CHAOS ENGINE");
+                ctx.print_color(4, 7,  sel,  bg, "Every action in this game runs through the Chaos Engine.");
+                ctx.print_color(4, 9,  dim,  bg, "When you attack, cast a spell, or get hit, the engine fires:");
+                ctx.print_color(4, 11, ac,   bg, "  1.  A base roll is computed from your stats.");
+                ctx.print_color(4, 12, ac,   bg, "  2.  A chain of sub-engines each modify the result.");
+                ctx.print_color(4, 13, ac,   bg, "  3.  The final value determines damage / healing / effect.");
+                ctx.print_color(4, 15, warn, bg, "The chain length grows with depth. Floor 1 = 2 links.");
+                ctx.print_color(4, 16, warn, bg, "Floor 50 = 8+ links. Floor 100+ = fully recursive chaos.");
+                ctx.print_color(4, 18, dim,  bg, "Example chain:  base(42) → sigmoid(38) → entropy(61) → CRIT(97)");
+                ctx.print_color(4, 19, succ, bg, "                                                  ^^^  97 damage!");
+                ctx.print_color(4, 21, dim,  bg, "The same attack can deal 12 damage or 340 damage.");
+                ctx.print_color(4, 22, dim,  bg, "That is not a bug. That IS the game.");
+
+                // Mini ASCII diagram
+                ctx.print_color(12, 25, ac,  bg,  "[ YOU ]──►[ engine A ]──►[ engine B ]──►[ RESULT ]");
+                ctx.print_color(12, 26, dim, bg,  "   ↑            ↑               ↑");
+                ctx.print_color(12, 27, dim, bg,  " stats      sigmoid          entropy");
+            }
+
+            // ── Slide 2: Body System ──────────────────────────────────────
+            2 => {
+                ctx.print_color(4, 5,  hd,   bg, "SLIDE 2 — THE BODY SYSTEM");
+                ctx.print_color(4, 7,  sel,  bg, "Your character has 13 body parts, each with independent HP.");
+                ctx.print_color(4, 9,  dim,  bg, "Damage is distributed to body parts based on hit location.");
+                ctx.print_color(4, 11, ac,   bg, "  Head   — controls   Focus / Chaos resistance");
+                ctx.print_color(4, 12, ac,   bg, "  Torso  — core HP pool; death if it reaches 0");
+                ctx.print_color(4, 13, ac,   bg, "  Arms   — attack damage & carry weight");
+                ctx.print_color(4, 14, ac,   bg, "  Legs   — dodge & movement");
+                ctx.print_color(4, 15, ac,   bg, "  Spine  — links all systems; injury = cascading debuffs");
+                ctx.print_color(4, 17, warn, bg, "Injury Severities:  Bruised → Fractured → Shattered");
+                ctx.print_color(4, 18, warn, bg, "                    → Severed → MATH.ABSENT");
+                ctx.print_color(4, 20, dim,  bg, "MATH.ABSENT = the part is gone. The engine notices.");
+                ctx.print_color(4, 21, danger,bg,"A severed Head triggers immediate Death Math.");
+                ctx.print_color(4, 23, dim,  bg, "Press [B] from the floor map to view your Body Chart.");
+            }
+
+            // ── Slide 3: Passive Tree ─────────────────────────────────────
+            3 => {
+                ctx.print_color(4, 5,  hd,   bg, "SLIDE 3 — PASSIVE SKILL TREE");
+                ctx.print_color(4, 7,  sel,  bg, "Every kill grants skill points. Spend them in the Passive Tree.");
+                ctx.print_color(4, 9,  dim,  bg, "Nodes are organized by type:");
+                ctx.print_color(4, 11, ac,   bg, "  Stat       — +STR, +DEX, +HP etc.  Small bonuses.");
+                ctx.print_color(4, 12, warn, bg, "  Notable    — Named abilities. Larger effects.");
+                ctx.print_color(4, 13, danger,bg, "  Keystone   — Game-changing rules. Read carefully.");
+                ctx.print_color(4, 14, RGB::from_u8(160,80,255), bg,
+                                            "  Engine     — Modify the chaos chain itself.");
+                ctx.print_color(4, 15, succ, bg, "  Synergy    — Unlock combos between other nodes.");
+                ctx.print_color(4, 17, dim,  bg, "Some nodes require other nodes as prerequisites.");
+                ctx.print_color(4, 18, dim,  bg, "Press [P] on the Character Sheet to open the full tree.");
+                ctx.print_color(4, 19, dim,  bg, "Press [N] anywhere to auto-allocate pending points.");
+                ctx.print_color(4, 21, warn, bg, "Keystones often have drawbacks. READ THEM.");
+            }
+
+            // ── Slide 4: Misery + Corruption ─────────────────────────────
+            4 => {
+                ctx.print_color(4, 5,  hd,    bg, "SLIDE 4 — MISERY & CORRUPTION");
+                ctx.print_color(4, 7,  sel,   bg, "Misery is a global modifier that makes everything worse.");
+                ctx.print_color(4, 9,  dim,   bg, "It accumulates when you:");
+                ctx.print_color(4, 11, danger,bg, "  × Take heavy damage        + Misery");
+                ctx.print_color(4, 12, danger,bg, "  × Use cursed items          + Misery");
+                ctx.print_color(4, 13, danger,bg, "  × Die and continue (Story)  + Misery");
+                ctx.print_color(4, 14, danger,bg, "  × Fail skill checks         + Misery");
+                ctx.print_color(4, 16, succ,  bg, "High Misery unlocks the Hall of Misery leaderboard.");
+                ctx.print_color(4, 17, dim,   bg, "Defiance builds when you survive near-death moments.");
+                ctx.print_color(4, 18, dim,   bg, "At 100 Defiance: one death is negated — Spite activates.");
+                ctx.print_color(4, 20, warn,  bg, "Corruption > 5 means your chaos rolls can invert.");
+                ctx.print_color(4, 21, warn,  bg, "Corruption > 20: the dungeon itself starts lying to you.");
+                ctx.print_color(4, 23, dim,   bg, "Watch the amber alert on the floor map. It means something.");
+            }
+
+            // ── Slide 5: Tips & Keys ──────────────────────────────────────
+            _ => {
+                ctx.print_color(4, 5,  hd,  bg, "SLIDE 5 — QUICK REFERENCE");
+                ctx.print_color(4, 7,  sel, bg, "Floor navigation:");
+                ctx.print_color(4, 8,  ac,  bg, "  Enter/E  Enter room        D  Descend to next floor");
+                ctx.print_color(4, 9,  ac,  bg, "  C        Character sheet   B  Body chart");
+                ctx.print_color(4, 10, ac,  bg, "  P        Passive tree      N  Auto-allocate points");
+                ctx.print_color(4, 11, ac,  bg, "  F5       Save game         Z  Auto-pilot");
+                ctx.print_color(4, 13, sel, bg, "Combat:");
+                ctx.print_color(4, 14, ac,  bg, "  A  Attack   S  Spell   D  Defend   H  Heal");
+                ctx.print_color(4, 15, ac,  bg, "  I  Use item  F  Flee   Q  Quit to title");
+                ctx.print_color(4, 17, sel, bg, "The chaos engine CHAIN is shown at the top of the combat log.");
+                ctx.print_color(4, 18, dim, bg, "Each link is: EngineName(output_value)");
+                ctx.print_color(4, 19, dim, bg, "Watch for CRIT bursts — they chain-multiply across all links.");
+                ctx.print_color(4, 21, sel, bg, "Pro tips:");
+                ctx.print_color(4, 22, dim, bg, "  ● Engine nodes amplify chain variance — high risk / reward.");
+                ctx.print_color(4, 23, dim, bg, "  ● Keystone 'Pure Chaos' removes all caps. Yes, all of them.");
+                ctx.print_color(4, 24, dim, bg, "  ● If a body part says MATH.ABSENT — you are doing great.");
+            }
+        }
+
+        // ── Navigation footer ─────────────────────────────────────────────
+        draw_separator(ctx, 2, 44, 75, &t);
+        print_hint(ctx, 4,  45, "←→/Space", " Navigate slides  ", &t);
+        print_hint(ctx, 36, 45, "Esc",      " Back to title",     &t);
+
+        if slide < TOTAL_SLIDES {
+            let next_flash = if (self.frame / 20) % 2 == 0 { ac } else { hd };
+            ctx.print_color(56, 45, next_flash, bg, "► Next slide");
+        } else {
+            ctx.print_color(56, 45, succ, bg, "► Press Enter to play!");
+        }
+
+        ctx.print_color(4, 47, dim, bg, &format!("Slide {}/{} — press ? on title to reopen", slide, TOTAL_SLIDES));
+    }
+
     // ── PASSIVE TREE ──────────────────────────────────────────────────────────
 
     fn draw_passive_tree(&mut self, ctx: &mut BTerm) {
@@ -2818,14 +3130,30 @@ impl State {
         match self.screen.clone() {
             AppScreen::Title => match key {
                 VirtualKeyCode::Up   => self.selected_menu = self.selected_menu.saturating_sub(1),
-                VirtualKeyCode::Down => self.selected_menu = (self.selected_menu + 1).min(2),
-                VirtualKeyCode::Return => match self.selected_menu {
-                    0 => self.screen = AppScreen::ModeSelect,
-                    1 => self.screen = AppScreen::Scoreboard,
-                    _ => ctx.quit(),
-                },
+                VirtualKeyCode::Down => {
+                    let max = if self.save_exists { 3 } else { 2 };
+                    self.selected_menu = (self.selected_menu + 1).min(max);
+                }
+                VirtualKeyCode::Return => {
+                    // Offset indices when Continue is present
+                    let offset = if self.save_exists { 1 } else { 0 };
+                    if self.save_exists && self.selected_menu == 0 {
+                        self.do_load();
+                    } else {
+                        match self.selected_menu - offset {
+                            0 => self.screen = AppScreen::ModeSelect,
+                            1 => self.screen = AppScreen::Scoreboard,
+                            _ => ctx.quit(),
+                        }
+                    }
+                }
+                VirtualKeyCode::L => { if self.save_exists { self.do_load(); } }
                 VirtualKeyCode::T => self.cycle_theme(),
                 VirtualKeyCode::Q => ctx.quit(),
+                VirtualKeyCode::Slash | VirtualKeyCode::F1 => {
+                    self.tutorial_slide = 1;
+                    self.screen = AppScreen::Tutorial;
+                }
                 _ => {}
             },
 
@@ -2904,6 +3232,7 @@ impl State {
                         self.push_log("Auto pilot OFF.".to_string());
                     }
                 }
+                VirtualKeyCode::F5 => { self.do_save(); }
                 VirtualKeyCode::S => self.screen = AppScreen::Scoreboard,
                 VirtualKeyCode::Q | VirtualKeyCode::Escape => {
                     self.save_score_now();
@@ -3157,6 +3486,26 @@ impl State {
                 }
                 VirtualKeyCode::C => {
                     self.screen = AppScreen::CharacterSheet;
+                }
+                _ => {}
+            },
+
+            AppScreen::Tutorial => match key {
+                VirtualKeyCode::Right | VirtualKeyCode::Return | VirtualKeyCode::Space => {
+                    const TOTAL_SLIDES: usize = 5;
+                    if self.tutorial_slide >= TOTAL_SLIDES {
+                        self.tutorial_slide = 0;
+                        self.screen = AppScreen::Title;
+                    } else {
+                        self.tutorial_slide += 1;
+                    }
+                }
+                VirtualKeyCode::Left => {
+                    if self.tutorial_slide > 1 { self.tutorial_slide -= 1; }
+                }
+                VirtualKeyCode::Escape | VirtualKeyCode::Q => {
+                    self.tutorial_slide = 0;
+                    self.screen = AppScreen::Title;
                 }
                 _ => {}
             },
