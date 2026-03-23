@@ -56,6 +56,7 @@ enum AppScreen {
     Crafting,
     CharacterSheet,
     BodyChart,
+    PassiveTree,
     GameOver,
     Victory,
     Scoreboard,
@@ -185,6 +186,8 @@ struct State {
     // ── Kill linger ──
     kill_linger: u32,                       // frames to stay on combat after kill
     post_combat_screen: Option<AppScreen>,  // screen to go to after linger
+    // ── Passive tree browser ──
+    passive_scroll: usize,                  // scroll offset for passive tree list
 }
 
 impl State {
@@ -225,6 +228,7 @@ impl State {
             spell_beam_col: (80, 120, 255),
             kill_linger: 0,
             post_combat_screen: None,
+            passive_scroll: 0,
         }
     }
 
@@ -854,12 +858,7 @@ impl State {
             }
         }
 
-        // Chaos engine trace
-        if let Some(ref roll) = self.last_roll.clone() {
-            for line in roll.display_lines().iter().take(4) {
-                self.combat_log.push(format!("  {}", line));
-            }
-        }
+        // last_roll stored for on-screen display — not pushed to log
 
         // Tick status effects (start of each new turn after action)
         if let Some(ref mut p) = self.player {
@@ -933,7 +932,8 @@ impl State {
                 }
 
                 self.gauntlet_stage = 0;
-                self.enemy = None;
+                // NOTE: self.enemy is intentionally NOT nulled here.
+                // draw_combat reads it during the kill_linger frames. It's cleared when linger ends.
                 // Show loot if pending, else floor nav — but linger on combat first
                 let next_screen = if self.loot_pending.is_some() {
                     let loot = self.loot_pending.take().unwrap();
@@ -1097,6 +1097,7 @@ impl GameState for State {
             self.draw_combat(ctx);
             if self.kill_linger == 0 {
                 if let Some(next) = self.post_combat_screen.take() {
+                    self.enemy = None; // safe to clear now that linger frames are done
                     self.screen = next;
                 }
             }
@@ -1115,6 +1116,7 @@ impl GameState for State {
             AppScreen::Crafting         => self.draw_crafting(ctx),
             AppScreen::CharacterSheet   => self.draw_character_sheet(ctx),
             AppScreen::BodyChart        => self.draw_body_chart(ctx),
+            AppScreen::PassiveTree      => self.draw_passive_tree(ctx),
             AppScreen::GameOver         => self.draw_game_over(ctx),
             AppScreen::Victory          => self.draw_victory(ctx),
             AppScreen::Scoreboard       => self.draw_scoreboard(ctx),
@@ -1663,8 +1665,8 @@ impl State {
             ctx.print_color(2, y, gld, bg, "[ D ] Descend to next floor  ▼");
         }
         draw_separator(ctx, 1, 43, 77, &t);
-        ctx.print_color(2, 44, dim, bg, "[×]=Fight [★]=Loot [$]=Shop [~]=Shrine [!]=Trap [^]=Portal [⚒]=Craft [∞]=Rift");
-        ctx.print_color(2, 45, dim, bg, "Tip: Press [C] to manage passives — unspent points boost your stats automatically");
+        ctx.print_color(2, 44, dim, bg, "[×]=Fight  [★]=Loot  [$]=Shop  [~]=Shrine  [!]=Trap  [^]=Portal  [⚒]=Craft");
+        ctx.print_color(2, 45, dim, bg, "Tip: [C] = Sheet+Passives  [B] = Body HP  [N] = Spend skill points");
     }
 
     // ── ROOM VIEW ─────────────────────────────────────────────────────────────
@@ -1883,19 +1885,44 @@ impl State {
             }
         }
 
-        // ── Combat log ────────────────────────────────────────────────────────
-        // Panel: y=33, h=16 → bottom border at y=48 (fits inside outer 49-row panel)
-        // Inner rows: y=35 to y=47 = 13 usable lines
+        // ── Combat log + Chaos trace ───────────────────────────────────────────
+        // Panel inner: y=35 to y=47.  Top 3 rows = chaos engine trace. Bottom 10 = log.
         draw_subpanel(ctx, 1, 33, 77, 16, "CHAOS LOG", &t);
-        let log_start = self.combat_log.len().saturating_sub(13);
+
+        // Chaos engine trace (always shown at top of panel)
+        if let Some(ref roll) = self.last_roll {
+            let result_label = if roll.is_critical()    { "CRITICAL" }
+                               else if roll.final_value > 0.0 { "SUCCESS" }
+                               else if roll.is_catastrophe()  { "CATASTROPHE" }
+                               else { "FAILURE" };
+            let result_col = if roll.is_critical()      { gld }
+                             else if roll.final_value > 0.0  { suc }
+                             else if roll.is_catastrophe()   { RGB::from_u8(255, 0, 100) }
+                             else { dng };
+            // Row 1: chain of engines as arrows
+            let chain_str: String = roll.chain.iter()
+                .map(|s| format!("{}({:+.2})", &s.engine_name.chars().take(6).collect::<String>(), s.output))
+                .collect::<Vec<_>>().join(" → ");
+            ctx.print_color(3, 35, dim, bg, &format!("chain: {}", chain_str.chars().take(68).collect::<String>()));
+            // Row 2: result bar + verdict
+            let bar_filled = ((roll.final_value + 1.0) / 2.0 * 30.0).round() as usize;
+            let bar: String = "█".repeat(bar_filled.min(30)) + &"░".repeat(30usize.saturating_sub(bar_filled));
+            ctx.print_color(3, 36, dim, bg, &format!("[{}]", bar));
+            ctx.print_color(36, 36, result_col, bg, &format!("{:+.3}  {}", roll.final_value, result_label));
+        } else {
+            ctx.print_color(3, 35, dim, bg, "No chaos roll yet — make your first move.");
+        }
+        draw_separator(ctx, 2, 37, 75, &t);
+
+        // Log entries below chaos trace (10 rows: y=38 to y=47)
+        let log_start = self.combat_log.len().saturating_sub(10);
         for (i, line) in self.combat_log[log_start..].iter().enumerate() {
-            if i >= 13 { break; }
+            if i >= 10 { break; }
             let fg = if line.contains("CRIT") || line.contains("BOSS") || line.contains("☠") { dng }
                      else if line.contains("Victory") || line.contains("LEVEL") { gld }
                      else if line.contains("heal") || line.contains('+') { suc }
-                     else if line.starts_with("  ") { dim } // engine trace
                      else { RGB::from_u8(t.primary.0, t.primary.1, t.primary.2) };
-            ctx.print_color(3, 35 + i as i32, fg, bg, &line.chars().take(74).collect::<String>());
+            ctx.print_color(3, 38 + i as i32, fg, bg, &line.chars().take(74).collect::<String>());
         }
 
         // ── Visual effects (drawn on top of panels) ───────────────────────────
@@ -2256,9 +2283,156 @@ impl State {
         }
         let node_count = p.allocated_nodes.len();
         ctx.print_color(3, 45, dim, bg, &format!("{} nodes allocated  |  class: {}", node_count, p.class.passive_name()));
-        print_hint(ctx, 3, 46, "[N]", " Auto-allocate  ", &t);
-        print_hint(ctx, 22, 46, "[B]", " Body Chart  ", &t);
-        print_hint(ctx, 38, 46, "[Esc]", " Back to floor", &t);
+        print_hint(ctx, 3, 46, "[N]", " Auto-alloc  ", &t);
+        print_hint(ctx, 20, 46, "[P]", " Full Tree  ", &t);
+        print_hint(ctx, 36, 46, "[B]", " Body  ", &t);
+        print_hint(ctx, 47, 46, "[Esc]", " Back", &t);
+    }
+
+    // ── PASSIVE TREE ──────────────────────────────────────────────────────────
+
+    fn draw_passive_tree(&mut self, ctx: &mut BTerm) {
+        use chaos_rpg_core::passive_tree::{nodes, NodeType};
+
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+        let mna = RGB::from_u8(t.mana.0,   t.mana.1,   t.mana.2);
+
+        let p = match &self.player { Some(p) => p.clone(), None => { self.screen = AppScreen::FloorNav; return; } };
+        let allocated_set: std::collections::HashSet<u32> = p.allocated_nodes.iter().cloned().collect();
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 79, 49, "PASSIVE TREE", &t);
+
+        // Header bar
+        let sp = p.skill_points;
+        let sp_col = if sp > 0 { gld } else { dim };
+        let header = format!("{} — {} pts available — {} nodes allocated",
+            p.class.name(), sp, allocated_set.len());
+        ctx.print_color(2, 1, hd, bg, &header.chars().take(76).collect::<String>());
+        if sp > 0 {
+            let pulse = (self.frame / 12) % 2 == 0;
+            let pc = if pulse { gld } else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+10, 10) };
+            ctx.print_color(60, 1, pc, bg, &format!("[N] Spend {} pts", sp));
+        }
+        draw_separator(ctx, 1, 2, 77, &t);
+
+        // Build node list: allocated first, then available, then locked
+        let all_nodes = nodes();
+        // Filter to nodes that belong to player's class or are universal
+        let class_nodes: Vec<&chaos_rpg_core::passive_tree::TreeNode> = all_nodes.iter()
+            .filter(|n| n.class_start == Some(p.class) || n.class_start.is_none())
+            .collect();
+
+        // Categorize
+        let mut allocated_nodes: Vec<&chaos_rpg_core::passive_tree::TreeNode> = Vec::new();
+        let mut available_nodes: Vec<&chaos_rpg_core::passive_tree::TreeNode> = Vec::new();
+        let mut locked_nodes:    Vec<&chaos_rpg_core::passive_tree::TreeNode> = Vec::new();
+
+        // Build temporary PlayerPassives to check can_allocate
+        use chaos_rpg_core::passive_tree::PlayerPassives;
+        let tmp_passives = PlayerPassives {
+            allocated: p.allocated_nodes.iter().map(|&id| id as u16).collect(),
+            points: p.skill_points,
+            ..Default::default()
+        };
+
+        for node in &class_nodes {
+            if allocated_set.contains(&(node.id as u32)) {
+                allocated_nodes.push(node);
+            } else if tmp_passives.can_allocate(node.id) {
+                available_nodes.push(node);
+            } else {
+                locked_nodes.push(node);
+            }
+        }
+
+        // Combine: available first (actionable), then allocated, then locked
+        let mut display: Vec<(u8, &chaos_rpg_core::passive_tree::TreeNode)> = Vec::new(); // 0=avail,1=alloc,2=locked
+        for n in &available_nodes { display.push((0, n)); }
+        for n in &allocated_nodes { display.push((1, n)); }
+        for n in &locked_nodes    { display.push((2, n)); }
+
+        // Clamp scroll
+        let rows_per_page = 38usize;
+        let max_scroll = display.len().saturating_sub(rows_per_page);
+        if self.passive_scroll > max_scroll { self.passive_scroll = max_scroll; }
+
+        // Section separators
+        let avail_count = available_nodes.len();
+        let alloc_count = allocated_nodes.len();
+
+        // Column headers
+        ctx.print_color(2,  3, ac,  bg, "Status");
+        ctx.print_color(11, 3, ac,  bg, "Node Name");
+        ctx.print_color(36, 3, ac,  bg, "Type");
+        ctx.print_color(51, 3, ac,  bg, "Effect");
+        draw_separator(ctx, 1, 4, 77, &t);
+
+        let visible = &display[self.passive_scroll..display.len().min(self.passive_scroll + rows_per_page)];
+        for (i, (cat, node)) in visible.iter().enumerate() {
+            let y = 5 + i as i32;
+
+            // Section header rows
+            let global_idx = self.passive_scroll + i;
+            if global_idx == 0 && avail_count > 0 {
+                ctx.print_color(2, y, suc, bg, &format!("-- AVAILABLE TO ALLOCATE ({}) --", avail_count));
+                continue;
+            }
+            if global_idx == avail_count && alloc_count > 0 {
+                ctx.print_color(2, y, mna, bg, &format!("-- ALLOCATED ({}) --", alloc_count));
+                continue;
+            }
+            if global_idx == avail_count + alloc_count {
+                ctx.print_color(2, y, dim, bg, &format!("-- LOCKED ({}) — allocate prerequisites first --", locked_nodes.len()));
+                continue;
+            }
+
+            let (status_str, status_col) = match cat {
+                0 => ("  [open]", suc),
+                1 => ("  [done]", mna),
+                _ => ("  [lock]", dim),
+            };
+            ctx.print_color(2, y, status_col, bg, status_str);
+
+            // Node name (truncated to 22 chars)
+            let name_col = match cat { 0 => hd, 1 => mna, _ => dim };
+            ctx.print_color(11, y, name_col, bg, &node.name.chars().take(22).collect::<String>());
+
+            // Type tag + color
+            let (type_tag, type_col) = match &node.node_type {
+                NodeType::Stat { stat, min, max } => (format!("Stat/{}", stat.chars().take(5).collect::<String>()), ac),
+                NodeType::Notable { stat, bonus, .. } => (format!("Notable {:+}", bonus), gld),
+                NodeType::Keystone { .. } => ("KEYSTONE".to_string(), dng),
+                NodeType::Engine { engine, .. } => (format!("Engine/{}", engine.chars().take(6).collect::<String>()), RGB::from_u8(180, 80, 255)),
+                NodeType::Synergy { cluster, .. } => (format!("Syn #{}", cluster), RGB::from_u8(100, 200, 180)),
+            };
+            ctx.print_color(36, y, type_col, bg, &type_tag.chars().take(13).collect::<String>());
+
+            // Short desc
+            ctx.print_color(51, y, dim, bg, &node.short_desc.chars().take(26).collect::<String>());
+        }
+
+        // Scroll indicator
+        if display.len() > rows_per_page {
+            let scroll_pct = self.passive_scroll * 100 / display.len().max(1);
+            ctx.print_color(2, 44, dim, bg, &format!("Showing {}-{} of {}  ({}% scrolled)",
+                self.passive_scroll + 1,
+                (self.passive_scroll + rows_per_page).min(display.len()),
+                display.len(), scroll_pct));
+        }
+
+        draw_separator(ctx, 1, 45, 77, &t);
+        print_hint(ctx, 2,  46, "[Up/Dn]", " Scroll  ", &t);
+        print_hint(ctx, 22, 46, "[PgUp/PgDn]", " Page  ", &t);
+        if sp > 0 { print_hint(ctx, 46, 46, "[N]", " Auto-allocate all points  ", &t); }
+        print_hint(ctx, 2,  47, "[Esc/C]", " Back to Sheet", &t);
     }
 
     // ── BODY CHART ────────────────────────────────────────────────────────────
@@ -2944,8 +3118,35 @@ impl State {
                 VirtualKeyCode::Escape | VirtualKeyCode::C | VirtualKeyCode::Return => {
                     self.screen = AppScreen::FloorNav;
                 }
-                VirtualKeyCode::B => {
-                    self.screen = AppScreen::BodyChart;
+                VirtualKeyCode::B => { self.screen = AppScreen::BodyChart; }
+                VirtualKeyCode::P => { self.screen = AppScreen::PassiveTree; }
+                VirtualKeyCode::N => {
+                    let seed = self.floor_seed.wrapping_add(self.frame);
+                    if let Some(ref mut p) = self.player {
+                        if p.skill_points > 0 {
+                            let msgs = p.auto_allocate_passives(seed);
+                            for m in msgs { self.combat_log.push(m); }
+                        }
+                    }
+                }
+                _ => {}
+            },
+
+            AppScreen::PassiveTree => match key {
+                VirtualKeyCode::Escape | VirtualKeyCode::C => { self.screen = AppScreen::CharacterSheet; }
+                VirtualKeyCode::Up   => { self.passive_scroll = self.passive_scroll.saturating_sub(1); }
+                VirtualKeyCode::Down => { self.passive_scroll += 1; }
+                VirtualKeyCode::PageUp   => { self.passive_scroll = self.passive_scroll.saturating_sub(10); }
+                VirtualKeyCode::PageDown => { self.passive_scroll += 10; }
+                VirtualKeyCode::N => {
+                    let seed = self.floor_seed.wrapping_add(self.frame);
+                    if let Some(ref mut p) = self.player {
+                        if p.skill_points > 0 {
+                            let msgs = p.auto_allocate_passives(seed);
+                            for m in msgs { self.combat_log.push(m); }
+                            self.passive_scroll = 0;
+                        }
+                    }
                 }
                 _ => {}
             },
