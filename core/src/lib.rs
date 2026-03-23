@@ -60,3 +60,5 @@ pub mod relationship_system;
 pub mod trap_system;
 pub mod time_system;
 pub mod crafting_system;
+pub mod bestiary;
+pub mod quest_system;
