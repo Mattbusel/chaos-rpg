@@ -368,10 +368,10 @@ mod tests {
         let mut enemy = generate_enemy(1, 42);
         let mut state = CombatState::new(999);
 
-        let initial_hp = enemy.current_hp;
+        let initial_hp = enemy.hp;
         let (events, _) = resolve_action(&mut player, &mut enemy, CombatAction::Attack, &mut state);
         assert!(events.iter().any(|e| matches!(e, CombatEvent::PlayerAttack { .. })));
-        assert!(enemy.current_hp < initial_hp || enemy.current_hp == 0);
+        assert!(enemy.hp < initial_hp || enemy.hp == 0);
     }
 
     #[test]
