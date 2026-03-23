@@ -62,3 +62,4 @@ pub mod time_system;
 pub mod crafting_system;
 pub mod bestiary;
 pub mod quest_system;
+pub mod combat_system;

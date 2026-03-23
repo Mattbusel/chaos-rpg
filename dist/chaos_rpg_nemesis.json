@@ -1,0 +1,10 @@
+{
+  "enemy_name": "Collatz Shade",
+  "floor_killed_at": 12,
+  "times_killed_player": 1,
+  "killer_base_damage": 10,
+  "hp_bonus_pct": 30,
+  "damage_bonus_pct": 25,
+  "kill_method": "physical",
+  "killed_player_class": "Necromancer"
+}

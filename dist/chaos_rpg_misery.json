@@ -1,5 +1,17 @@
 [
   {
+    "name": "Grignus",
+    "class": "Necromancer",
+    "misery_index": 2871.0,
+    "floor_reached": 12,
+    "power_tier": "MYTHICAL",
+    "spite_spent": 0.0,
+    "defiance_rolls": 0,
+    "cause_of_death": "Killed by Collatz Shade",
+    "misery_score": 34452,
+    "timestamp": "2026-03-23 09:59Z"
+  },
+  {
     "name": "Hero",
     "class": "Berserker",
     "misery_index": 755.0,
