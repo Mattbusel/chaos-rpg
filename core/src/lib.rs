@@ -4,6 +4,8 @@
 //! enemies, world generation, scoreboards, and the nemesis system.
 //! Rendering is the job of the frontend crates (terminal, graphical, web).
 
+pub mod audio_events;
+pub mod audio_synth;
 pub mod achievement_system;
 pub mod io_util;
 pub mod atlas;
@@ -42,3 +44,5 @@ pub mod skill_tree_v2;
 pub mod inventory_system;
 pub mod combat_simulator;
 pub mod npc_generator;
+pub mod party_system;
+pub mod class_system;
