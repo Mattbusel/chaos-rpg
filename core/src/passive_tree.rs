@@ -752,6 +752,72 @@ impl PlayerPassives {
         self.cursor
     }
 
+    /// Greedily spend all available points, prioritising nodes that match the
+    /// class's primary stats.  Returns one log line per allocation.
+    pub fn auto_allocate_all(&mut self, class: CharacterClass, seed: u64) -> Vec<String> {
+        // Primary-stat priority per class (first = most important)
+        let primary: &[&str] = match class {
+            CharacterClass::Mage        => &["mana",      "entropy"],
+            CharacterClass::Berserker   => &["force",     "vitality"],
+            CharacterClass::Ranger      => &["precision", "luck"],
+            CharacterClass::Thief       => &["cunning",   "luck"],
+            CharacterClass::Necromancer => &["vitality",  "mana"],
+            CharacterClass::Alchemist   => &["luck",      "mana"],
+            CharacterClass::Paladin     => &["vitality",  "force"],
+            CharacterClass::VoidWalker  => &["entropy",   "cunning"],
+        };
+
+        let mut messages = Vec::new();
+        let mut alloc_seed = seed;
+
+        while self.points > 0 {
+            let reachable: Vec<u16> = nodes()
+                .iter()
+                .filter(|n| !self.allocated.contains(&n.id) && self.can_allocate(n.id))
+                .map(|n| n.id)
+                .collect();
+
+            if reachable.is_empty() {
+                break;
+            }
+
+            // Score each candidate: higher = better pick
+            let best = reachable
+                .iter()
+                .max_by_key(|&&nid| {
+                    let node = nodes().iter().find(|n| n.id == nid).unwrap();
+                    match &node.node_type {
+                        NodeType::Notable { stat, bonus, .. } => {
+                            let pri = primary.iter().position(|s| *s == *stat).map(|p| 2 - p as i32).unwrap_or(0);
+                            2000 + pri * 500 + *bonus as i32
+                        }
+                        NodeType::Stat { stat, min, max } => {
+                            let pri = primary.iter().position(|s| *s == *stat).map(|p| 2 - p as i32).unwrap_or(0);
+                            1000 + pri * 300 + (*min + *max) as i32 / 2
+                        }
+                        NodeType::Engine { .. }  => 300,
+                        NodeType::Synergy { .. } => 200,
+                        NodeType::Keystone { .. } => 50, // last resort — trade-offs unknown
+                    }
+                })
+                .copied();
+
+            if let Some(nid) = best {
+                alloc_seed = alloc_seed
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(nid as u64 * 777);
+                if let Some(msg) = self.allocate(nid, alloc_seed) {
+                    messages.push(msg);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        messages
+    }
+
     pub fn display_map(&self, class: CharacterClass) -> Vec<String> {
         const RESET: &str = "\x1b[0m";
         const DIM: &str = "\x1b[2m";

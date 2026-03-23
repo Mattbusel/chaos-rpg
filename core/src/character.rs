@@ -1108,6 +1108,53 @@ impl Character {
         self.known_spells.push(spell);
     }
 
+    /// Spend all available passive skill points automatically, prioritising
+    /// nodes that match the class's primary stats.
+    /// Returns one log line per allocated node.
+    pub fn auto_allocate_passives(&mut self, seed: u64) -> Vec<String> {
+        use crate::passive_tree::{nodes, NodeType, PlayerPassives};
+
+        if self.skill_points == 0 {
+            return vec!["No skill points to spend.".to_string()];
+        }
+
+        let mut passives = PlayerPassives {
+            allocated:           self.allocated_nodes.iter().map(|&id| id as u16).collect(),
+            stat_bonuses:        std::collections::HashMap::new(),
+            points:              self.skill_points,
+            keystones:           std::collections::HashSet::new(),
+            completed_synergies: std::collections::HashSet::new(),
+            cursor:              self.allocated_nodes.first().map(|&id| id as u16).unwrap_or(0),
+        };
+
+        let messages = passives.auto_allocate_all(self.class, seed);
+
+        // Apply all stat gains to the live character
+        for (&nid, &value) in &passives.stat_bonuses {
+            if let Some(node) = nodes().iter().find(|n| n.id == nid) {
+                match &node.node_type {
+                    NodeType::Stat { stat, .. } | NodeType::Notable { stat, .. } => {
+                        match *stat {
+                            "vitality"  => { self.stats.vitality  += value; self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1); }
+                            "force"     => { self.stats.force     += value; self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1); }
+                            "mana"      => self.stats.mana      += value,
+                            "cunning"   => self.stats.cunning   += value,
+                            "precision" => self.stats.precision += value,
+                            "entropy"   => self.stats.entropy   += value,
+                            "luck"      => self.stats.luck      += value,
+                            _ => {}
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        self.allocated_nodes = passives.allocated.into_iter().map(|id| id as u32).collect();
+        self.skill_points    = passives.points;
+        messages
+    }
+
     pub fn use_item(&mut self, idx: usize) -> Option<crate::items::Item> {
         if idx < self.inventory.len() {
             self.items_used += 1;

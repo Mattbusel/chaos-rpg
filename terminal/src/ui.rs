@@ -1446,13 +1446,38 @@ pub fn show_passive_tree_ui(player: &mut Character, seed: u64) {
             );
         }
         println!();
-        println!("  {}[0] Done{}", DIM, RESET);
+        println!("  {}[0] Done  [A] Auto-allocate all{}", DIM, RESET);
         println!();
 
         let input = prompt("  Node ID > ");
         let trimmed = input.trim();
         if trimmed == "0" || trimmed.eq_ignore_ascii_case("q") {
             break;
+        }
+
+        // Auto-allocate: spend all points using the class priority heuristic
+        if trimmed.eq_ignore_ascii_case("a") {
+            let prev_bonuses = passives.stat_bonuses.clone();
+            let msgs = passives.auto_allocate_all(player.class, seed);
+            if msgs.is_empty() {
+                println!("  {}Nothing to allocate.{}", DIM, RESET);
+            } else {
+                for msg in &msgs {
+                    println!("  {}{}{}", t_success(), msg, RESET);
+                }
+                // Apply all newly gained stat bonuses
+                for (&nid, &value) in &passives.stat_bonuses {
+                    if !prev_bonuses.contains_key(&nid) {
+                        if let Some(node) = nodes().iter().find(|n| n.id == nid) {
+                            if let NodeType::Stat { stat, .. } | NodeType::Notable { stat, .. } = &node.node_type {
+                                passive_apply_stat(player, stat, value);
+                            }
+                        }
+                    }
+                }
+            }
+            press_enter(&format!("  {}[ENTER]...{}", DIM, RESET));
+            continue;
         }
 
         if let Ok(node_id) = trimmed.parse::<u16>() {

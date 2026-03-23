@@ -140,6 +140,9 @@ struct State {
     audio: Option<AudioSystem>,
     // visual theme
     theme_idx: usize,
+    // auto-play mode
+    auto_mode: bool,
+    auto_last_action: u64, // frame when last auto-action fired
 }
 
 impl State {
@@ -169,6 +172,8 @@ impl State {
             craft_message: String::new(),
             audio: AudioSystem::try_new(),
             theme_idx: 0,
+            auto_mode: false,
+            auto_last_action: 0,
         }
     }
 
@@ -932,6 +937,10 @@ impl GameState for State {
         ctx.cls();
         self.frame += 1;
 
+        if self.auto_mode {
+            self.tick_auto_play(ctx);
+        }
+
         match self.screen.clone() {
             AppScreen::Title            => self.draw_title(ctx),
             AppScreen::ModeSelect       => self.draw_mode_select(ctx),
@@ -1216,7 +1225,12 @@ impl State {
             pfloor, pname, plv, pclass);
         ctx.print_color(2, 1, hd, bg, &floor_str);
 
-        // Mode badge (right-aligned)
+        // Mode badge (right-aligned), AUTO badge if active
+        if self.auto_mode {
+            let pulse = (self.frame / 15) % 2 == 0;
+            let auto_c = if pulse { RGB::from_u8(80, 220, 80) } else { RGB::from_u8(40, 140, 40) };
+            ctx.print_color(65, 1, auto_c, bg, "◆ AUTO");
+        }
         let mode_str = match self.game_mode {
             GameMode::Story    => format!("STORY {}/{}", pfloor, 10),
             GameMode::Infinite => "∞ INFINITE".to_string(),
@@ -1405,12 +1419,18 @@ impl State {
         // ── Actions bar ───────────────────────────────────────────────────────
         draw_separator(ctx, 1, 38, 77, &t);
         let y = 39i32;
-        print_hint(ctx, 2, y,   "E",     " Enter Room  ", &t);
-        print_hint(ctx, 20, y,  "C",     " Character   ", &t);
-        print_hint(ctx, 36, y,  "B",     " Body Chart  ", &t);
-        print_hint(ctx, 52, y,  "S",     " Scores  ", &t);
-        print_hint(ctx, 64, y,  "Q",     " Quit", &t);
-        if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
+        print_hint(ctx, 2, y,   "E",  " Enter  ", &t);
+        print_hint(ctx, 15, y,  "C",  " Sheet  ", &t);
+        print_hint(ctx, 27, y,  "B",  " Body   ", &t);
+        print_hint(ctx, 39, y,  "Z",  " Auto   ", &t);
+        print_hint(ctx, 51, y,  "S",  " Scores ", &t);
+        print_hint(ctx, 63, y,  "Q",  " Quit", &t);
+        // Auto mode indicator text on second line
+        if self.auto_mode {
+            let auto_c = (80u8, 220u8, 80u8);
+            ctx.print_color(2, y + 1, RGB::from_u8(auto_c.0, auto_c.1, auto_c.2), bg,
+                "  AUTO PILOT ACTIVE — pauses at item rooms, shop, craft  [Z] to stop");
+        } else if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
             ctx.print_color(2, y + 1, gld, bg, "  [ D ] Descend to next floor  ▼");
         }
         draw_separator(ctx, 1, 43, 77, &t);
@@ -2078,6 +2098,121 @@ impl State {
 // ─── INPUT HANDLER ────────────────────────────────────────────────────────────
 
 impl State {
+    // ── AUTO-PLAY TICK ─────────────────────────────────────────────────────────
+    //
+    // Fires once per AUTO_DELAY frames.  Handles floor navigation, combat AI,
+    // and non-item room resolution automatically.  Pauses on:
+    //   • Item pickup prompts (the player still decides what to keep)
+    //   • Shop / Crafting screens (player manages gold/items)
+    //   • GameOver / Victory (nothing to advance)
+    //
+    fn tick_auto_play(&mut self, _ctx: &mut BTerm) {
+        const AUTO_DELAY: u64 = 20; // ~0.33 s at 60 fps — readable but fast
+        if self.frame.saturating_sub(self.auto_last_action) < AUTO_DELAY {
+            return;
+        }
+
+        match self.screen.clone() {
+            // ── Floor navigation ─────────────────────────────────────────────
+            AppScreen::FloorNav => {
+                // Auto-allocate any pending skill points first
+                if self.player.as_ref().map(|p| p.skill_points > 0).unwrap_or(false) {
+                    let seed = self.floor_seed.wrapping_add(self.frame);
+                    if let Some(ref mut p) = self.player {
+                        let msgs = p.auto_allocate_passives(seed);
+                        for m in msgs { self.push_log(m); }
+                    }
+                }
+
+                if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
+                    // All rooms done — descend
+                    if self.floor_num >= self.max_floor {
+                        self.save_score_now();
+                        self.screen = AppScreen::Victory;
+                    } else {
+                        self.floor_num += 1;
+                        self.generate_floor_for_current();
+                    }
+                } else {
+                    self.enter_current_room();
+                }
+                self.auto_last_action = self.frame;
+            }
+
+            // ── Combat ───────────────────────────────────────────────────────
+            AppScreen::Combat => {
+                let action = self.auto_combat_action();
+                self.resolve_combat_action(action);
+                self.auto_last_action = self.frame;
+            }
+
+            // ── Non-item room events — auto-accept ───────────────────────────
+            AppScreen::RoomView => {
+                let has_item = self.room_event.pending_item.is_some();
+                if has_item {
+                    // Pause so the player can decide
+                    return;
+                }
+                // Portal: skip through automatically (risky but exciting)
+                if self.room_event.portal_available {
+                    self.room_event.portal_available = false;
+                    if self.floor_num >= self.max_floor {
+                        self.save_score_now();
+                        self.screen = AppScreen::Victory;
+                    } else {
+                        self.floor_num += 1;
+                        self.generate_floor_for_current();
+                        self.screen = AppScreen::FloorNav;
+                    }
+                } else {
+                    // Auto-accept all other room events (shrine bless, trap damage, etc.)
+                    self.room_event.pending_spell = None;
+                    self.advance_floor_room();
+                    if self.screen != AppScreen::GameOver && self.screen != AppScreen::Victory {
+                        self.screen = AppScreen::FloorNav;
+                    }
+                }
+                self.auto_last_action = self.frame;
+            }
+
+            // Pause on screens where the player makes deliberate choices
+            AppScreen::Shop
+            | AppScreen::Crafting
+            | AppScreen::GameOver
+            | AppScreen::Victory => {}
+
+            _ => {}
+        }
+    }
+
+    /// Choose a combat action using a simple HP-aware strategy:
+    ///   HP < 25%          → Defend
+    ///   MP > 30% & spells → cast best available spell
+    ///   otherwise         → Attack
+    fn auto_combat_action(&self) -> CombatAction {
+        let (hp, max_hp, mp, max_mp, spell_count) = match &self.player {
+            Some(p) => (
+                p.current_hp, p.max_hp,
+                self.current_mana, self.max_mana(),
+                p.known_spells.len(),
+            ),
+            None => return CombatAction::Attack,
+        };
+
+        let hp_pct = hp as f32 / max_hp.max(1) as f32;
+        if hp_pct < 0.25 {
+            return CombatAction::Defend;
+        }
+
+        // Use a spell when mana is plentiful
+        let mp_pct = mp as f32 / max_mp.max(1) as f32;
+        if spell_count > 0 && mp_pct > 0.30 {
+            return CombatAction::UseSpell(0);
+        }
+
+        CombatAction::Attack
+    }
+
     fn handle_input(&mut self, ctx: &mut BTerm) {
         let key = match ctx.key { Some(k) => k, None => return };
 
@@ -2152,6 +2287,23 @@ impl State {
                 }
                 VirtualKeyCode::B => {
                     self.screen = AppScreen::BodyChart;
+                }
+                VirtualKeyCode::Z => {
+                    self.auto_mode = !self.auto_mode;
+                    self.auto_last_action = 0;
+                    if self.auto_mode {
+                        // Auto-alloc any pending points immediately on enabling
+                        let seed = self.floor_seed.wrapping_add(self.frame);
+                        if let Some(ref mut p) = self.player {
+                            if p.skill_points > 0 {
+                                let msgs = p.auto_allocate_passives(seed);
+                                for m in msgs { self.push_log(m); }
+                            }
+                        }
+                        self.push_log("AUTO PILOT ON — pauses for item pickups and shop/craft".to_string());
+                    } else {
+                        self.push_log("Auto pilot OFF.".to_string());
+                    }
                 }
                 VirtualKeyCode::S => self.screen = AppScreen::Scoreboard,
                 VirtualKeyCode::Q | VirtualKeyCode::Escape => {
