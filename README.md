@@ -55,8 +55,10 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 | Terminal (TUI) | Windows | `chaos-rpg-terminal-windows.exe` |
 | Graphical | Linux | `chaos-rpg-graphical-linux` |
 | Terminal | Linux | `chaos-rpg-terminal-linux` |
-| Graphical | macOS | `chaos-rpg-graphical-macos` |
-| Terminal | macOS | `chaos-rpg-terminal-macos` |
+| Graphical | macOS x64 | `chaos-rpg-graphical-macos` |
+| Terminal | macOS x64 | `chaos-rpg-terminal-macos` |
+| Graphical | macOS ARM64 (M1/M2/M3) | `chaos-rpg-graphical-macos-arm64` |
+| Terminal | macOS ARM64 (M1/M2/M3) | `chaos-rpg-terminal-macos-arm64` |
 
 4. Run it:
    - **Windows:** Double-click the `.exe`
@@ -133,6 +135,8 @@ Every attack, heal, flee attempt, loot roll, enemy stat, and world event uses th
 
 **Corruption:** Each kill adds 1 corruption stack. Every 50 stacks, the pipeline's core parameters shift permanently - σ drifts, Zeta's evaluation point moves. By stack 400+, you are running a completely different mathematical system than the one you started with.
 
+**Chaos Engine Visualizer:** Press **`[V]`** during combat to open a live overlay showing the full engine chain - engine name, raw input, output, delta, and a magnitude bar for each step in the current roll.
+
 ---
 
 ## Two Frontends, One Game
@@ -168,7 +172,19 @@ Both frontends share the same core library (`chaos-rpg-core`). All game logic, s
 |------|-------------|
 | **Story** | 10 floors, structured narrative, final boss. Recommended for new players. |
 | **Infinite** | Floors never end. Score goes on the leaderboard. Enemies scale exponentially. |
-| **Daily Seed** | Same dungeon for everyone today. Resets at UTC midnight. |
+| **Daily Seed** | Same dungeon for everyone today. Resets at UTC midnight. Score submits to the global leaderboard. |
+
+### Title Screen Keys
+
+| Key | Opens |
+|-----|-------|
+| `[N]` | New game |
+| `[C]` | Continue saved run |
+| `[T]` | Cycle color theme |
+| `[?]` | Tutorial (5 slides) |
+| `[J]` | Achievements (175 total) |
+| `[H]` | Run history |
+| `[D]` | Daily leaderboard |
 
 ### Character Creation
 
@@ -219,12 +235,13 @@ After character creation, choose one of three randomly offered permanent bonuses
 | `D` | Defend - reduce incoming damage this round |
 | `T` | Taunt - force enemy to attack you (some boss interactions require this) |
 | `F` | Flee - luck+cunning roll to escape |
-| `1–8` | Cast spell - costs mana, chaos-powered |
-| `Q–O` | Use item from inventory |
+| `1-8` | Cast spell - costs mana, chaos-powered |
+| `Q-O` | Use item from inventory |
+| `V` | Toggle Chaos Engine Visualizer overlay |
 
 ### Power Tiers
 
-The sum of all 7 stats determines your Power Tier, displayed next to your name. 40 tiers from THE VOID to ΩMEGA. ΩMEGA-tier characters render with animated rainbow text. Negative-tier characters have glitch, static, and inversion effects on their display.
+The sum of all 7 stats determines your Power Tier, displayed next to your name. 40 tiers from THE VOID to OMEGA. OMEGA-tier characters render with animated rainbow text. Negative-tier characters have glitch, static, and inversion effects on their display.
 
 ### The Misery System
 
@@ -237,7 +254,7 @@ Suffering accumulates into the Misery Index. The worse things go, the more power
 - **50,000**: Transcendent Misery. Suffering becomes direct power.
 - **100,000**: Published Failure. Immortalized in the Hall of Misery.
 
-**Underdog Multiplier:** Negative total stats give a logarithmic XP and score bonus. A character at -200 total stats earns roughly ×2.3 XP per kill.
+**Underdog Multiplier:** Negative total stats give a logarithmic XP and score bonus. A character at -200 total stats earns roughly x2.3 XP per kill.
 
 **Spite Actions:** Spend Spite points on revenge abilities - Spite Strike (+50% damage), Bitter Endurance (absorb one hit), Chaos Spite (invert an enemy roll).
 
@@ -248,7 +265,7 @@ Suffering accumulates into the Misery Index. The worse things go, the more power
 ### The Nemesis System
 
 If you flee from an enemy or barely survive a fight, that enemy may be promoted to Nemesis:
-- Gains 50–200% HP bonus
+- Gains 50-200% HP bonus
 - Gains +25% damage
 - Gains a unique ability based on the encounter (fire kills → Immolation, spell kills → Spell Reflection)
 - Returns on a later floor titled "Slayer of [your name]"
@@ -277,24 +294,51 @@ Full boss strategies: [docs/BOSSES.md](docs/BOSSES.md)
 
 ### Crafting
 
-At Crafting Bench rooms, six operations are available:
+At Crafting Bench rooms, eight operations are available:
 
-| Operation | Effect |
-|-----------|--------|
-| **Reforge** | Chaos-reroll all stat modifiers from scratch |
-| **Augment** | Add one new chaos-rolled modifier |
-| **Annul** | Remove one random modifier |
-| **Corrupt** | Unpredictable effect - can double values, flip them, add sockets, change item type |
-| **Fuse** | Double all values and upgrade rarity tier |
-| **EngineLock** | Lock a chaos engine into the item (costs gold, scales with floor) |
+| Key | Operation | Effect |
+|-----|-----------|--------|
+| `1` | **Reforge** | Chaos-reroll all stat modifiers from scratch |
+| `2` | **Augment** | Add one new chaos-rolled modifier |
+| `3` | **Annul** | Remove one random modifier |
+| `4` | **Corrupt** | Unpredictable effect - can double values, flip them, add sockets, change item type |
+| `5` | **Fuse** | Double all values and upgrade rarity tier |
+| `6` | **EngineLock** | Lock a chaos engine into the item (costs gold, scales with floor) |
+| `7` | **Shatter** | Destroy the item and scatter its modifiers as transferable shards |
+| `8` | **Imbue** | Implant a shard from a destroyed item into the current item |
 
-### Factions and World Map
+**Item Filter:** Press **`/`** in the item selection screen to type-ahead filter by name or rarity. Clear the filter with `Escape`.
 
-The world spans multiple regions under faction control. Reputation with factions affects shop prices, NPC dialogue, enemy hostility, and available quests.
+**Item Charges:** Consumable items show a charge count `[Nc]`. Stacking them preserves charges on the same inventory slot.
 
-### Party System
+### Achievements
 
-Recruit NPCs as party members. Each has their own class, stats, and morale. Morale affects combat performance - lead poorly and they flee.
+175 achievements across 7 rarity tiers, tracked persistently across all runs. Press **`[J]`** on the title screen to view your progress.
+
+| Tier | Color | Examples |
+|------|-------|---------|
+| **Common** | Grey | Reach floor 5, deal first kill |
+| **Uncommon** | Green | Win on Hard, reach floor 15 |
+| **Rare** | Blue | Beat a Nemesis, win with negative stats |
+| **Epic** | Purple | Win on Chaos difficulty, floor 100 |
+| **Legendary** | Gold | Complete all class masteries |
+| **Mythic** | Red | Floor 500, 10,000 total kills |
+| **Omega** | Rainbow | Transcendent feats across the entire run history |
+
+Unlocked achievements display full name and description. Locked achievements show `???` until earned.
+
+### Run History
+
+Press **`[H]`** on the title screen to view a scrollable table of all past runs with class, score, floor, kills, game mode, and outcome.
+
+### Daily Leaderboard
+
+Press **`[D]`** on the title screen to view the daily leaderboard. Daily Seed mode uses the same dungeon for all players on a given UTC day. After completing a Daily Seed run, your score is submitted to the global leaderboard automatically.
+
+- Today's seed is shown at the top of the screen
+- Your personal best for today is shown below the seed
+- The global top 100 for today are listed by rank, name, class, floor, score, and kills
+- Press **`[R]`** to refresh the remote scores
 
 ### Audio
 
@@ -312,9 +356,41 @@ score = kills × floor × difficulty_multiplier × chaos_bonus × underdog_multi
 **Hall of Misery:** Separate leaderboard for `misery_index × floor × underdog_mult`
 
 **Legacy system (`~/.chaos_rpg/legacy.json`):**
-- 34 persistent achievements across all runs
+- 175 persistent achievements across all runs across 7 rarity tiers
 - Character graveyard with procedurally generated epitaphs
 - Hall of Misery historical records
+- Full run history with per-run statistics
+
+---
+
+## Configuration
+
+`chaos_config.toml` is read from the same folder as the executable on startup. If the file does not exist, defaults are used and the game generates an example file. All fields are optional.
+
+```toml
+[display]
+particle_speed_mult = 1.0    # 0.1..5.0  animation speed multiplier
+kill_linger_frames = 8       # frames enemy corpse stays on screen
+
+[gameplay]
+starting_gold_bonus = 0      # extra gold at run start
+difficulty_modifier = 1.0    # scales enemy HP and damage
+infinite_seed_override = ""  # force a specific seed string every run
+disable_hunger = false
+disable_nemesis = false
+disable_corruption = false
+extra_inventory_slots = 0    # 0..10
+xp_multiplier = 1.0
+
+[leaderboard]
+url = ""                     # Cloudflare Worker URL for global daily scores
+player_name = ""             # override your display name on the leaderboard
+submit_daily = true
+fetch_on_open = true
+
+[meta]
+hard_mode = false            # no config changes allowed mid-run
+```
 
 ---
 
@@ -322,15 +398,15 @@ score = kills × floor × difficulty_multiplier × chaos_bonus × underdog_multi
 
 | Icon | Room | What Happens |
 |------|------|-------------|
-| `[×]` | Combat | Enemy encounter. No free escape. |
-| `[★]` | Treasure | Free item - sometimes cursed. |
+| `[x]` | Combat | Enemy encounter. No free escape. |
+| `[*]` | Treasure | Free item - sometimes cursed. |
 | `[$]` | Shop | Buy items, spells, healing with gold. |
 | `[~]` | Shrine | Stat bonuses or healing. |
 | `[!]` | Trap | Unavoidable damage or debuff. |
 | `[B]` | Boss | Unique boss encounter. |
 | `[^]` | Portal | Skip to a later floor. Risk vs reward. |
-| `[∞]` | Chaos Rift | Pure chaos event. Anything can happen. |
-| `[⚒]` | Crafting | Modify items at the bench. |
+| `[8]` | Chaos Rift | Pure chaos event. Anything can happen. |
+| `[c]` | Crafting | Modify items at the bench. |
 
 ---
 
@@ -345,12 +421,17 @@ chaos-rpg/
 │       ├── chaos_pipeline.rs      Lorenz → Mandelbrot → Bifurcation chain
 │       ├── enemy.rs               enemy generation, floor scaling, floor abilities
 │       ├── bosses.rs              12 unique bosses with custom mechanics
-│       ├── items.rs               item system, rarities, stat modifiers
+│       ├── items.rs               item system, rarities, stat modifiers, charges
 │       ├── spells.rs              spell library, mana costs, damage formulas
 │       ├── power_tier.rs          40-tier power table with animated render effects
 │       ├── misery_system.rs       Misery Index, Spite, Defiance, Cosmic Joke
 │       ├── run_stats.rs           per-run statistics tracker and report card
 │       ├── legacy_system.rs       achievements, graveyard, Hall of Misery
+│       ├── achievement_system.rs  175 achievements, 7 rarity tiers, check hooks
+│       ├── achievements.rs        achievement definitions and unlock conditions
+│       ├── run_history.rs         scrollable per-run history log
+│       ├── chaos_config.rs        chaos_config.toml loader and defaults
+│       ├── daily_leaderboard.rs   local store + HTTP submit/fetch via ureq
 │       ├── passive_tree.rs        ~820-node passive skill tree
 │       ├── scoreboard.rs          score serialization, leaderboard logic
 │       ├── world.rs               floor generation, room type distribution
@@ -372,13 +453,17 @@ chaos-rpg/
 │       ├── renderer.rs            box drawing, bars, stat lines, minimap
 │       ├── theme.rs               5 color themes with lerp helpers
 │       ├── sprites.rs             ASCII art sprite library
-│       └── ui_overlay.rs          tooltip and banner helpers
+│       └── visual_config.rs       visual timing constants, FAST_MODE support
 │
 ├── audio/                     # chaos-rpg-audio - procedural audio (rodio)
 │   └── src/
 │       ├── lib.rs                 AudioSystem, event dispatch
 │       ├── synth.rs               oscillators, ADSR, filters
 │       └── events.rs              AudioEvent enum
+│
+├── server/                    # Cloudflare Worker - global daily leaderboard
+│   ├── worker.js                  KV-backed leaderboard: POST /submit, GET /scores
+│   └── wrangler.toml              deployment config (fill in KV namespace id)
 │
 └── docs/
     ├── GETTING_STARTED.md     New player guide
