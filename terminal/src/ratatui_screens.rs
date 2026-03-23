@@ -937,17 +937,25 @@ pub fn draw_character_sheet(f: &mut Frame, player: &Character, theme: ColorTheme
         CharacterClass::Necromancer => PORTRAIT_NECROMANCER,
         CharacterClass::Alchemist => PORTRAIT_ALCHEMIST,
         CharacterClass::Paladin => PORTRAIT_PALADIN,
-        CharacterClass::VoidWalker => PORTRAIT_VOIDWALKER,
+        CharacterClass::VoidWalker   => PORTRAIT_VOIDWALKER,
+        CharacterClass::Warlord      => PORTRAIT_BERSERKER,   // reuse similar
+        CharacterClass::Trickster    => PORTRAIT_THIEF,
+        CharacterClass::Runesmith    => PORTRAIT_PALADIN,
+        CharacterClass::Chronomancer => PORTRAIT_MAGE,
     };
     let class_color = match player.class {
-        CharacterClass::Mage => Color::Cyan,
-        CharacterClass::Berserker => Color::Red,
-        CharacterClass::Ranger => Color::Green,
-        CharacterClass::Thief => Color::DarkGray,
-        CharacterClass::Necromancer => Color::Magenta,
-        CharacterClass::Alchemist => Color::Yellow,
-        CharacterClass::Paladin => Color::LightYellow,
-        CharacterClass::VoidWalker => Color::LightMagenta,
+        CharacterClass::Mage         => Color::Cyan,
+        CharacterClass::Berserker    => Color::Red,
+        CharacterClass::Ranger       => Color::Green,
+        CharacterClass::Thief        => Color::DarkGray,
+        CharacterClass::Necromancer  => Color::Magenta,
+        CharacterClass::Alchemist    => Color::Yellow,
+        CharacterClass::Paladin      => Color::LightYellow,
+        CharacterClass::VoidWalker   => Color::LightMagenta,
+        CharacterClass::Warlord      => Color::Red,
+        CharacterClass::Trickster    => Color::LightGreen,
+        CharacterClass::Runesmith    => Color::LightBlue,
+        CharacterClass::Chronomancer => Color::LightCyan,
     };
 
     let portrait_lines: Vec<Line> = portrait

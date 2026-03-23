@@ -146,6 +146,18 @@ fn run_game(mode: GameMode) {
         CharacterClass::VoidWalker => {
             "Between the Mandelbrot set's boundary and infinity, you found a door. You walked through."
         }
+        CharacterClass::Warlord => {
+            "Armies have risen at your word. Now the chaos itself must answer to your authority."
+        }
+        CharacterClass::Trickster => {
+            "Every shadow is a misdirection. Every step is a lie the enemy believes."
+        }
+        CharacterClass::Runesmith => {
+            "You carve equations into steel. The weapon becomes the algorithm."
+        }
+        CharacterClass::Chronomancer => {
+            "Time is a variable. You are its derivative."
+        }
     };
     println!("  {}{}{}", ui::MAGENTA, intro, ui::RESET);
     println!();
@@ -1512,6 +1524,22 @@ fn do_combat_encounter(
             *last_roll = Some(roll.clone());
         }
 
+        // ── Track cause of death (last enemy hit this round) ─────────────────
+        {
+            use chaos_rpg_core::combat::CombatEvent;
+            let last_hit = events.iter().rev().find_map(|ev| {
+                if let CombatEvent::EnemyAttack { damage, is_crit } = ev {
+                    Some((*damage, *is_crit))
+                } else { None }
+            });
+            if let Some((dmg, crit)) = last_hit {
+                let crit_tag = if crit { " [CRIT]" } else { "" };
+                player.run_stats.cause_of_death =
+                    format!("Floor {} — {} hit for {}{}", player.floor, enemy.name, dmg, crit_tag);
+                player.run_stats.final_blow_damage = dmg;
+            }
+        }
+
         // ── Misery tracking ──────────────────────────────────────────────────
         {
             use chaos_rpg_core::combat::CombatEvent;
@@ -1647,8 +1675,6 @@ fn do_combat_encounter(
             CombatOutcome::PlayerDied => {
                 emit_audio(AudioEvent::EntityDied { is_player: true });
                 emit_audio(AudioEvent::GameOver);
-                // Record death stats
-                player.run_stats.cause_of_death = format!("Killed by {}", enemy.name);
                 player.misery.add_misery(MiserySource::DeathRemainingEnemyHp, enemy.hp as f64);
                 // Save nemesis: the enemy that just killed the player
                 let kill_method = if player.spells_cast > player.kills * 2 { "spell" } else { "physical" };

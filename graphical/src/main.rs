@@ -88,6 +88,37 @@ impl RoomEvent {
     }
 }
 
+// ─── PARTICLE SYSTEM ─────────────────────────────────────────────────────────
+
+#[derive(Clone)]
+struct Particle {
+    x: i32,
+    y: f32,
+    text: String,
+    col: (u8, u8, u8),
+    age: u32,
+    lifetime: u32,
+}
+
+impl Particle {
+    fn new(x: i32, y: i32, text: impl Into<String>, col: (u8,u8,u8), lifetime: u32) -> Self {
+        Self { x, y: y as f32, text: text.into(), col, age: 0, lifetime }
+    }
+    fn alive(&self) -> bool { self.age < self.lifetime }
+    fn step(&mut self) { self.age += 1; self.y -= 0.45; }
+    /// Dim color in the last 40% of lifetime.
+    fn render_col(&self) -> (u8, u8, u8) {
+        let fade_at = self.lifetime * 3 / 5;
+        if self.age <= fade_at { return self.col; }
+        let pct = 1.0 - (self.age - fade_at) as f32 / (self.lifetime - fade_at).max(1) as f32;
+        (
+            ((self.col.0 as f32 * pct) as u8).max(12),
+            ((self.col.1 as f32 * pct) as u8).max(12),
+            ((self.col.2 as f32 * pct) as u8).max(12),
+        )
+    }
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 
 struct State {
@@ -143,6 +174,14 @@ struct State {
     // auto-play mode
     auto_mode: bool,
     auto_last_action: u64, // frame when last auto-action fired
+    // ── Visual effects ──
+    particles: Vec<Particle>,
+    player_flash: u32,          // frames left — red border flash on player panel
+    enemy_flash: u32,           // frames left — colored border flash on enemy panel
+    enemy_flash_col: (u8,u8,u8),
+    hit_shake: u32,             // frames of outer-border shake flash on big crits
+    spell_beam: u32,            // frames of beam animation
+    spell_beam_col: (u8,u8,u8),
 }
 
 impl State {
@@ -174,6 +213,13 @@ impl State {
             theme_idx: 0,
             auto_mode: false,
             auto_last_action: 0,
+            particles: Vec::new(),
+            player_flash: 0,
+            enemy_flash: 0,
+            enemy_flash_col: (80, 220, 80),
+            hit_shake: 0,
+            spell_beam: 0,
+            spell_beam_col: (80, 120, 255),
         }
     }
 
@@ -664,8 +710,97 @@ impl State {
             self.last_roll = Some(roll.clone());
         }
 
+        // Track final blow for cause-of-death
+        {
+            use chaos_rpg_core::combat::CombatEvent;
+            let last_hit = events.iter().rev().find_map(|ev| {
+                if let CombatEvent::EnemyAttack { damage, is_crit } = ev {
+                    Some((*damage, *is_crit))
+                } else { None }
+            });
+            if let Some((dmg, crit)) = last_hit {
+                let ename = enemy.name.clone();
+                let floor = player.floor;
+                let crit_tag = if crit { " [CRIT]" } else { "" };
+                player.run_stats.cause_of_death =
+                    format!("Floor {} — {} hit for {}{}", floor, ename, dmg, crit_tag);
+                player.run_stats.final_blow_damage = dmg;
+            }
+        }
+
         for ev in &events {
             self.combat_log.push(ev.to_display_string());
+        }
+
+        // ── Spawn visual effects ──────────────────────────────────────────────
+        {
+            use chaos_rpg_core::combat::CombatEvent;
+            for ev in &events {
+                match ev {
+                    // Enemy takes damage from player
+                    CombatEvent::PlayerAttack { damage, is_crit } => {
+                        let (text, col, lt) = if *is_crit {
+                            (format!("★ {} ★", damage), (255u8, 215u8, 0u8), 22u32)
+                        } else {
+                            (format!("{}", damage), (80, 220, 80), 18)
+                        };
+                        // Jitter x slightly using frame so stacked hits don't overlap
+                        let jx = 12 + (self.frame % 8) as i32;
+                        self.particles.push(Particle::new(jx, 7, text, col, lt));
+                        self.enemy_flash = if *is_crit { 7 } else { 3 };
+                        self.enemy_flash_col = col;
+                    }
+                    // Player takes damage from enemy
+                    CombatEvent::EnemyAttack { damage, is_crit } => {
+                        let (text, col, lt) = if *is_crit {
+                            (format!("☠ -{} !", damage), (255u8, 60u8, 0u8), 22u32)
+                        } else {
+                            (format!("-{}", damage), (220, 50, 50), 18)
+                        };
+                        let jx = 53 + (self.frame % 8) as i32;
+                        self.particles.push(Particle::new(jx, 7, text, col, lt));
+                        self.player_flash = if *is_crit { 8 } else { 4 };
+                        if *is_crit { self.hit_shake = 5; }
+                    }
+                    // Healing
+                    CombatEvent::PlayerHealed { amount } => {
+                        self.particles.push(Particle::new(55, 9,
+                            format!("+{}", amount), (50, 220, 100), 18));
+                    }
+                    // Spell cast
+                    CombatEvent::SpellCast { damage, backfired, .. } => {
+                        if *backfired {
+                            self.spell_beam_col = (220, 50, 50);
+                            self.particles.push(Particle::new(50, 5,
+                                format!("BACKFIRE! -{}", damage), (255, 80, 0), 26));
+                            self.hit_shake = 4;
+                        } else {
+                            self.spell_beam_col = (80, 140, 255);
+                            self.particles.push(Particle::new(14, 6,
+                                format!("✦ {}", damage), (130, 190, 255), 22));
+                            self.enemy_flash = 6;
+                            self.enemy_flash_col = (80, 140, 255);
+                        }
+                        self.spell_beam = 12;
+                    }
+                    // Enemy kill reward
+                    CombatEvent::EnemyDied { xp, gold } => {
+                        self.particles.push(Particle::new(8, 4,
+                            format!("+{} XP  +{}g", xp, gold), (255, 215, 0), 28));
+                    }
+                    // Status applied
+                    CombatEvent::StatusApplied { name } => {
+                        self.particles.push(Particle::new(14, 11,
+                            format!("[{}]", name), (200, 150, 60), 16));
+                    }
+                    // Defend
+                    CombatEvent::PlayerDefend { damage_reduced } if *damage_reduced > 0 => {
+                        self.particles.push(Particle::new(55, 6,
+                            format!("BLOCK -{}", damage_reduced), (80, 140, 200), 18));
+                    }
+                    _ => {}
+                }
+            }
         }
 
         // ── Misery event wiring ───────────────────────────────────────────────
@@ -819,6 +954,8 @@ impl State {
             }
 
             CombatOutcome::PlayerDied => {
+                self.particles.clear();
+                self.player_flash = 0; self.enemy_flash = 0; self.hit_shake = 0;
                 // Save nemesis
                 let enemy_name = self.enemy.as_ref().map(|e| e.name.clone()).unwrap_or_default();
                 let enemy_dmg  = self.enemy.as_ref().map(|e| e.base_damage).unwrap_or(5);
@@ -1591,8 +1728,39 @@ impl State {
         draw_bar_gradient(ctx, 43, 6, 34, php, pmhp, pc, t.muted, &t);
         stat_line(ctx, 43, 7, "MP ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
         draw_bar_solid(ctx, 43, 8, 34, self.current_mana, self.max_mana(), t.mana, &t);
-        if !pstatus.is_empty() {
-            ctx.print_color(43, 9, xp, bg, &format!("St: {}", &pstatus.chars().take(28).collect::<String>()));
+        // ── Status effect icons with per-effect flicker ──────────────────────
+        if let Some(ref p) = self.player {
+            use chaos_rpg_core::character::StatusEffect;
+            let mut sx = 43i32;
+            for effect in &p.status_effects {
+                let (icon, base_col): (&str, (u8,u8,u8)) = match effect {
+                    StatusEffect::Burning(_)          => ("🔥", (255, 100,  20)),
+                    StatusEffect::Poisoned(_)         => ("☠",  ( 50, 200,  50)),
+                    StatusEffect::Stunned(_)          => ("⚡", (100, 200, 255)),
+                    StatusEffect::Cursed(_)           => ("✖",  (180,  50, 180)),
+                    StatusEffect::Blessed(_)          => ("✦",  (255, 220,  60)),
+                    StatusEffect::Shielded(_)         => ("🛡", ( 60, 100, 220)),
+                    StatusEffect::Enraged(_)          => ("⚔",  (220,  30,  30)),
+                    StatusEffect::Frozen(_)           => ("❄",  (100, 180, 255)),
+                    StatusEffect::Regenerating(_)     => ("+",  ( 50, 240, 100)),
+                    StatusEffect::Phasing(_)          => ("◈",  (200,  80, 255)),
+                    StatusEffect::Empowered(_)        => ("▲",  (255, 215,   0)),
+                    StatusEffect::Fracture(_)         => ("⚙",  (180, 100,  40)),
+                    StatusEffect::Resonance(_)        => ("~",  (255, 200,  80)),
+                    StatusEffect::PhaseLock(_)        => ("⏸",  (220, 220, 220)),
+                    StatusEffect::DimensionalBleed(_) => ("∞",  (140,  40, 200)),
+                    StatusEffect::Recursive(_)        => ("↻",  (255,  80,  80)),
+                    StatusEffect::Nullified(_)        => ("∅",  ( 80,  80,  80)),
+                };
+                // Pulse: alternate brightness each ~8 frames
+                let pulse = (self.frame / 8) % 2 == 0;
+                let fc = if pulse { base_col } else {
+                    (base_col.0 / 2, base_col.1 / 2, base_col.2 / 2)
+                };
+                ctx.print_color(sx, 9, RGB::from_u8(fc.0, fc.1, fc.2), bg, icon);
+                sx += (icon.chars().count() as i32).max(1) + 1;
+                if sx > 76 { break; }
+            }
         }
         if self.is_cursed_floor {
             ctx.print_color(43, 10, dng, bg, "☠ CURSED — inverted");
@@ -1646,6 +1814,59 @@ impl State {
                      else if line.starts_with("  ") { dim } // engine trace
                      else { RGB::from_u8(t.primary.0, t.primary.1, t.primary.2) };
             ctx.print_color(3, 35 + i as i32, fg, bg, &line.chars().take(74).collect::<String>());
+        }
+
+        // ── Visual effects (drawn on top of panels) ───────────────────────────
+
+        // 1. Enemy panel hit flash — redraw border in effect color
+        if self.enemy_flash > 0 {
+            self.enemy_flash -= 1;
+            let t_scale = self.enemy_flash as f32 / 7.0;
+            let ec = self.enemy_flash_col;
+            let r = (ec.0 as f32 * t_scale + 40.0 * (1.0 - t_scale)) as u8;
+            let g = (ec.1 as f32 * t_scale + 40.0 * (1.0 - t_scale)) as u8;
+            let b = (ec.2 as f32 * t_scale + 40.0 * (1.0 - t_scale)) as u8;
+            ctx.draw_box(1, 2, 38, 21, RGB::from_u8(r, g, b), bg);
+        }
+
+        // 2. Player panel hit flash — red border
+        if self.player_flash > 0 {
+            self.player_flash -= 1;
+            let intensity = (self.player_flash * 30 + 60) as u8;
+            ctx.draw_box(41, 2, 38, 21, RGB::from_u8(intensity, 10, 10), bg);
+        }
+
+        // 3. Screen shake on big crits — outer border flash
+        if self.hit_shake > 0 {
+            self.hit_shake -= 1;
+            let pulse = (self.hit_shake % 2 == 0) as u8;
+            let intensity = 120 + pulse * 80;
+            ctx.draw_box(0, 0, 79, 49, RGB::from_u8(intensity, intensity / 4, 0), bg);
+        }
+
+        // 4. Spell beam — animated line of chars across the centre gap (y=23)
+        if self.spell_beam > 0 {
+            self.spell_beam -= 1;
+            let bc = self.spell_beam_col;
+            let bc_rgb = RGB::from_u8(bc.0, bc.1, bc.2);
+            let beam_chars = ["~","≈","∿","~","≋","~"];
+            let beam_offset = (self.frame / 2) as usize;
+            for bx in 2..77i32 {
+                let c = beam_chars[(bx as usize + beam_offset) % beam_chars.len()];
+                ctx.print_color(bx, 23, bc_rgb, bg, c);
+            }
+            // Bright flash centre dot
+            ctx.print_color(39, 23, RGB::from_u8(255, 255, 200), bg, "✦");
+        }
+
+        // 5. Floating damage numbers — step and render
+        for p in &mut self.particles { p.step(); }
+        self.particles.retain(|p| p.alive());
+        for p in &self.particles {
+            let rc = p.render_col();
+            let py = p.y as i32;
+            if py < 2 || py > 32 { continue; } // clip to combat panels area
+            ctx.print_color(p.x, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
         }
     }
 
@@ -2025,18 +2246,44 @@ impl State {
         ctx.print_color(17, 8,  pulse, bg, "╚══════════════════════════════════════════╝");
 
         if let Some(ref p) = self.player {
-            draw_subpanel(ctx, 2, 11, 75, 24, "RUN SUMMARY", &t);
+            draw_subpanel(ctx, 2, 11, 75, 30, "RUN SUMMARY", &t);
+
+            // ── Identity + cause of death ──
             ctx.print_color(4, 13, hd, bg,
-                &format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
-            stat_line(ctx, 4, 14, "Floor  ", &format!("{}", p.floor),  t.warn, &t);
-            stat_line(ctx, 4, 15, "Kills  ", &format!("{}", p.kills),  t.success, &t);
-            stat_line(ctx, 4, 16, "Gold   ", &format!("{}g", p.gold),  t.gold, &t);
-            stat_line(ctx, 4, 17, "XP     ", &format!("{}", p.xp),     t.xp, &t);
-            stat_line(ctx, 4, 18, "Spells ", &format!("{}", p.spells_cast), t.mana, &t);
-            stat_line(ctx, 4, 19, "Corrupt", &format!("{}", p.corruption), t.danger, &t);
-            draw_separator(ctx, 3, 20, 73, &t);
-            for (i, line) in p.run_summary().iter().enumerate().take(12) {
-                ctx.print_color(4, 21 + i as i32, dim, bg, &line.chars().take(72).collect::<String>());
+                &format!("{} · {} · Lv.{} · Floor {}", p.name, p.class.name(), p.level, p.floor));
+            let cause: String = p.run_stats.cause_of_death.chars().take(60).collect();
+            ctx.print_color(4, 14, dng, bg, &format!("☠  {}", cause));
+
+            draw_separator(ctx, 3, 15, 73, &t);
+
+            // ── Combat stats (two columns) ──
+            // Left column
+            stat_line(ctx, 4, 16, "Kills    ", &format!("{}", p.kills),  t.success, &t);
+            stat_line(ctx, 4, 17, "Gold     ", &format!("{}g", p.gold),  t.gold, &t);
+            stat_line(ctx, 4, 18, "XP       ", &format!("{}", p.xp),     t.xp, &t);
+            stat_line(ctx, 4, 19, "Spells   ", &format!("{}", p.spells_cast), t.mana, &t);
+            stat_line(ctx, 4, 20, "Corrupt  ", &format!("{}", p.corruption), t.danger, &t);
+
+            // Right column — damage summary
+            let dealt = p.run_stats.damage_dealt;
+            let taken = p.run_stats.damage_taken;
+            let ratio = if taken > 0 { dealt as f64 / taken as f64 } else { dealt as f64 };
+            let ratio_col = if ratio >= 2.0 { t.success } else if ratio >= 1.0 { t.gold } else { t.danger };
+            stat_line(ctx, 40, 16, "Dmg Dealt ", &format!("{}", dealt), t.success, &t);
+            stat_line(ctx, 40, 17, "Dmg Taken ", &format!("{}", taken), t.danger, &t);
+            stat_line(ctx, 40, 18, "D/T Ratio ", &format!("{:.2}", ratio), ratio_col, &t);
+            let fbd = p.run_stats.final_blow_damage;
+            if fbd > 0 {
+                stat_line(ctx, 40, 19, "Final Blow", &format!("{}", fbd), t.danger, &t);
+            }
+            let best_hit = p.run_stats.highest_single_hit;
+            if best_hit > 0 {
+                stat_line(ctx, 40, 20, "Best Hit  ", &format!("{}", best_hit), t.gold, &t);
+            }
+
+            draw_separator(ctx, 3, 21, 73, &t);
+            for (i, line) in p.run_summary().iter().enumerate().take(18) {
+                ctx.print_color(4, 22 + i as i32, dim, bg, &line.chars().take(72).collect::<String>());
             }
         }
 

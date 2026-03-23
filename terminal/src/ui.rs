@@ -535,14 +535,18 @@ pub fn show_boon_select(seed: u64) -> Boon {
 
 fn select_class_ui() -> CharacterClass {
     let classes = [
-        (CharacterClass::Mage, "1"),
-        (CharacterClass::Berserker, "2"),
-        (CharacterClass::Ranger, "3"),
-        (CharacterClass::Thief, "4"),
-        (CharacterClass::Necromancer, "5"),
-        (CharacterClass::Alchemist, "6"),
-        (CharacterClass::Paladin, "7"),
-        (CharacterClass::VoidWalker, "8"),
+        (CharacterClass::Mage,         "1"),
+        (CharacterClass::Berserker,    "2"),
+        (CharacterClass::Ranger,       "3"),
+        (CharacterClass::Thief,        "4"),
+        (CharacterClass::Necromancer,  "5"),
+        (CharacterClass::Alchemist,    "6"),
+        (CharacterClass::Paladin,      "7"),
+        (CharacterClass::VoidWalker,   "8"),
+        (CharacterClass::Warlord,      "9"),
+        (CharacterClass::Trickster,    "a"),
+        (CharacterClass::Runesmith,    "b"),
+        (CharacterClass::Chronomancer, "c"),
     ];
 
     clear_screen();
@@ -564,14 +568,18 @@ fn select_class_ui() -> CharacterClass {
 
     for (i, (class, num)) in classes.iter().enumerate() {
         let col = match i {
-            0 => BRIGHT_CYAN,
-            1 => BRIGHT_RED,
-            2 => BRIGHT_GREEN,
-            3 => YELLOW,
-            4 => MAGENTA,
-            5 => GREEN,
-            6 => WHITE,
-            _ => BRIGHT_MAGENTA,
+            0  => BRIGHT_CYAN,
+            1  => BRIGHT_RED,
+            2  => BRIGHT_GREEN,
+            3  => YELLOW,
+            4  => MAGENTA,
+            5  => GREEN,
+            6  => WHITE,
+            7  => BRIGHT_MAGENTA,
+            8  => RED,
+            9  => CYAN,
+            10 => BRIGHT_GREEN,
+            _  => BRIGHT_RED,
         };
         println!(
             "  {}[{}]{} {:12} — {}",
@@ -592,7 +600,7 @@ fn select_class_ui() -> CharacterClass {
     }
 
     loop {
-        match prompt("  CLASS >").as_str() {
+        match prompt("  CLASS [1-9/a-c] >").as_str() {
             "1" => return CharacterClass::Mage,
             "2" => return CharacterClass::Berserker,
             "3" => return CharacterClass::Ranger,
@@ -601,7 +609,11 @@ fn select_class_ui() -> CharacterClass {
             "6" => return CharacterClass::Alchemist,
             "7" => return CharacterClass::Paladin,
             "8" => return CharacterClass::VoidWalker,
-            _ => println!("  {}Enter 1-8{}", DIM, RESET),
+            "9" => return CharacterClass::Warlord,
+            "a" => return CharacterClass::Trickster,
+            "b" => return CharacterClass::Runesmith,
+            "c" => return CharacterClass::Chronomancer,
+            _ => println!("  {}Enter 1-9 or a/b/c{}", DIM, RESET),
         }
     }
 }
