@@ -161,7 +161,7 @@ fn run_game(mode: GameMode) {
         if player.floor > 0 && player.floor % 20 == 0 && !player.inventory.is_empty() {
             let vol_idx = (floor_seed % player.inventory.len() as u64) as usize;
             let old_name = player.inventory[vol_idx].name.clone();
-            player.inventory[vol_idx] = Item::generate(floor_seed.wrapping_add(0x766F6C6174696C65));
+            player.inventory[vol_idx] = Item::generate_leveled(floor_seed.wrapping_add(0x766F6C6174696C65), player.floor);
             let new_name = player.inventory[vol_idx].name.clone();
             println!();
             println!("  {}⚡ ITEM VOLATILITY ⚡{}", ui::RED, ui::RESET);
@@ -541,7 +541,7 @@ fn handle_room(
         }
 
         RoomType::Treasure => {
-            let item = Item::generate(seed);
+            let item = Item::generate_leveled(seed, player.floor);
             let gold_bonus = (seed % 30 + 10) as i64 * player.floor as i64;
 
             println!("  {}* TREASURE ROOM *{}", ui::YELLOW, ui::RESET);
@@ -1469,7 +1469,7 @@ fn do_combat_encounter(
                     .wrapping_add(state.turn as u64 * 9973);
                 let drop_chance = if is_boss { 100 } else { 40 };
                 if loot_seed % 100 < drop_chance {
-                    let loot = Item::generate(loot_seed);
+                    let loot = Item::generate_leveled(loot_seed, player.floor);
                     println!();
                     println!("  {}★ Item dropped!{}", ui::YELLOW, ui::RESET);
                     for line in loot.display_box() {

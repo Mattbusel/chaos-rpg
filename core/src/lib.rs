@@ -46,3 +46,5 @@ pub mod combat_simulator;
 pub mod npc_generator;
 pub mod party_system;
 pub mod class_system;
+pub mod dungeon_generator_v2;
+pub mod dialogue_system;

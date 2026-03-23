@@ -9,6 +9,7 @@ use bracket_lib::prelude::*;
 use chaos_rpg_audio::AudioSystem;
 use chaos_rpg_core::{
     audio_events::AudioEvent,
+
     bosses::{boss_name, boss_pool_for_floor, random_unique_boss},
     character::{Background, Boon, Character, CharacterClass, Difficulty},
     chaos_pipeline::{chaos_roll_verbose, destiny_roll, ChaosRollResult},
@@ -25,6 +26,7 @@ use chaos_rpg_core::{
 
 mod renderer;
 mod sprites;
+mod theme;
 mod ui_overlay;
 
 // ─── GAME MODE ────────────────────────────────────────────────────────────────
@@ -132,6 +134,8 @@ struct State {
     craft_message: String,
     // audio
     audio: Option<AudioSystem>,
+    // visual theme
+    theme_idx: usize,
 }
 
 impl State {
@@ -160,7 +164,16 @@ impl State {
             craft_item_cursor: 0, craft_op_cursor: 0,
             craft_message: String::new(),
             audio: AudioSystem::try_new(),
+            theme_idx: 0,
         }
+    }
+
+    fn theme(&self) -> &theme::Theme {
+        &theme::THEMES[self.theme_idx]
+    }
+
+    fn cycle_theme(&mut self) {
+        self.theme_idx = (self.theme_idx + 1) % theme::THEMES.len();
     }
 
     fn max_mana(&self) -> i64 {
