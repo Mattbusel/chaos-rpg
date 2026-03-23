@@ -1,0 +1,16 @@
+[package]
+name = "chaos-rpg-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CHAOS RPG — web frontend with macroquad (WASM build)"
+
+[[bin]]
+name = "chaos-rpg-web"
+path = "src/main.rs"
+
+[dependencies]
+chaos-rpg-core.workspace = true
+macroquad.workspace = true
+serde.workspace = true
+rand.workspace = true

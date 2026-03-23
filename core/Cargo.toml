@@ -1,0 +1,12 @@
+[package]
+name = "chaos-rpg-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core game logic for CHAOS RPG — math engines, combat, characters, items, and world generation"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true
+thiserror.workspace = true

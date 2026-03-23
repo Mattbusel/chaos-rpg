@@ -1,0 +1,18 @@
+[package]
+name = "chaos-rpg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CHAOS RPG — terminal frontend with ratatui"
+
+[[bin]]
+name = "chaos-rpg"
+path = "src/main.rs"
+
+[dependencies]
+chaos-rpg-core.workspace = true
+crossterm.workspace = true
+ratatui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rand.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "chaos-rpg-graphical"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CHAOS RPG — graphical frontend with bracket-lib"
+
+[[bin]]
+name = "chaos-rpg-graphical"
+path = "src/main.rs"
+
+[dependencies]
+chaos-rpg-core.workspace = true
+bracket-lib.workspace = true
+serde.workspace = true
+rand.workspace = true
