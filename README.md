@@ -2,8 +2,6 @@
 
 > *Where Math Goes To Die*
 
-[![CI](https://github.com/Mattbusel/chaos-rpg/actions/workflows/ci.yml/badge.svg)](https://github.com/Mattbusel/chaos-rpg/actions/workflows/ci.yml)
-[![Release](https://github.com/Mattbusel/chaos-rpg/actions/workflows/release.yml/badge.svg)](https://github.com/Mattbusel/chaos-rpg/actions/workflows/release.yml)
 
 A roguelike where **every outcome** is produced by chaining real mathematical algorithms together. Character stats, enemy behavior, damage, healing, loot, skill checks, world generation — all of it flows through the same chaos pipeline. The same class can produce wildly different characters on every run. You can roll a deity or a corpse. Both are mathematically valid.
 
