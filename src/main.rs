@@ -24,7 +24,21 @@ fn current_seed() -> u64 {
         .unwrap_or(42)
 }
 
+/// Derive a seed that is identical for everyone on the same calendar day (UTC).
+/// Format: days since Unix epoch × a prime. Stable for a full 24h UTC window.
+fn daily_seed() -> u64 {
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let day = secs / 86400; // calendar day (UTC)
+    day.wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407)
+}
+
 fn main() {
+    let _fullscreen = ui::FullscreenGuard::enter();
+
     loop {
         ui::show_title();
         let mode = ui::select_mode();
@@ -38,7 +52,7 @@ fn main() {
                 let scores = chaos_rpg::scoreboard::load_scores();
                 ui::show_scoreboard(&scores);
             }
-            GameMode::Story | GameMode::Infinite => {
+            GameMode::Story | GameMode::Infinite | GameMode::DailySeed => {
                 run_game(mode);
             }
         }
@@ -53,7 +67,21 @@ fn run_game(mode: GameMode) {
 
     let (name, class, background, game_difficulty): (_, _, _, GameDifficulty) =
         ui::create_character_ui();
-    let seed = current_seed();
+    let seed = if mode == GameMode::DailySeed {
+        let s = daily_seed();
+        println!(
+            "  {}Daily Seed: {}{}{} — everyone shares this seed today.{}",
+            ui::DIM,
+            ui::CYAN,
+            s,
+            ui::DIM,
+            ui::RESET
+        );
+        println!();
+        s
+    } else {
+        current_seed()
+    };
     let mut player = Character::roll_new(name, class, background, seed, game_difficulty);
 
     // Boon selection
@@ -104,6 +132,15 @@ fn run_game(mode: GameMode) {
     } else {
         u32::MAX
     };
+    let daily_banner = if mode == GameMode::DailySeed {
+        format!(
+            "{}[DAILY RACE]{} Seed fixed for all players today.",
+            ui::CYAN,
+            ui::RESET
+        )
+    } else {
+        String::new()
+    };
     let mut last_roll: Option<chaos_rpg::chaos_pipeline::ChaosRollResult> = None;
     let mut floor_seed = seed;
 
@@ -116,6 +153,10 @@ fn run_game(mode: GameMode) {
 
         ui::clear_screen();
         ui::show_floor_header(player.floor, &mode);
+        if !daily_banner.is_empty() {
+            println!("  {}", daily_banner);
+            println!();
+        }
 
         if mode == GameMode::Story {
             if let Some(event) = ui::story_event(player.floor, floor_seed) {
@@ -667,7 +708,310 @@ fn handle_room(
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
             RoomOutcome::Continue
         }
+
+        RoomType::CraftingBench => {
+            do_crafting_bench(player, seed, last_roll);
+            RoomOutcome::Continue
+        }
     }
+}
+
+// ─── CRAFTING ────────────────────────────────────────────────────────────────
+
+/// 6 crafting operations, each using the chaos pipeline on items in inventory.
+fn do_crafting_bench(
+    player: &mut Character,
+    seed: u64,
+    _last_roll: &mut Option<chaos_rpg::chaos_pipeline::ChaosRollResult>,
+) {
+    use chaos_rpg::chaos_pipeline::chaos_roll_verbose;
+
+    println!("  {}⚒  CRAFTING BENCH  ⚒{}", ui::CYAN, ui::RESET);
+    println!();
+    println!("  Mathematical tools await. Your items can be remade.");
+    println!();
+
+    if player.inventory.is_empty() {
+        println!(
+            "  {}Your inventory is empty — nothing to craft with.{}",
+            ui::DIM,
+            ui::RESET
+        );
+        ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+        return;
+    }
+
+    // Show inventory
+    println!("  {}Inventory:{}", ui::YELLOW, ui::RESET);
+    for (i, item) in player.inventory.iter().enumerate() {
+        let rc = item.rarity.color_code();
+        println!("  [{}] {}{}{}", i + 1, rc, item.name, ui::RESET);
+    }
+    println!();
+
+    // Pick item
+    let item_input = ui::prompt("  Select item # (or 0 to leave) > ");
+    let item_idx = match item_input.trim().parse::<usize>() {
+        Ok(0) => {
+            println!("  {}You leave the bench.{}", ui::DIM, ui::RESET);
+            ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+            return;
+        }
+        Ok(n) if n >= 1 && n <= player.inventory.len() => n - 1,
+        _ => {
+            println!("  {}Invalid selection.{}", ui::RED, ui::RESET);
+            ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+            return;
+        }
+    };
+
+    println!();
+    println!("  {}Operations:{}", ui::CYAN, ui::RESET);
+    println!(
+        "  [1] {}Reforge{}   — chaos-reroll all stat modifiers on item",
+        ui::YELLOW,
+        ui::RESET
+    );
+    println!(
+        "  [2] {}Augment{}   — add one new chaos-rolled stat modifier",
+        ui::GREEN,
+        ui::RESET
+    );
+    println!(
+        "  [3] {}Annul{}     — remove one random stat modifier",
+        ui::RED,
+        ui::RESET
+    );
+    println!(
+        "  [4] {}Corrupt{}   — unpredictable chaos effect (can be good or bad)",
+        ui::MAGENTA,
+        ui::RESET
+    );
+    println!(
+        "  [5] {}Fuse{}      — double item value, combine rarity tier",
+        ui::BRIGHT_CYAN,
+        ui::RESET
+    );
+    println!(
+        "  [6] {}EngineLock{}— lock the item's chaos engine (costs 40g)",
+        ui::BRIGHT_MAGENTA,
+        ui::RESET
+    );
+    println!("  [0] Cancel");
+    println!();
+
+    let op_input = ui::prompt("  Operation > ");
+    let roll = chaos_roll_verbose(player.stats.entropy as f64 * 0.01, seed);
+
+    match op_input.trim() {
+        "1" => {
+            // Reforge: chaos-reroll all stat modifiers
+            let item = &mut player.inventory[item_idx];
+            let n = item.stat_modifiers.len().max(1);
+            item.stat_modifiers.clear();
+            for j in 0..n {
+                let mod_seed = seed
+                    .wrapping_add(j as u64 * 17777)
+                    .wrapping_mul(6364136223846793005);
+                let new_mod = chaos_rpg::items::StatModifier::generate_random(mod_seed);
+                item.stat_modifiers.push(new_mod);
+            }
+            println!(
+                "  {}REFORGED! {} modifiers chaos-rolled anew.{}",
+                ui::YELLOW,
+                n,
+                ui::RESET
+            );
+        }
+        "2" => {
+            // Augment: add a new modifier
+            let item = &mut player.inventory[item_idx];
+            let aug_seed = seed
+                .wrapping_mul(0xdeadbeef)
+                .wrapping_add(item.value as u64);
+            let new_mod = chaos_rpg::items::StatModifier::generate_random(aug_seed);
+            let stat = new_mod.stat.clone();
+            let val = new_mod.value;
+            item.stat_modifiers.push(new_mod);
+            item.value = (item.value as f64 * 1.2) as i64;
+            println!(
+                "  {}AUGMENTED! Added: {} {:+}{} to {}{}{}.",
+                ui::GREEN,
+                ui::YELLOW,
+                val,
+                ui::RESET,
+                ui::GREEN,
+                stat,
+                ui::RESET
+            );
+        }
+        "3" => {
+            // Annul: remove one random modifier
+            let item = &mut player.inventory[item_idx];
+            if item.stat_modifiers.is_empty() {
+                println!("  {}No modifiers to remove.{}", ui::DIM, ui::RESET);
+            } else {
+                let remove_idx = (seed % item.stat_modifiers.len() as u64) as usize;
+                let removed = item.stat_modifiers.remove(remove_idx);
+                println!(
+                    "  {}ANNULLED: removed {} {:+}.{}",
+                    ui::RED,
+                    removed.stat,
+                    removed.value,
+                    ui::RESET
+                );
+            }
+        }
+        "4" => {
+            // Corrupt: chaotic outcome
+            let item = &mut player.inventory[item_idx];
+            let outcome = roll.to_range(0, 5);
+            match outcome {
+                0 => {
+                    // Gain socket
+                    if item.socket_count < 6 {
+                        item.socket_count += 1;
+                        println!("  {}CORRUPTED: +1 socket!{}", ui::MAGENTA, ui::RESET);
+                    } else {
+                        println!(
+                            "  {}CORRUPTED: item glows... but nothing changes.{}",
+                            ui::DIM,
+                            ui::RESET
+                        );
+                    }
+                }
+                1 => {
+                    // Double a modifier
+                    if !item.stat_modifiers.is_empty() {
+                        let idx2 =
+                            (seed.wrapping_add(99) % item.stat_modifiers.len() as u64) as usize;
+                        item.stat_modifiers[idx2].value *= 2;
+                        println!(
+                            "  {}CORRUPTED: a modifier was doubled!{}",
+                            ui::MAGENTA,
+                            ui::RESET
+                        );
+                    } else {
+                        println!(
+                            "  {}CORRUPTED: sparks fly but do nothing.{}",
+                            ui::DIM,
+                            ui::RESET
+                        );
+                    }
+                }
+                2 => {
+                    // Add corruption tag
+                    item.corruption = Some("Chaos-Touched".to_string());
+                    let val_bonus = (item.value as f64 * 0.5) as i64;
+                    item.value += val_bonus;
+                    println!(
+                        "  {}CORRUPTED: item is now Chaos-Touched (+50% value)!{}",
+                        ui::MAGENTA,
+                        ui::RESET
+                    );
+                }
+                3 => {
+                    // Lose one modifier
+                    if !item.stat_modifiers.is_empty() {
+                        item.stat_modifiers.pop();
+                        println!(
+                            "  {}CORRUPTED: a modifier dissolved into void.{}",
+                            ui::RED,
+                            ui::RESET
+                        );
+                    }
+                }
+                4 => {
+                    // Negate all modifiers
+                    for m in &mut item.stat_modifiers {
+                        m.value = -m.value;
+                    }
+                    println!(
+                        "  {}CORRUPTED: all modifiers INVERTED!{}",
+                        ui::RED,
+                        ui::RESET
+                    );
+                }
+                _ => {
+                    // Mirror: flip is_weapon flag
+                    item.is_weapon = !item.is_weapon;
+                    println!(
+                        "  {}CORRUPTED: item type transmogrified!{}",
+                        ui::MAGENTA,
+                        ui::RESET
+                    );
+                }
+            }
+        }
+        "5" => {
+            // Fuse: double value, upgrade rarity
+            let item = &mut player.inventory[item_idx];
+            item.value *= 2;
+            use chaos_rpg::items::Rarity;
+            item.rarity = match item.rarity {
+                Rarity::Common => Rarity::Uncommon,
+                Rarity::Uncommon => Rarity::Rare,
+                Rarity::Rare => Rarity::Epic,
+                Rarity::Epic => Rarity::Legendary,
+                Rarity::Legendary => Rarity::Mythical,
+                Rarity::Mythical => Rarity::Divine,
+                Rarity::Divine => Rarity::Beyond,
+                Rarity::Beyond | Rarity::Artifact => Rarity::Artifact,
+            };
+            println!(
+                "  {}FUSED! Value doubled, rarity upgraded to {}{}{}.{}",
+                ui::BRIGHT_CYAN,
+                item.rarity.color_code(),
+                item.rarity.name(),
+                ui::BRIGHT_CYAN,
+                ui::RESET
+            );
+        }
+        "6" => {
+            // Engine Lock: costs 40g
+            let cost = 40 + player.floor as i64 * 5;
+            if player.gold < cost {
+                println!(
+                    "  {}Not enough gold. Need {}g, have {}g.{}",
+                    ui::RED,
+                    cost,
+                    player.gold,
+                    ui::RESET
+                );
+            } else {
+                player.gold -= cost;
+                let engines = [
+                    "Lorenz",
+                    "Zeta",
+                    "Collatz",
+                    "Mandelbrot",
+                    "Fibonacci",
+                    "Euler",
+                    "Linear",
+                    "SharpEdge",
+                    "Orbit",
+                    "Recursive",
+                ];
+                let engine_idx = (seed % engines.len() as u64) as usize;
+                let locked_engine = engines[engine_idx].to_string();
+                let item = &mut player.inventory[item_idx];
+                item.engine_locks.push(locked_engine.clone());
+                println!(
+                    "  {}ENGINE LOCKED: {} engine embedded into {}.{}",
+                    ui::BRIGHT_MAGENTA,
+                    locked_engine,
+                    item.name,
+                    ui::RESET
+                );
+            }
+        }
+        _ => {
+            println!("  {}Cancelled.{}", ui::DIM, ui::RESET);
+        }
+    }
+
+    println!();
+    ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
 }
 
 // ─── COMBAT ──────────────────────────────────────────────────────────────────
@@ -764,6 +1108,18 @@ fn do_combat_encounter(
                 if player.level > level_before {
                     ui::show_level_up(player.level, "Chaos has amplified your stats!");
                     ui::show_character_sheet(player);
+                    if player.skill_points > 0 {
+                        println!(
+                            "  {}You have {} skill point(s) to spend!{}",
+                            ui::CYAN,
+                            player.skill_points,
+                            ui::RESET
+                        );
+                        let inp = ui::prompt("  [P] Open passive tree  [any] Skip > ");
+                        if inp.trim().eq_ignore_ascii_case("p") {
+                            ui::show_passive_tree_ui(player, seed);
+                        }
+                    }
                 }
 
                 // Loot drop — 40% chance, guaranteed from bosses

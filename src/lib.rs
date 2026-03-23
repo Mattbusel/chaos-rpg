@@ -1,10 +1,15 @@
+pub mod atlas;
+pub mod body;
 pub mod chaos_pipeline;
 pub mod character;
 pub mod combat;
+pub mod crafting;
 pub mod enemy;
+pub mod factions;
 pub mod items;
 pub mod math_engines;
 pub mod npcs;
+pub mod passive_tree;
 pub mod scoreboard;
 pub mod skill_checks;
 pub mod spells;

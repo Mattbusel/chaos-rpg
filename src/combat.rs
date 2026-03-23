@@ -500,9 +500,7 @@ pub fn resolve_action(
         if player.class == CharacterClass::Necromancer {
             let drain = ((enemy.max_hp as f64 * 0.08) as i64).max(1);
             player.heal(drain);
-            events.push(CombatEvent::PlayerHealed {
-                amount: drain,
-            });
+            events.push(CombatEvent::PlayerHealed { amount: drain });
             events.push(CombatEvent::ChaosEvent {
                 description: format!("Death Drain: absorbed {} HP from the fallen.", drain),
             });
@@ -558,11 +556,30 @@ pub fn resolve_action(
                 description: "PHASE SHIFT! You phase through the attack! (VoidWalker)".to_string(),
             });
         } else {
-            player.take_damage(enemy_dmg);
+            let (hit_part, _actual, injury) = player.take_damage_to_part(enemy_dmg, enemy_seed);
+            // Announce hit location
+            let injury_str = injury
+                .map(|i| format!(" [{} {}]", i.name(), hit_part.name()))
+                .unwrap_or_default();
             events.push(CombatEvent::EnemyAttack {
                 damage: enemy_dmg,
                 is_crit,
             });
+            if !injury_str.is_empty() {
+                events.push(CombatEvent::ChaosEvent {
+                    description: format!(
+                        "Hit {}{} — {}{}",
+                        hit_part.name(),
+                        injury_str,
+                        if player.body.head_destroyed() {
+                            "HEAD DESTROYED — INSTANT DEATH"
+                        } else {
+                            ""
+                        },
+                        ""
+                    ),
+                });
+            }
         }
     } else {
         state.enemy_stunned = false;

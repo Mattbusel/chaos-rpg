@@ -3,6 +3,7 @@
 //! CHAOS RPG — now with 8 classes, each with unique passives and playstyles.
 //! Stats can exceed any limit — there is no cap. The universe is your cap.
 
+use crate::body::{Body, BodyPart};
 use crate::chaos_pipeline::{chaos_roll_verbose, destiny_roll, roll_stat};
 use serde::{Deserialize, Serialize};
 
@@ -408,6 +409,7 @@ impl PowerTier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StatusEffect {
+    // ── Original 11 ───────────────────────────────────────────────────────────
     Burning(u32),
     Poisoned(u32),
     Stunned(u32),
@@ -419,6 +421,19 @@ pub enum StatusEffect {
     Regenerating(u32),
     Phasing(u32),
     Empowered(u32),
+    // ── Deep Ailments ─────────────────────────────────────────────────────────
+    /// A portion of chaos rolls use only 1 engine instead of 4-10. Extremely volatile.
+    Fracture(u32),
+    /// Output of roll N is added to input of roll N+1. Good streaks beget good; bad cascades bad.
+    Resonance(u32),
+    /// All rolls use the same engine seed for N turns. Locked into whatever the first roll was.
+    PhaseLock(u32),
+    /// Enemy chaos rolls use YOUR stat biases instead of theirs.
+    DimensionalBleed(u32),
+    /// Each engine in the chain runs twice, feeding back into itself. Doubles chaos depth.
+    Recursive(u32),
+    /// All chaos rolls return exactly 0.0 for N turns. Mathematical silence. Base stats only.
+    Nullified(u32),
 }
 
 impl StatusEffect {
@@ -435,6 +450,12 @@ impl StatusEffect {
             StatusEffect::Regenerating(_) => "REGEN",
             StatusEffect::Phasing(_) => "PHASING",
             StatusEffect::Empowered(_) => "EMPOWERED",
+            StatusEffect::Fracture(_) => "FRACTURE",
+            StatusEffect::Resonance(_) => "RESONANCE",
+            StatusEffect::PhaseLock(_) => "PHASE LOCK",
+            StatusEffect::DimensionalBleed(_) => "DIM.BLEED",
+            StatusEffect::Recursive(_) => "RECURSIVE",
+            StatusEffect::Nullified(_) => "NULLIFIED",
         }
     }
 
@@ -451,6 +472,12 @@ impl StatusEffect {
             StatusEffect::Regenerating(_) => "[REG]",
             StatusEffect::Phasing(_) => "[PHS]",
             StatusEffect::Empowered(_) => "[EMP]",
+            StatusEffect::Fracture(_) => "[FRC]",
+            StatusEffect::Resonance(_) => "[RES]",
+            StatusEffect::PhaseLock(_) => "[PLK]",
+            StatusEffect::DimensionalBleed(_) => "[DLB]",
+            StatusEffect::Recursive(_) => "[RCV]",
+            StatusEffect::Nullified(_) => "[NUL]",
         }
     }
 
@@ -467,6 +494,26 @@ impl StatusEffect {
             StatusEffect::Regenerating(_) => "\x1b[92m",
             StatusEffect::Phasing(_) => "\x1b[95m",
             StatusEffect::Empowered(_) => "\x1b[93m",
+            StatusEffect::Fracture(_) => "\x1b[96m",
+            StatusEffect::Resonance(_) => "\x1b[93m",
+            StatusEffect::PhaseLock(_) => "\x1b[97m",
+            StatusEffect::DimensionalBleed(_) => "\x1b[35m",
+            StatusEffect::Recursive(_) => "\x1b[91m",
+            StatusEffect::Nullified(_) => "\x1b[90m",
+        }
+    }
+
+    pub fn describe(&self) -> &'static str {
+        match self {
+            StatusEffect::Fracture(_) => "Some rolls use only 1 engine (extreme volatility)",
+            StatusEffect::Resonance(_) => "Roll output feeds into next roll input (streak effects)",
+            StatusEffect::PhaseLock(_) => {
+                "All rolls use same seed (good = invincible, bad = stuck)"
+            }
+            StatusEffect::DimensionalBleed(_) => "Enemy rolls use YOUR stat biases",
+            StatusEffect::Recursive(_) => "Each engine runs twice -- chaos depth doubled",
+            StatusEffect::Nullified(_) => "All rolls return 0.0 -- base stats only, no crits",
+            _ => "",
         }
     }
 
@@ -496,7 +543,13 @@ impl StatusEffect {
             | StatusEffect::Frozen(n)
             | StatusEffect::Regenerating(n)
             | StatusEffect::Phasing(n)
-            | StatusEffect::Empowered(n) => {
+            | StatusEffect::Empowered(n)
+            | StatusEffect::Fracture(n)
+            | StatusEffect::Resonance(n)
+            | StatusEffect::PhaseLock(n)
+            | StatusEffect::DimensionalBleed(n)
+            | StatusEffect::Recursive(n)
+            | StatusEffect::Nullified(n) => {
                 if *n == 0 {
                     return true;
                 }
@@ -776,6 +829,13 @@ pub struct Character {
     pub boon: Option<Boon>,
     pub spell_damage_mult: f64,
     pub xp_mult: f64,
+    // Body system
+    pub body: Body,
+    // Skill points for passive tree
+    pub skill_points: u32,
+    pub allocated_nodes: Vec<u32>,
+    // Faction reputation
+    pub faction_rep: crate::factions::FactionRep,
 }
 
 impl Character {
@@ -812,6 +872,7 @@ impl Character {
 
         let stats = stats.add(&bg_bonus);
         let max_hp = (50 + stats.vitality * 3 + stats.force).max(1);
+        let body = Body::generate(max_hp, seed.wrapping_add(55555));
 
         let known_spells = match class {
             CharacterClass::Mage => vec![
@@ -866,6 +927,10 @@ impl Character {
             boon: None,
             spell_damage_mult: 1.0,
             xp_mult: 1.0,
+            body,
+            skill_points: 0,
+            allocated_nodes: Vec::new(),
+            faction_rep: crate::factions::FactionRep::default(),
         }
     }
 
@@ -987,6 +1052,18 @@ impl Character {
     }
 
     pub fn take_damage(&mut self, amount: i64) {
+        self.take_damage_to_part(amount, self.seed.wrapping_add(amount as u64));
+    }
+
+    /// Deal damage routed to a specific body part (determined by caller) or
+    /// chaos-rolled to a random part if `part` is None.
+    /// Returns (hit part, actual damage, injury).
+    pub fn take_damage_to_part(
+        &mut self,
+        amount: i64,
+        seed: u64,
+    ) -> (BodyPart, i64, Option<crate::body::InjurySeverity>) {
+        // 1. Absorb through shields first
         let mut remaining = amount;
         for effect in &mut self.status_effects {
             if let StatusEffect::Shielded(shield_hp) = effect {
@@ -1002,8 +1079,21 @@ impl Character {
         }
         self.status_effects
             .retain(|e| !matches!(e, StatusEffect::Shielded(0)));
+
+        // 2. Route to body part
+        let hit_part = Body::target_part(seed);
+        let (body_dmg, injury) = self.body.damage_part(hit_part, remaining);
+
+        // 3. Deduct from overall HP
         self.current_hp = (self.current_hp - remaining).max(0);
         self.total_damage_taken += remaining;
+
+        // 4. Head death = instant kill
+        if self.body.head_destroyed() {
+            self.current_hp = 0;
+        }
+
+        (hit_part, body_dmg, injury)
     }
 
     pub fn add_status(&mut self, effect: StatusEffect) {
@@ -1037,7 +1127,7 @@ impl Character {
             if tick_heal > 0 {
                 self.current_hp = (self.current_hp + tick_heal).min(self.max_hp);
                 net_dmg -= tick_heal;
-                msgs.push(format!("Divine Regen restores {} HP.", tick_heal));
+                msgs.push(format!("{} restores {} HP.", effect.name(), tick_heal));
             }
         }
 
@@ -1051,6 +1141,15 @@ impl Character {
             msgs.push(format!("{} wore off.", name));
         }
         self.status_effects.retain(|e| !expired.contains(&e.name()));
+
+        // Cursed body parts drain HP and stats each turn
+        let cursed_drain = self.body.curse_drain_per_turn();
+        if cursed_drain > 0 {
+            self.current_hp = (self.current_hp - cursed_drain).max(0);
+            self.total_damage_taken += cursed_drain;
+            net_dmg += cursed_drain;
+            msgs.push(format!("Cursed body parts drain {} HP!", cursed_drain));
+        }
 
         (net_dmg, msgs)
     }
@@ -1074,6 +1173,10 @@ impl Character {
 
     pub fn heal(&mut self, amount: i64) {
         self.current_hp = (self.current_hp + amount).min(self.max_hp);
+        // Distribute a fraction of healing to injured body parts (5% of each part's max HP)
+        if amount > 0 {
+            self.body.heal_all_pct(0.05);
+        }
     }
 
     /// Necromancer passive: drain HP on enemy kill
@@ -1082,6 +1185,33 @@ impl Character {
             let drain = (enemy_max_hp as f64 * 0.08) as i64;
             self.heal(drain.max(1));
         }
+    }
+
+    // ── Body-aware stat accessors ─────────────────────────────────────────────
+
+    /// Effective precision including body part penalties (eye damage).
+    pub fn effective_precision(&self) -> i64 {
+        self.stats.precision + self.body.penalties().precision
+    }
+
+    /// Effective force including body part penalties (arm damage).
+    pub fn effective_force(&self) -> i64 {
+        self.stats.force + self.body.penalties().force
+    }
+
+    /// Flee luck modifier including leg/foot injury penalty.
+    pub fn flee_luck_modifier(&self) -> i64 {
+        self.stats.luck - (self.body.flee_penalty_pct() * 100.0) as i64
+    }
+
+    /// True entropy including body bonus from both eyes lost.
+    pub fn effective_entropy(&self) -> i64 {
+        self.stats.entropy + self.body.penalties().entropy
+    }
+
+    /// Total defense bonus from equipped body armor.
+    pub fn body_armor_defense(&self) -> i64 {
+        self.body.parts.values().map(|s| s.armor_defense).sum()
     }
 
     /// Alchemist passive: amplified item heal
@@ -1123,6 +1253,12 @@ impl Character {
         self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
         self.current_hp += self.max_hp - old_max;
         self.current_hp = self.current_hp.min(self.max_hp);
+
+        // Grant chaos-rolled skill points (0–5, usually 1–2)
+        let sp_seed = seed.wrapping_add(self.level as u64 * 77777);
+        let sp_roll = chaos_roll_verbose(self.level as f64 * 0.05, sp_seed);
+        let sp = (sp_roll.to_range(0, 5) as u32).min(5);
+        self.skill_points += sp;
     }
 
     pub fn level_up_and_learn_spell(&mut self) {

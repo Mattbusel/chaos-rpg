@@ -5,7 +5,7 @@
 
 use crossterm::{
     cursor, execute,
-    terminal::{self, ClearType},
+    terminal::{self, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::io::{self, Write};
 use std::sync::OnceLock;
@@ -69,6 +69,7 @@ pub fn t_title() -> &'static str {
 pub enum GameMode {
     Story,
     Infinite,
+    DailySeed,
     Scoreboard,
     Quit,
 }
@@ -87,6 +88,34 @@ pub enum FloorChoice {
 pub fn clear_screen() {
     let mut out = io::stdout();
     let _ = execute!(out, terminal::Clear(ClearType::All), cursor::MoveTo(0, 0));
+}
+
+// ─── FULLSCREEN / ALTERNATE SCREEN ────────────────────────────────────────────
+
+/// Enters the alternate screen buffer and hides the cursor.
+/// Drop the returned guard to restore the terminal.
+pub struct FullscreenGuard;
+
+impl FullscreenGuard {
+    pub fn enter() -> Self {
+        let mut out = io::stdout();
+        let _ = execute!(out, EnterAlternateScreen, cursor::Hide);
+        // Install a panic hook so the terminal is always restored
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let mut out = io::stdout();
+            let _ = execute!(out, LeaveAlternateScreen, cursor::Show);
+            default_hook(info);
+        }));
+        FullscreenGuard
+    }
+}
+
+impl Drop for FullscreenGuard {
+    fn drop(&mut self) {
+        let mut out = io::stdout();
+        let _ = execute!(out, LeaveAlternateScreen, cursor::Show);
+    }
 }
 
 pub fn println_color(color: &str, msg: &str) {
@@ -201,6 +230,10 @@ pub fn show_title() {
         c, RESET, GREEN, RESET, c, RESET
     );
     println!(
+        "{}║{}  {}[D]{} Daily Seed      — shared seed, everyone races today {}║{}",
+        c, RESET, CYAN, RESET, c, RESET
+    );
+    println!(
         "{}║{}  {}[S]{} Scoreboard      — hall of the mathematically gifted {}║{}",
         c, RESET, YELLOW, RESET, c, RESET
     );
@@ -225,13 +258,14 @@ pub fn select_mode() -> GameMode {
         match input.to_uppercase().as_str() {
             "N" | "1" => return GameMode::Story,
             "I" | "2" => return GameMode::Infinite,
-            "S" | "3" => return GameMode::Scoreboard,
+            "D" | "3" => return GameMode::DailySeed,
+            "S" | "4" => return GameMode::Scoreboard,
             "H" | "?" => {
                 show_help();
                 show_title();
             }
             "X" | "Q" | "EXIT" | "QUIT" => return GameMode::Quit,
-            _ => println!("  {}Unknown — type N, I, S, H, or X{}", DIM, RESET),
+            _ => println!("  {}Unknown — type N, I, D, S, H, or X{}", DIM, RESET),
         }
     }
 }
@@ -623,11 +657,12 @@ pub fn show_character_sheet(c: &Character) {
         col, RESET
     );
     println!(
-        "  {}║  Spells: {}  Items: {}  Difficulty: {}{}║{}",
+        "  {}║  Spells: {}  Items: {}  Difficulty: {}  SP: {}{}║{}",
         col,
         c.known_spells.len(),
         c.inventory.len(),
         c.difficulty.name(),
+        c.skill_points,
         col,
         RESET
     );
@@ -635,6 +670,14 @@ pub fn show_character_sheet(c: &Character) {
         "  {}╚══════════════════════════════════════════════════╝{}",
         col, RESET
     );
+    // Body injury summary — only show if any injuries exist.
+    let has_injuries = c.body.parts.values().any(|s| s.injury.is_some());
+    if has_injuries {
+        println!();
+        for line in c.body.display_lines() {
+            println!("  {}", line);
+        }
+    }
 }
 
 // ─── ENEMY DISPLAY ────────────────────────────────────────────────────────────
@@ -890,10 +933,10 @@ pub fn display_combat_events(events: &[crate::combat::CombatEvent]) {
 // ─── FLOOR / ROOM DISPLAY ─────────────────────────────────────────────────────
 
 pub fn show_floor_header(floor: u32, mode: &GameMode) {
-    let mode_str = if *mode == GameMode::Story {
-        "Story"
-    } else {
-        "Infinite"
+    let mode_str = match mode {
+        GameMode::Story => "Story",
+        GameMode::DailySeed => "Daily",
+        _ => "Infinite",
     };
     let c = t_primary();
     println!();
@@ -1178,4 +1221,142 @@ pub fn show_help() {
     }
     println!();
     press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));
+}
+
+// ─── PASSIVE TREE UI ──────────────────────────────────────────────────────────
+
+/// Interactive passive skill tree allocation. Shows available nodes and lets
+/// the player type a node ID to allocate it. Applies stat bonuses immediately.
+pub fn show_passive_tree_ui(player: &mut Character, seed: u64) {
+    use crate::passive_tree::{NodeType, PlayerPassives, NODES};
+
+    // Build PlayerPassives from character state.
+    let mut passives = PlayerPassives {
+        allocated: player.allocated_nodes.iter().map(|&id| id as u16).collect(),
+        stat_bonuses: std::collections::HashMap::new(),
+        points: player.skill_points,
+        keystones: std::collections::HashSet::new(),
+        completed_synergies: std::collections::HashSet::new(),
+        cursor: player
+            .allocated_nodes
+            .first()
+            .map(|&id| id as u16)
+            .unwrap_or(0),
+    };
+
+    loop {
+        clear_screen();
+        for line in passives.display_map(player.class) {
+            println!("{}", line);
+        }
+        println!();
+        println!(
+            "  {}Skill Points remaining: {}{}{}",
+            DIM,
+            t_warning(),
+            passives.points,
+            RESET
+        );
+        println!();
+
+        // Show reachable unallocated nodes.
+        let reachable: Vec<_> = NODES
+            .iter()
+            .filter(|n| !passives.allocated.contains(&n.id) && passives.can_allocate(n.id))
+            .collect();
+
+        if reachable.is_empty() || passives.points == 0 {
+            if passives.points == 0 {
+                println!("  {}No skill points remaining.{}", DIM, RESET);
+            } else {
+                println!(
+                    "  {}No reachable nodes from current allocation.{}",
+                    DIM, RESET
+                );
+            }
+            press_enter(&format!("  {}[ENTER] to continue...{}", DIM, RESET));
+            break;
+        }
+
+        println!("  {}Available nodes:{}", t_primary(), RESET);
+        for node in &reachable {
+            let type_tag = match &node.node_type {
+                NodeType::Stat { stat, min, max } => {
+                    format!("[STAT] {} ({}-{})", stat.to_uppercase(), min, max)
+                }
+                NodeType::Engine { engine, .. } => format!("[ENGINE] {}", engine),
+                NodeType::Keystone { id } => format!("[KEYSTONE] {}", id),
+                NodeType::Synergy { cluster, .. } => format!("[SYNERGY] cluster {}", cluster),
+            };
+            println!(
+                "  {}{:>3}{} {} — {} {}{}{}",
+                t_warning(),
+                node.id,
+                RESET,
+                node.name,
+                node.short_desc,
+                DIM,
+                type_tag,
+                RESET
+            );
+        }
+        println!();
+        println!("  {}[0] Done{}", DIM, RESET);
+        println!();
+
+        let input = prompt("  Node ID > ");
+        let trimmed = input.trim();
+        if trimmed == "0" || trimmed.eq_ignore_ascii_case("q") {
+            break;
+        }
+
+        if let Ok(node_id) = trimmed.parse::<u16>() {
+            let prev_bonuses = passives.stat_bonuses.clone();
+            if let Some(msg) = passives.allocate(node_id, seed.wrapping_add(node_id as u64 * 777)) {
+                println!("  {}{}{}", t_success(), msg, RESET);
+                // Apply any newly locked-in stat bonuses to the character.
+                for (&nid, &value) in &passives.stat_bonuses {
+                    if !prev_bonuses.contains_key(&nid) {
+                        if let Some(node) = NODES.iter().find(|n| n.id == nid) {
+                            if let NodeType::Stat { stat, .. } = &node.node_type {
+                                passive_apply_stat(player, stat, value);
+                            }
+                        }
+                    }
+                }
+                press_enter(&format!("  {}[ENTER]...{}", DIM, RESET));
+            } else {
+                println!(
+                    "  {}Cannot allocate node {} — check requirements.{}",
+                    t_danger(),
+                    node_id,
+                    RESET
+                );
+                press_enter(&format!("  {}[ENTER]...{}", DIM, RESET));
+            }
+        }
+    }
+
+    // Write back updated state.
+    player.allocated_nodes = passives.allocated.into_iter().map(|id| id as u32).collect();
+    player.skill_points = passives.points;
+}
+
+fn passive_apply_stat(player: &mut Character, stat: &str, value: i64) {
+    match stat {
+        "vitality" => {
+            player.stats.vitality += value;
+            player.max_hp = (50 + player.stats.vitality * 3 + player.stats.force).max(1);
+        }
+        "force" => {
+            player.stats.force += value;
+            player.max_hp = (50 + player.stats.vitality * 3 + player.stats.force).max(1);
+        }
+        "mana" => player.stats.mana += value,
+        "cunning" => player.stats.cunning += value,
+        "precision" => player.stats.precision += value,
+        "entropy" => player.stats.entropy += value,
+        "luck" => player.stats.luck += value,
+        _ => {}
+    }
 }

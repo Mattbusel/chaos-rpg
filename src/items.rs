@@ -203,6 +203,140 @@ pub struct StatModifier {
     pub value: i64,
 }
 
+impl StatModifier {
+    /// Generate a single chaos-rolled stat modifier from a seed.
+    pub fn generate_random(seed: u64) -> Self {
+        use crate::chaos_pipeline::{chaos_roll_verbose, roll_stat};
+        let roll = chaos_roll_verbose(0.0, seed);
+        let stat_idx = (seed % STAT_NAMES.len() as u64) as usize;
+        let value = (roll.final_value * 2000.0) as i64 + roll_stat(-500, 500, seed.wrapping_add(1));
+        StatModifier {
+            stat: STAT_NAMES[stat_idx].to_string(),
+            value,
+        }
+    }
+}
+
+// ─── Gem ─────────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum GemType {
+    Skill,   // active ability socketed here
+    Support, // modifies linked skill gems
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Gem {
+    pub name: String,
+    pub gem_type: GemType,
+    pub description: String,
+    /// Engine modifier tag (e.g. "AddedChaos", "Fork", "ControlledDestruction")
+    pub tag: String,
+}
+
+impl Gem {
+    pub fn generate(seed: u64) -> Self {
+        const SUPPORT_GEMS: &[(&str, &str, &str)] = &[
+            (
+                "Added Chaos Damage",
+                "Adds an extra engine to the damage chain",
+                "AddedChaos",
+            ),
+            (
+                "Fork",
+                "Spell hits two targets; each uses a separate chaos roll",
+                "Fork",
+            ),
+            (
+                "Controlled Destruction",
+                "Removes Lorenz Attractor from chain (more predictable)",
+                "ControlledDestruction",
+            ),
+            (
+                "Increased Critical",
+                "Crit threshold lowered from 90 to 70",
+                "IncreasedCrit",
+            ),
+            (
+                "Cast on Death",
+                "Linked skill auto-casts when you die",
+                "CastOnDeath",
+            ),
+            (
+                "Chaos Amplification",
+                "All engine outputs in chain are squared",
+                "ChaosAmplify",
+            ),
+            (
+                "Spell Echo",
+                "Spell fires twice but second cast uses half engines",
+                "SpellEcho",
+            ),
+            (
+                "Minefield",
+                "Skill deploys a mine; detonates on enemy turn",
+                "Minefield",
+            ),
+            (
+                "Concentrated Effect",
+                "Area reduced to single target; damage x1.5",
+                "ConcentratedEffect",
+            ),
+            (
+                "Void Shot",
+                "Skill pierces target and hits the floor for AoE",
+                "VoidShot",
+            ),
+        ];
+        const SKILL_GEMS: &[(&str, &str)] = &[
+            ("Void Bolt", "Fires a bolt of compressed void energy"),
+            (
+                "Prime Explosion",
+                "Detonates prime-factored energy at target",
+            ),
+            ("Entropy Cascade", "Chains entropy through adjacent enemies"),
+            (
+                "Lorenz Storm",
+                "Summons a butterfly-effect storm; scales chaotically",
+            ),
+            (
+                "Collatz Spiral",
+                "3n+1 damage chain; unpredictable altitude",
+            ),
+            (
+                "Fibonacci Arc",
+                "Arc of golden-ratio energy; scales with streak",
+            ),
+            (
+                "Mandelbrot Pulse",
+                "Pulse from the set boundary; damages phase-shifted enemies",
+            ),
+            ("Zeta Wave", "Riemann zeta resonance wave"),
+        ];
+
+        let is_support = !seed.is_multiple_of(3); // 66% support gems
+        if is_support {
+            let idx = (seed.wrapping_mul(54321) % SUPPORT_GEMS.len() as u64) as usize;
+            let (name, desc, tag) = SUPPORT_GEMS[idx];
+            Gem {
+                name: name.to_string(),
+                gem_type: GemType::Support,
+                description: desc.to_string(),
+                tag: tag.to_string(),
+            }
+        } else {
+            let idx = (seed.wrapping_mul(12345) % SKILL_GEMS.len() as u64) as usize;
+            let (name, desc) = SKILL_GEMS[idx];
+            Gem {
+                name: name.to_string(),
+                gem_type: GemType::Skill,
+                description: desc.to_string(),
+                tag: "Skill".to_string(),
+            }
+        }
+    }
+}
+
 // ─── Item ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,6 +349,16 @@ pub struct Item {
     pub rarity: Rarity,
     pub is_weapon: bool,
     pub value: i64,
+    /// Number of gem sockets (0-6, chaos-rolled at generation)
+    pub socket_count: u8,
+    /// Number of linked socket pairs
+    pub socket_links: u8,
+    /// Socketed gems (up to socket_count)
+    pub socketed_gems: Vec<Gem>,
+    /// Engine locks: "+EngineName" = always include, "-EngineName" = always exclude
+    pub engine_locks: Vec<String>,
+    /// Corruption implicit (if corrupted)
+    pub corruption: Option<String>,
 }
 
 impl Item {
@@ -260,6 +404,20 @@ impl Item {
         let rarity = Rarity::from_magnitude(total_magnitude);
         let value = roll_stat(1, 10000, seed.wrapping_add(9999));
 
+        // Sockets: 0-6 based on chaos roll; weapons/armor get more sockets
+        let socket_roll = chaos_roll_verbose(seed as f64 * 1e-8 + 0.5, seed.wrapping_add(8888));
+        let max_sockets: u8 = if is_weapon { 6 } else { 4 };
+        let socket_count =
+            (((socket_roll.final_value + 1.0) * 0.5 * max_sockets as f64) as u8).min(max_sockets);
+        // Links: chaos-rolled, fewer than sockets
+        let link_roll = chaos_roll_verbose(seed as f64 * 1e-7, seed.wrapping_add(7777));
+        let socket_links = if socket_count <= 1 {
+            0
+        } else {
+            (((link_roll.final_value + 1.0) * 0.5 * (socket_count - 1) as f64) as u8)
+                .min(socket_count.saturating_sub(1))
+        };
+
         Item {
             name,
             base_type,
@@ -269,6 +427,11 @@ impl Item {
             rarity,
             is_weapon,
             value,
+            socket_count,
+            socket_links,
+            socketed_gems: Vec::new(),
+            engine_locks: Vec::new(),
+            corruption: None,
         }
     }
 
@@ -358,8 +521,95 @@ impl Item {
             width = inner - 6
         ));
 
+        // Sockets display
+        if self.socket_count > 0 {
+            let mut sock_str = String::new();
+            for i in 0..self.socket_count {
+                if i < self.socketed_gems.len() as u8 {
+                    let gem = &self.socketed_gems[i as usize];
+                    let gem_char = match gem.gem_type {
+                        GemType::Skill => 'S',
+                        GemType::Support => 's',
+                    };
+                    sock_str.push(gem_char);
+                } else {
+                    sock_str.push('O');
+                }
+                if i < self.socket_links && i + 1 < self.socket_count {
+                    sock_str.push('-');
+                } else if i + 1 < self.socket_count {
+                    sock_str.push(' ');
+                }
+            }
+            lines.push(format!(
+                "{}║  Sockets: {:<width$}║{}",
+                rarity_color,
+                sock_str,
+                reset,
+                width = inner - 11
+            ));
+        }
+
+        // Engine locks
+        if !self.engine_locks.is_empty() {
+            let lock_str = self.engine_locks.join(", ");
+            let lock_display = if lock_str.len() > inner - 10 {
+                format!("{}...", &lock_str[..inner - 13])
+            } else {
+                lock_str
+            };
+            lines.push(format!(
+                "{}║  Locked: {:<width$}║{}",
+                rarity_color,
+                lock_display,
+                reset,
+                width = inner - 10
+            ));
+        }
+
+        // Corruption
+        if let Some(ref corr) = self.corruption {
+            lines.push(format!(
+                "{}║  \x1b[35m[CORRUPT] {:<width$}{}║{}",
+                rarity_color,
+                corr.chars().take(inner - 12).collect::<String>(),
+                rarity_color,
+                reset,
+                width = 0
+            ));
+        }
+
         lines.push(format!("{}╚{}╝{}", rarity_color, "═".repeat(width), reset));
         lines
+    }
+
+    /// Socket a gem into this item. Returns Err if no space.
+    pub fn socket_gem(&mut self, gem: Gem) -> Result<(), &'static str> {
+        if self.socketed_gems.len() < self.socket_count as usize {
+            self.socketed_gems.push(gem);
+            Ok(())
+        } else {
+            Err("No empty sockets available")
+        }
+    }
+
+    /// Unsocket a gem by index. Returns the gem if successful.
+    pub fn unsocket_gem(&mut self, idx: usize) -> Option<Gem> {
+        if idx < self.socketed_gems.len() {
+            Some(self.socketed_gems.remove(idx))
+        } else {
+            None
+        }
+    }
+
+    /// Get support gems that are linked to the skill gem at index 0.
+    /// Linked gems are those with index < socket_links.
+    pub fn linked_supports(&self) -> Vec<&Gem> {
+        self.socketed_gems
+            .iter()
+            .take(self.socket_links as usize + 1)
+            .filter(|g| matches!(g.gem_type, GemType::Support))
+            .collect()
     }
 }
 

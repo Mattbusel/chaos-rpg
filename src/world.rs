@@ -17,9 +17,10 @@ pub enum RoomType {
     Shrine, // buff room
     Trap,
     Boss,
-    Portal,    // advance floor early
-    Empty,     // rare rest room
-    ChaosRift, // pure randomness
+    Portal,        // advance floor early
+    Empty,         // rare rest room
+    ChaosRift,     // pure randomness
+    CraftingBench, // modify items with chaos operations
 }
 
 impl RoomType {
@@ -34,6 +35,7 @@ impl RoomType {
             RoomType::Portal => "Portal",
             RoomType::Empty => "Empty",
             RoomType::ChaosRift => "CHAOS RIFT",
+            RoomType::CraftingBench => "Crafting Bench",
         }
     }
 
@@ -48,6 +50,7 @@ impl RoomType {
             RoomType::Portal => "[↑]",
             RoomType::Empty => "[ ]",
             RoomType::ChaosRift => "[∞]",
+            RoomType::CraftingBench => "[⚒]",
         }
     }
 }
@@ -245,10 +248,11 @@ fn generate_room(floor: u32, seed: u64, is_last: bool) -> Room {
         // Weighted distribution
         match (val + 1.0) / 2.0 {
             v if v > 0.92 => RoomType::ChaosRift,
-            v if v > 0.82 => RoomType::Treasure,
-            v if v > 0.72 => RoomType::Shop,
-            v if v > 0.62 => RoomType::Shrine,
-            v if v > 0.50 => RoomType::Trap,
+            v if v > 0.85 => RoomType::CraftingBench,
+            v if v > 0.75 => RoomType::Treasure,
+            v if v > 0.65 => RoomType::Shop,
+            v if v > 0.55 => RoomType::Shrine,
+            v if v > 0.45 => RoomType::Trap,
             v if v > 0.10 => RoomType::Combat,
             _ => RoomType::Empty,
         }
@@ -277,6 +281,11 @@ fn pick_room_desc(room_type: &RoomType, seed: u64) -> String {
         RoomType::Shop => &["A merchant emerges from the math-fog."],
         RoomType::ChaosRift => &["REALITY ERROR. MATHEMATICAL EXCEPTION. PROCEED?"],
         RoomType::Portal => &["A shimmering portal to the next floor hums ahead."],
+        RoomType::CraftingBench => &[
+            "A bench covered in crystallized prime number shards. Items can be reforged.",
+            "Mathematical tools lay arranged in Fibonacci order. The bench beckons.",
+            "Chaos resonates through iron anvil runes. Something waits to be remade.",
+        ],
     };
     let idx = (seed % descs.len() as u64) as usize;
     descs[idx].to_string()
