@@ -306,6 +306,5 @@ PRs welcome. Rules:
 
 ---
 
-## License
 
 MIT
