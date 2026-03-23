@@ -1,7 +1,9 @@
 mod ui;
 mod ratatui_screens;
 
+use chaos_rpg_audio::AudioSystem;
 use chaos_rpg_core::{
+    audio_events::AudioEvent,
     bosses::{boss_name, random_unique_boss, run_unique_boss, BossOutcome},
     chaos_pipeline::chaos_roll_verbose,
     character::{Character, CharacterClass, Difficulty as GameDifficulty},
@@ -64,7 +66,19 @@ fn main() {
     }
 }
 
+use std::cell::RefCell;
+
+thread_local! {
+    static AUDIO: RefCell<Option<AudioSystem>> = RefCell::new(None);
+}
+
+fn emit_audio(ev: AudioEvent) {
+    AUDIO.with(|a| { if let Some(ref s) = *a.borrow() { s.emit(ev); } });
+}
+
 fn run_game(mode: GameMode) {
+    AUDIO.with(|a| *a.borrow_mut() = AudioSystem::try_new());
+
     let help = ui::prompt("  Show tutorial? [y/N] >");
     if help.eq_ignore_ascii_case("y") {
         ui::show_help();
@@ -160,12 +174,16 @@ fn run_game(mode: GameMode) {
         let mut floor = generate_floor(player.floor, floor_seed);
         let is_cursed_floor = player.floor > 0 && player.floor % 25 == 0;
 
+        emit_audio(AudioEvent::FloorEntered { floor: player.floor, seed: floor_seed });
+        if is_cursed_floor { emit_audio(AudioEvent::CursedFloorActivated); }
+
         // ── Item Volatility: every 20 floors, re-roll a random item ──────────
         if player.floor > 0 && player.floor % 20 == 0 && !player.inventory.is_empty() {
             let vol_idx = (floor_seed % player.inventory.len() as u64) as usize;
             let old_name = player.inventory[vol_idx].name.clone();
             player.inventory[vol_idx] = Item::generate(floor_seed.wrapping_add(0x766F6C6174696C65));
             let new_name = player.inventory[vol_idx].name.clone();
+            emit_audio(AudioEvent::ItemVolatilityReroll);
             println!();
             println!("  {}⚡ ITEM VOLATILITY ⚡{}", ui::RED, ui::RESET);
             println!("  The math reshapes your gear.");
@@ -329,6 +347,7 @@ fn run_game(mode: GameMode) {
                 "d" if floor.rooms_remaining() == 0 => {
                     player.floor += 1;
                     if player.floor > max_floor {
+                        emit_audio(AudioEvent::Victory);
                         ui::show_victory(&player);
                         println!();
                         for line in player.run_summary() {
@@ -605,6 +624,7 @@ fn handle_room(
         }
 
         RoomType::Shop => {
+            emit_audio(AudioEvent::ShopEntered);
             let mut npc = shop_npc(player.floor, seed);
             println!("  {}$ SHOP ${}", ui::CYAN, ui::RESET);
             println!();
@@ -1377,6 +1397,7 @@ fn do_combat_encounter(
     is_cursed: bool,
 ) -> RoomOutcome {
     if is_boss {
+        emit_audio(AudioEvent::BossEncounterStart { boss_tier: 1 });
         println!("  {}B O S S  E N C O U N T E R{}", ui::RED, ui::RESET);
         println!();
     }
@@ -1460,6 +1481,7 @@ fn do_combat_encounter(
 
         match outcome {
             CombatOutcome::PlayerWon { xp, gold } => {
+                emit_audio(AudioEvent::EntityDied { is_player: false });
                 println!(
                     "  {}Victory! +{} XP, +{} gold.{}",
                     ui::YELLOW,
@@ -1468,6 +1490,7 @@ fn do_combat_encounter(
                     ui::RESET
                 );
                 if player.level > level_before {
+                    emit_audio(AudioEvent::LevelUp);
                     ui::show_level_up(player.level, "Chaos has amplified your stats!");
                     ui::show_character_sheet(player);
                     if player.skill_points > 0 {
@@ -1514,6 +1537,8 @@ fn do_combat_encounter(
                 return RoomOutcome::Continue;
             }
             CombatOutcome::PlayerDied => {
+                emit_audio(AudioEvent::EntityDied { is_player: true });
+                emit_audio(AudioEvent::GameOver);
                 // Save nemesis: the enemy that just killed the player
                 let kill_method = if player.spells_cast > player.kills * 2 { "spell" } else { "physical" };
                 let nemesis = NemesisRecord::new(

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "core",
+    "audio",
     "terminal",
     "graphical",
     "web",
@@ -22,3 +23,5 @@ ratatui = "0.28"
 bracket-lib = "0.8"
 macroquad = "0.4"
 chaos-rpg-core = { path = "core" }
+chaos-rpg-audio = { path = "audio" }
+rodio = { version = "0.17", default-features = false, features = ["wav"] }

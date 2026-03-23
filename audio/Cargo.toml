@@ -1,0 +1,12 @@
+[package]
+name = "chaos-rpg-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+chaos-rpg-core = { path = "../core" }
+rodio = { version = "0.17", default-features = false, features = ["wav"] }
+
+[features]
+default = []

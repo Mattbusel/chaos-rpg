@@ -6,7 +6,9 @@
 //! real chaos-engine combat via resolve_action().
 
 use bracket_lib::prelude::*;
+use chaos_rpg_audio::AudioSystem;
 use chaos_rpg_core::{
+    audio_events::AudioEvent,
     bosses::{boss_name, boss_pool_for_floor, random_unique_boss},
     character::{Background, Boon, Character, CharacterClass, Difficulty},
     chaos_pipeline::{chaos_roll_verbose, destiny_roll, ChaosRollResult},
@@ -128,6 +130,8 @@ struct State {
     craft_item_cursor: usize,
     craft_op_cursor: usize,
     craft_message: String,
+    // audio
+    audio: Option<AudioSystem>,
 }
 
 impl State {
@@ -155,6 +159,7 @@ impl State {
             craft_phase: CraftPhase::SelectItem,
             craft_item_cursor: 0, craft_op_cursor: 0,
             craft_message: String::new(),
+            audio: AudioSystem::try_new(),
         }
     }
 
@@ -165,6 +170,10 @@ impl State {
     fn push_log(&mut self, msg: impl Into<String>) {
         self.combat_log.push(msg.into());
         if self.combat_log.len() > 300 { self.combat_log.remove(0); }
+    }
+
+    fn emit_audio(&self, event: AudioEvent) {
+        if let Some(ref audio) = self.audio { audio.emit(event); }
     }
 
     fn apply_stat_modifier(&mut self, stat: &str, val: i64) {
@@ -210,6 +219,10 @@ impl State {
         self.current_mana = self.max_mana();
         self.screen = AppScreen::FloorNav;
         self.generate_floor_for_current();
+        self.emit_audio(AudioEvent::FloorEntered { floor: self.floor_num, seed: self.floor_seed });
+        if self.game_mode == GameMode::Daily {
+            self.emit_audio(AudioEvent::DailyStart);
+        }
     }
 
     fn generate_floor_for_current(&mut self) {
@@ -226,6 +239,7 @@ impl State {
                     p.inventory[vol_idx] = Item::generate(self.floor_seed.wrapping_add(0x766F6C));
                     let new = p.inventory[vol_idx].name.clone();
                     self.push_log(format!("⚡ ITEM VOLATILITY: {} → {}", old, new));
+                    self.emit_audio(AudioEvent::ItemVolatilityReroll);
                 }
             }
         }
@@ -233,6 +247,7 @@ impl State {
         self.is_cursed_floor = self.floor_num > 0 && self.floor_num % 25 == 0;
         if self.is_cursed_floor {
             self.push_log("☠ CURSED FLOOR! All engine outputs INVERTED this floor.".to_string());
+            self.emit_audio(AudioEvent::CursedFloorActivated);
         }
 
         let fl = generate_floor(self.floor_num, self.floor_seed);
@@ -250,6 +265,7 @@ impl State {
         if at_end {
             // Check victory condition
             if self.floor_num >= self.max_floor {
+                self.emit_audio(AudioEvent::Victory);
                 self.screen = AppScreen::Victory;
                 self.save_score_now();
                 return;
@@ -265,6 +281,7 @@ impl State {
             .map(|p| p.floor >= 50 && p.rooms_without_kill >= 5 && self.screen != AppScreen::Combat)
             .unwrap_or(false);
         if hunger_trigger {
+            self.emit_audio(AudioEvent::HungerTriggered);
             let loss = self.player.as_ref().map(|p| (p.max_hp / 20).max(1)).unwrap_or(1);
             if let Some(ref mut p) = self.player {
                 p.max_hp = (p.max_hp - loss).max(1);
@@ -329,6 +346,8 @@ impl State {
                             self.gauntlet_stage = 0;
                             self.combat_state = Some(CombatState::new(room_seed));
                             if let Some(ref mut cs) = self.combat_state { cs.is_cursed = self.is_cursed_floor; }
+                            self.emit_audio(AudioEvent::NemesisSpawned);
+                            self.emit_audio(AudioEvent::BossEncounterStart { boss_tier: 2 });
                             self.screen = AppScreen::Combat;
                             return;
                         }
@@ -359,6 +378,7 @@ impl State {
                     self.push_log("Fight 1/3".to_string());
                     self.combat_state = Some(CombatState::new(room_seed));
                     if let Some(ref mut cs) = self.combat_state { cs.is_cursed = self.is_cursed_floor; }
+                    self.emit_audio(AudioEvent::GauntletStart);
                     self.screen = AppScreen::Combat;
                     return;
                 }
@@ -383,6 +403,7 @@ impl State {
                         self.gauntlet_stage = 0;
                         self.combat_state = Some(CombatState::new(room_seed));
                         if let Some(ref mut cs) = self.combat_state { cs.is_cursed = self.is_cursed_floor; }
+                        self.emit_audio(AudioEvent::BossEncounterStart { boss_tier: 3 });
                         self.screen = AppScreen::Combat;
                         return;
                     }
@@ -408,6 +429,9 @@ impl State {
                     enemy.base_damage = (enemy.base_damage as f64 * 1.8) as i64;
                     enemy.xp_reward *= 3; enemy.gold_reward *= 3;
                     self.push_log("★ BOSS BATTLE ★".to_string());
+                    self.emit_audio(AudioEvent::BossEncounterStart { boss_tier: 1 });
+                } else {
+                    self.emit_audio(AudioEvent::RoomEntered { room_index: self.floor.as_ref().map(|f| f.current_room).unwrap_or(0) });
                 }
                 self.enemy = Some(enemy);
                 self.is_boss_fight = is_boss;
@@ -461,6 +485,7 @@ impl State {
                 self.shop_items = shop;
                 self.shop_heal_cost = heal_cost;
                 self.shop_cursor = 0;
+                self.emit_audio(AudioEvent::ShopEntered);
                 self.screen = AppScreen::Shop;
             }
 
@@ -642,6 +667,7 @@ impl State {
             if skill_pts > 0 {
                 self.push_log(format!("  {} skill point(s) available!", skill_pts));
             }
+            self.emit_audio(AudioEvent::LevelUp);
         }
 
         match outcome {
@@ -738,11 +764,14 @@ impl State {
                     self.push_log(format!("☠ {} is now your Nemesis.", enemy_name));
                 }
                 self.save_score_now();
+                self.emit_audio(AudioEvent::EntityDied { is_player: true });
+                self.emit_audio(AudioEvent::GameOver);
                 self.screen = AppScreen::GameOver;
             }
 
             CombatOutcome::PlayerFled => {
                 self.push_log("You escaped into the chaos!".to_string());
+                self.emit_audio(AudioEvent::PlayerFled);
                 self.enemy = None;
                 if let Some(ref mut p) = self.player { p.rooms_without_kill += 1; }
                 self.advance_floor_room();
@@ -1402,13 +1431,13 @@ impl State {
             },
 
             AppScreen::BoonSelect => match key {
-                VirtualKeyCode::Up   => self.boon_cursor = self.boon_cursor.saturating_sub(1),
-                VirtualKeyCode::Down => self.boon_cursor = (self.boon_cursor + 1).min(2),
-                VirtualKeyCode::Key1 => { self.boon_cursor = 0; self.start_new_game(); }
-                VirtualKeyCode::Key2 => { self.boon_cursor = 1; self.start_new_game(); }
-                VirtualKeyCode::Key3 => { self.boon_cursor = 2; self.start_new_game(); }
-                VirtualKeyCode::Return => self.start_new_game(),
-                VirtualKeyCode::Escape => self.screen = AppScreen::CharacterCreation,
+                VirtualKeyCode::Up   => { self.boon_cursor = self.boon_cursor.saturating_sub(1); self.emit_audio(AudioEvent::MenuNavigate); }
+                VirtualKeyCode::Down => { self.boon_cursor = (self.boon_cursor + 1).min(2); self.emit_audio(AudioEvent::MenuNavigate); }
+                VirtualKeyCode::Key1 => { self.boon_cursor = 0; self.emit_audio(AudioEvent::BoonSelected); self.start_new_game(); }
+                VirtualKeyCode::Key2 => { self.boon_cursor = 1; self.emit_audio(AudioEvent::BoonSelected); self.start_new_game(); }
+                VirtualKeyCode::Key3 => { self.boon_cursor = 2; self.emit_audio(AudioEvent::BoonSelected); self.start_new_game(); }
+                VirtualKeyCode::Return => { self.emit_audio(AudioEvent::BoonSelected); self.start_new_game(); }
+                VirtualKeyCode::Escape => { self.emit_audio(AudioEvent::MenuCancel); self.screen = AppScreen::CharacterCreation; }
                 _ => {}
             },
 
@@ -1524,6 +1553,14 @@ impl State {
                     _ => None,
                 };
                 if let Some(act) = action {
+                    // Emit pre-action audio
+                    match &act {
+                        CombatAction::Attack => self.emit_audio(AudioEvent::PlayerAttack),
+                        CombatAction::HeavyAttack => self.emit_audio(AudioEvent::PlayerHeavyAttack),
+                        CombatAction::Defend => self.emit_audio(AudioEvent::PlayerDefend),
+                        CombatAction::UseSpell(idx) => self.emit_audio(AudioEvent::SpellCast { spell_index: *idx }),
+                        _ => {}
+                    }
                     self.resolve_combat_action(act);
                 }
             },

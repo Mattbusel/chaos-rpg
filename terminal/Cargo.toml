@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 chaos-rpg-core.workspace = true
+chaos-rpg-audio.workspace = true
 crossterm.workspace = true
 ratatui.workspace = true
 serde.workspace = true
