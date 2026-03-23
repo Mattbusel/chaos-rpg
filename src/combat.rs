@@ -180,10 +180,9 @@ pub fn resolve_action(
                 _ => 0,
             };
 
-            let actual = (damage - enemy.resilience).max(1);
             state.last_roll = Some(roll.clone());
-            enemy.current_hp = (enemy.current_hp - actual).max(0);
-            events.push(CombatEvent::PlayerAttack { damage: actual, is_crit });
+            enemy.hp = (enemy.hp - damage).max(0);
+            events.push(CombatEvent::PlayerAttack { damage, is_crit });
         }
 
         CombatAction::HeavyAttack => {
@@ -209,9 +208,8 @@ pub fn resolve_action(
 
             state.last_roll = Some(roll);
             if damage > 0 {
-                let actual = (damage - enemy.resilience).max(1);
-                enemy.current_hp = (enemy.current_hp - actual).max(0);
-                events.push(CombatEvent::PlayerAttack { damage: actual, is_crit });
+                enemy.hp = (enemy.hp - damage).max(0);
+                events.push(CombatEvent::PlayerAttack { damage, is_crit });
             }
         }
 
@@ -257,7 +255,7 @@ pub fn resolve_action(
     }
 
     // ── Check enemy death ────────────────────────────────────────────────────
-    if enemy.current_hp <= 0 {
+    if enemy.hp <= 0 {
         let xp = enemy.xp_reward;
         let gold = enemy.gold_reward;
         events.push(CombatEvent::EnemyDied { xp, gold });
@@ -270,10 +268,11 @@ pub fn resolve_action(
     // ── ENEMY TURN ───────────────────────────────────────────────────────────
     if !state.enemy_stunned {
         let enemy_seed = state.next_seed();
-        let enemy_roll = chaos_roll_verbose(enemy.force as f64 * 0.01, enemy_seed);
+        let enemy_roll = chaos_roll_verbose(enemy.chaos_level, enemy_seed);
         let is_crit = enemy_roll.is_critical();
 
-        let mut enemy_dmg = roll_damage(enemy.force, enemy.force, enemy_seed);
+        let base = enemy.base_damage + enemy.attack_modifier;
+        let mut enemy_dmg = roll_damage(base, base, enemy_seed);
 
         if is_crit {
             enemy_dmg = (enemy_dmg as f64 * 1.5) as i64;
@@ -325,7 +324,7 @@ fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u6
         }
         1 => {
             let dmg = roll_damage(10, player.stats.entropy, *seed);
-            enemy.current_hp = (enemy.current_hp - dmg).max(0);
+            enemy.hp = (enemy.hp - dmg).max(0);
             CombatEvent::ChaosEvent {
                 description: format!("Reality fractures! Enemy takes {} chaos damage.", dmg),
             }

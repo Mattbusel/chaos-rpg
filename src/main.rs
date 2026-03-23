@@ -76,7 +76,7 @@ fn run_game(mode: GameMode) {
     ui::press_enter(&format!("  {}Begin your descent [ENTER]...{}", ui::DIM, ui::RESET));
 
     let max_floor = if mode == GameMode::Story { 10u32 } else { u32::MAX };
-    let mut last_roll = None;
+    let mut last_roll: Option<chaos_rpg::chaos_pipeline::ChaosRollResult> = None;
     let mut encounters_on_floor = 0u32;
     let mut floor_seed = seed;
 
