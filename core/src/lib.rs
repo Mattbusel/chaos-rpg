@@ -57,3 +57,5 @@ pub mod merchant_system;
 pub mod crafting_system_v2;
 pub mod magic_system;
 pub mod relationship_system;
+pub mod trap_system;
+pub mod time_system;
