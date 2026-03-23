@@ -3,9 +3,9 @@
 //! Every NPC is procedurally generated with chaos-rolled personality,
 //! inventory, and dialogue. Haggling is governed by the logistic map.
 
-use crate::chaos_pipeline::{chaos_roll_verbose, biased_chaos_roll, roll_stat};
-use crate::items::Item;
+use crate::chaos_pipeline::{biased_chaos_roll, chaos_roll_verbose, roll_stat};
 use crate::character::Character;
+use crate::items::Item;
 use serde::{Deserialize, Serialize};
 
 // ─── NPC ROLES ───────────────────────────────────────────────────────────────
@@ -37,8 +37,8 @@ impl NpcRole {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NpcPersonality {
-    pub greed: f64,       // 0=generous, 1=greedy. Affects prices.
-    pub hostility: f64,   // 0=friendly, 1=hostile. Affects dialogue.
+    pub greed: f64,          // 0=generous, 1=greedy. Affects prices.
+    pub hostility: f64,      // 0=friendly, 1=hostile. Affects dialogue.
     pub chaos_affinity: f64, // 0=orderly, 1=chaotic. Affects what they say.
 }
 
@@ -85,12 +85,29 @@ impl Npc {
         }
 
         match self.role {
-            NpcRole::Merchant => format!("{}: 'Ah, a traveler! Care to browse my chaos-touched wares?'", self.name),
-            NpcRole::Oracle => format!("{}: 'The Riemann zeros have foretold your arrival... mostly.'", self.name),
-            NpcRole::Blacksmith => format!("{}: 'I can temper your weapons with prime-density alloy.'", self.name),
-            NpcRole::Healer => format!("{}: 'The Fibonacci sequence of your wounds is quite beautiful. Let me fix it.'", self.name),
-            NpcRole::MysteriousStranger => format!("{} says nothing. Their eyes compute something.", self.name),
-            NpcRole::CursedScholar => format!("{}: 'Knowledge has a cost. Mana, usually. Sometimes sanity.'", self.name),
+            NpcRole::Merchant => format!(
+                "{}: 'Ah, a traveler! Care to browse my chaos-touched wares?'",
+                self.name
+            ),
+            NpcRole::Oracle => format!(
+                "{}: 'The Riemann zeros have foretold your arrival... mostly.'",
+                self.name
+            ),
+            NpcRole::Blacksmith => format!(
+                "{}: 'I can temper your weapons with prime-density alloy.'",
+                self.name
+            ),
+            NpcRole::Healer => format!(
+                "{}: 'The Fibonacci sequence of your wounds is quite beautiful. Let me fix it.'",
+                self.name
+            ),
+            NpcRole::MysteriousStranger => {
+                format!("{} says nothing. Their eyes compute something.", self.name)
+            }
+            NpcRole::CursedScholar => format!(
+                "{}: 'Knowledge has a cost. Mana, usually. Sometimes sanity.'",
+                self.name
+            ),
         }
     }
 
@@ -132,14 +149,28 @@ impl Npc {
 // ─── NAME GENERATION ─────────────────────────────────────────────────────────
 
 const NPC_PREFIXES: &[&str] = &[
-    "Sigma", "Null", "Divergent", "Lorenz", "Prime", "Zeta",
-    "Fractal", "Attractor", "Asymptotic", "Recursive",
+    "Sigma",
+    "Null",
+    "Divergent",
+    "Lorenz",
+    "Prime",
+    "Zeta",
+    "Fractal",
+    "Attractor",
+    "Asymptotic",
+    "Recursive",
 ];
 
 const NPC_BASES: &[&str] = &[
-    "the Merchant", "Bifurcatus", "of the Last Algorithm",
-    "the Undefined", "Sequence-Walker", "of Infinite Regress",
-    "the Convergent", "Phase-Locked", "Math-Touched",
+    "the Merchant",
+    "Bifurcatus",
+    "of the Last Algorithm",
+    "the Undefined",
+    "Sequence-Walker",
+    "of Infinite Regress",
+    "the Convergent",
+    "Phase-Locked",
+    "Math-Touched",
 ];
 
 pub fn generate_npc(role: NpcRole, floor: u32, seed: u64) -> Npc {
@@ -217,9 +248,14 @@ mod tests {
 
     #[test]
     fn haggling_changes_relationship() {
-        use crate::character::{CharacterClass, Background};
+        use crate::character::{Background, CharacterClass};
         let mut npc = shop_npc(1, 42);
-        let player = Character::roll_new("Haggler".to_string(), CharacterClass::Thief, Background::Merchant, 1);
+        let player = Character::roll_new(
+            "Haggler".to_string(),
+            CharacterClass::Thief,
+            Background::Merchant,
+            1,
+        );
         let initial_rel = npc.relationship;
         let _ = npc.haggle(&player, 99);
         // relationship might have changed

@@ -6,24 +6,60 @@ use serde::{Deserialize, Serialize};
 // ─── Tables ──────────────────────────────────────────────────────────────────
 
 const BASE_TYPES: &[&str] = &[
-    "Sword", "Greatsword", "Staff", "Wand", "Bow", "Crossbow", "Dagger",
-    "Shield", "Helm", "Armor", "Ring", "Amulet", "Boots", "Gloves", "Cape",
-    "Mysterious Object", "Error", "Placeholder That Became Real",
+    "Sword",
+    "Greatsword",
+    "Staff",
+    "Wand",
+    "Bow",
+    "Crossbow",
+    "Dagger",
+    "Shield",
+    "Helm",
+    "Armor",
+    "Ring",
+    "Amulet",
+    "Boots",
+    "Gloves",
+    "Cape",
+    "Mysterious Object",
+    "Error",
+    "Placeholder That Became Real",
 ];
 
 const MATERIALS: &[&str] = &[
-    "wood", "iron", "steel", "mithril", "diamond", "antimatter",
-    "condensed screaming", "crystallized luck", "frozen time", "solidified math",
-    "sadness", "weaponized optimism", "dark matter", "suspicious cheese",
-    "the concept of sharpness", "recycled prayers", "bottled lightning",
+    "wood",
+    "iron",
+    "steel",
+    "mithril",
+    "diamond",
+    "antimatter",
+    "condensed screaming",
+    "crystallized luck",
+    "frozen time",
+    "solidified math",
+    "sadness",
+    "weaponized optimism",
+    "dark matter",
+    "suspicious cheese",
+    "the concept of sharpness",
+    "recycled prayers",
+    "bottled lightning",
 ];
 
 const ADJECTIVES: &[&str] = &[
-    "of the Forgotten", "of Absolute Tuesday", "of Infinite Regret",
-    "of Suspicious Origin", "the Unbreakable (breaks immediately)",
-    "of Certain Doom", "of Mild Inconvenience", "of the Last Algorithm",
-    "that Shouldn't Exist", "of Someone Else", "of Accidental Greatness",
-    "of Yesterday's Problems", "of Mathematical Inevitability",
+    "of the Forgotten",
+    "of Absolute Tuesday",
+    "of Infinite Regret",
+    "of Suspicious Origin",
+    "the Unbreakable (breaks immediately)",
+    "of Certain Doom",
+    "of Mild Inconvenience",
+    "of the Last Algorithm",
+    "that Shouldn't Exist",
+    "of Someone Else",
+    "of Accidental Greatness",
+    "of Yesterday's Problems",
+    "of Mathematical Inevitability",
 ];
 
 const SPECIAL_EFFECTS: &[&str] = &[
@@ -49,7 +85,13 @@ const SPECIAL_EFFECTS: &[&str] = &[
 ];
 
 const STAT_NAMES: &[&str] = &[
-    "Vitality", "Force", "Mana", "Cunning", "Precision", "Entropy", "Luck",
+    "Vitality",
+    "Force",
+    "Mana",
+    "Cunning",
+    "Precision",
+    "Entropy",
+    "Luck",
 ];
 
 // ─── Rarity ──────────────────────────────────────────────────────────────────
@@ -96,14 +138,14 @@ impl Rarity {
 
     pub fn color_code(self) -> &'static str {
         match self {
-            Rarity::Common => "\x1b[90m",   // dark grey
-            Rarity::Uncommon => "\x1b[37m", // white
-            Rarity::Rare => "\x1b[32m",     // green
-            Rarity::Epic => "\x1b[34m",     // blue
-            Rarity::Legendary => "\x1b[35m",// magenta
-            Rarity::Mythical => "\x1b[33m", // yellow
-            Rarity::Divine => "\x1b[31m",   // red
-            Rarity::Beyond => "\x1b[96m",   // bright cyan (cycles in display)
+            Rarity::Common => "\x1b[90m",    // dark grey
+            Rarity::Uncommon => "\x1b[37m",  // white
+            Rarity::Rare => "\x1b[32m",      // green
+            Rarity::Epic => "\x1b[34m",      // blue
+            Rarity::Legendary => "\x1b[35m", // magenta
+            Rarity::Mythical => "\x1b[33m",  // yellow
+            Rarity::Divine => "\x1b[31m",    // red
+            Rarity::Beyond => "\x1b[96m",    // bright cyan (cycles in display)
         }
     }
 }
@@ -149,8 +191,8 @@ impl Item {
         // Damage/defense — fully unbounded chaos roll mapped to a wide range
         let dmg_seed = seed.wrapping_add(111);
         let dmg_roll = chaos_roll_verbose(dmg_seed as f64 * 1e-9, dmg_seed);
-        let damage_or_defense = (dmg_roll.final_value * 500.0) as i64
-            + roll_stat(-200, 200, seed.wrapping_add(222));
+        let damage_or_defense =
+            (dmg_roll.final_value * 500.0) as i64 + roll_stat(-200, 200, seed.wrapping_add(222));
 
         // 0-3 stat modifiers
         let n_mods = (seed.wrapping_mul(17) % 4) as usize;
@@ -161,8 +203,8 @@ impl Item {
             let mod_seed = seed.wrapping_add(333 + i as u64 * 77);
             let stat_idx = (mod_seed % STAT_NAMES.len() as u64) as usize;
             let roll = chaos_roll_verbose(mod_seed as f64 * 1e-9, mod_seed);
-            let val = (roll.final_value * 2000.0) as i64
-                + roll_stat(-500, 500, mod_seed.wrapping_add(1));
+            let val =
+                (roll.final_value * 2000.0) as i64 + roll_stat(-500, 500, mod_seed.wrapping_add(1));
             total_magnitude += val.abs();
             stat_modifiers.push(StatModifier {
                 stat: STAT_NAMES[stat_idx].to_string(),
@@ -170,8 +212,7 @@ impl Item {
             });
         }
 
-        let effect_idx =
-            ((seed.wrapping_mul(55555)) % SPECIAL_EFFECTS.len() as u64) as usize;
+        let effect_idx = ((seed.wrapping_mul(55555)) % SPECIAL_EFFECTS.len() as u64) as usize;
         let special_effect = SPECIAL_EFFECTS[effect_idx].to_string();
 
         let rarity = Rarity::from_magnitude(total_magnitude);
@@ -254,7 +295,9 @@ impl Item {
                 m.stat,
                 sign,
                 m.value,
-                " ".repeat((inner - m.stat.len() - format!("{}{}", sign, m.value).len() - 4).max(1)),
+                " ".repeat(
+                    (inner - m.stat.len() - format!("{}{}", sign, m.value).len() - 4).max(1)
+                ),
                 reset
             ));
         }

@@ -1,10 +1,10 @@
 use chaos_rpg::{
-    character::{Character, CharacterClass},
-    combat::{CombatAction, CombatOutcome, CombatState, resolve_action},
-    enemy::generate_enemy,
-    scoreboard::{save_score, load_scores, ScoreEntry},
-    ui::{self, GameMode, FloorChoice},
     chaos_pipeline::chaos_roll_verbose,
+    character::{Character, CharacterClass},
+    combat::{resolve_action, CombatAction, CombatOutcome, CombatState},
+    enemy::generate_enemy,
+    scoreboard::{load_scores, save_score, ScoreEntry},
+    ui::{self, FloorChoice, GameMode},
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -62,20 +62,30 @@ fn run_game(mode: GameMode) {
     println!();
 
     let intro = match player.class {
-        CharacterClass::Mage =>
-            "You emerged from the fractal abyss, equations swirling in your wake.",
-        CharacterClass::Berserker =>
-            "The Lorenz attractor knows your rage. It feeds on it.",
-        CharacterClass::Ranger =>
-            "You read the prime spirals in every shadow. Nothing escapes you.",
-        CharacterClass::Thief =>
-            "Logistic map r=3.9: you are the period-doubling cascade no one sees coming.",
+        CharacterClass::Mage => {
+            "You emerged from the fractal abyss, equations swirling in your wake."
+        }
+        CharacterClass::Berserker => "The Lorenz attractor knows your rage. It feeds on it.",
+        CharacterClass::Ranger => {
+            "You read the prime spirals in every shadow. Nothing escapes you."
+        }
+        CharacterClass::Thief => {
+            "Logistic map r=3.9: you are the period-doubling cascade no one sees coming."
+        }
     };
     println!("  {}{}{}", ui::MAGENTA, intro, ui::RESET);
     println!();
-    ui::press_enter(&format!("  {}Begin your descent [ENTER]...{}", ui::DIM, ui::RESET));
+    ui::press_enter(&format!(
+        "  {}Begin your descent [ENTER]...{}",
+        ui::DIM,
+        ui::RESET
+    ));
 
-    let max_floor = if mode == GameMode::Story { 10u32 } else { u32::MAX };
+    let max_floor = if mode == GameMode::Story {
+        10u32
+    } else {
+        u32::MAX
+    };
     let mut last_roll: Option<chaos_rpg::chaos_pipeline::ChaosRollResult> = None;
     let mut encounters_on_floor = 0u32;
     let mut floor_seed = seed;
@@ -96,7 +106,10 @@ fn run_game(mode: GameMode) {
 
         println!(
             "  HP: {}  Gold: {}  Floor: {}  Kills: {}",
-            player.hp_bar(16), player.gold, player.floor, player.kills
+            player.hp_bar(16),
+            player.gold,
+            player.floor,
+            player.kills
         );
         println!();
 
@@ -181,10 +194,7 @@ fn run_game(mode: GameMode) {
                     // For UseSpell, do a mage-specific chaos display
                     if matches!(action, CombatAction::UseSpell(_)) {
                         let spell_seed = state.seed.wrapping_add(77777);
-                        let roll = chaos_roll_verbose(
-                            player.stats.mana as f64 * 0.01,
-                            spell_seed,
-                        );
+                        let roll = chaos_roll_verbose(player.stats.mana as f64 * 0.01, spell_seed);
                         for line in roll.display_lines() {
                             println!("{}", line);
                         }
@@ -206,13 +216,13 @@ fn run_game(mode: GameMode) {
                         CombatOutcome::PlayerWon { xp, gold } => {
                             println!(
                                 "  {}Victory! +{} XP, +{} gold.{}",
-                                ui::YELLOW, xp, gold, ui::RESET
+                                ui::YELLOW,
+                                xp,
+                                gold,
+                                ui::RESET
                             );
                             if player.level > level_before {
-                                ui::show_level_up(
-                                    player.level,
-                                    "Chaos has amplified your stats!",
-                                );
+                                ui::show_level_up(player.level, "Chaos has amplified your stats!");
                             }
                             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                             break 'combat;
@@ -243,7 +253,8 @@ fn run_game(mode: GameMode) {
                             );
                             ui::press_enter(&format!(
                                 "  {}[ENTER] next round...{}",
-                                ui::DIM, ui::RESET
+                                ui::DIM,
+                                ui::RESET
                             ));
                         }
                     }

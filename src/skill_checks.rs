@@ -3,21 +3,21 @@
 //! Every skill check shows its full chaos engine chain. The math is visible.
 //! You can watch your fate being calculated in real time.
 
-use crate::chaos_pipeline::{chaos_roll_verbose, biased_chaos_roll, ChaosRollResult};
+use crate::chaos_pipeline::{biased_chaos_roll, chaos_roll_verbose, ChaosRollResult};
 use crate::character::Character;
 
 // ─── SKILL CHECK TYPES ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SkillType {
-    Perception,   // spot traps, hidden items
-    Stealth,      // sneak past enemies
-    Lockpick,     // open locked chests
-    Persuasion,   // better NPC prices, avoid fights
-    Arcana,       // identify magic items, spells
-    Athletics,    // survive environmental effects
-    Luck,         // pure chaos roll with no stat bias
-    ChaosAffinity,// harder to predict, higher ceiling
+    Perception,    // spot traps, hidden items
+    Stealth,       // sneak past enemies
+    Lockpick,      // open locked chests
+    Persuasion,    // better NPC prices, avoid fights
+    Arcana,        // identify magic items, spells
+    Athletics,     // survive environmental effects
+    Luck,          // pure chaos roll with no stat bias
+    ChaosAffinity, // harder to predict, higher ceiling
 }
 
 impl SkillType {
@@ -90,10 +90,10 @@ impl Difficulty {
 pub struct SkillCheckResult {
     pub skill: SkillType,
     pub difficulty: Difficulty,
-    pub roll_value: i64,     // 1-100
+    pub roll_value: i64, // 1-100
     pub dc: i64,
     pub passed: bool,
-    pub margin: i64,         // how much over/under DC
+    pub margin: i64, // how much over/under DC
     pub chaos_result: ChaosRollResult,
     pub narrative: String,
 }
@@ -189,12 +189,19 @@ fn generate_narrative(
     if margin > 30 {
         // Exceptional success
         match skill {
-            SkillType::Perception => format!("{} sees the trap before it even activates. Impressive.", name),
+            SkillType::Perception => format!(
+                "{} sees the trap before it even activates. Impressive.",
+                name
+            ),
             SkillType::Stealth => format!("{} becomes one with the math. Invisible.", name),
-            SkillType::Lockpick => format!("{} doesn't just pick the lock — they befriend it.", name),
+            SkillType::Lockpick => {
+                format!("{} doesn't just pick the lock — they befriend it.", name)
+            }
             SkillType::Persuasion => format!("{} is so persuasive the merchant PAYS them.", name),
             SkillType::Arcana => format!("{} understands the equations on a cellular level.", name),
-            SkillType::Athletics => format!("{} transcends the physical limitation. Briefly.", name),
+            SkillType::Athletics => {
+                format!("{} transcends the physical limitation. Briefly.", name)
+            }
             SkillType::Luck => format!("{} is beloved by prime numbers today.", name),
             SkillType::ChaosAffinity => format!("{} and the chaos are one. Terrifying.", name),
         }
@@ -211,20 +218,38 @@ fn generate_narrative(
         }
     } else if margin > -20 {
         // Close failure
-        format!("{} almost succeeds at {} but the {} prevents it.", name, skill.name(), difficulty.name())
+        format!(
+            "{} almost succeeds at {} but the {} prevents it.",
+            name,
+            skill.name(),
+            difficulty.name()
+        )
     } else {
         // Catastrophic failure
         match difficulty {
             Difficulty::Impossible => {
-                format!("{} fails catastrophically. The {} was working against them from the start.", name, skill.name())
+                format!(
+                    "{} fails catastrophically. The {} was working against them from the start.",
+                    name,
+                    skill.name()
+                )
             }
-            _ => format!("{} fails the {} check. The mathematics are unforgiving.", name, skill.name()),
+            _ => format!(
+                "{} fails the {} check. The mathematics are unforgiving.",
+                name,
+                skill.name()
+            ),
         }
     }
 }
 
 /// Quick pass/fail check without full verbose display
-pub fn quick_check(character: &Character, skill: SkillType, difficulty: Difficulty, seed: u64) -> bool {
+pub fn quick_check(
+    character: &Character,
+    skill: SkillType,
+    difficulty: Difficulty,
+    seed: u64,
+) -> bool {
     perform_skill_check(character, skill, difficulty, seed).passed
 }
 
@@ -254,10 +279,15 @@ pub fn stealth_check(character: &Character, enemy_level: u32, seed: u64) -> Skil
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::character::{CharacterClass, Background};
+    use crate::character::{Background, CharacterClass};
 
     fn test_char() -> Character {
-        Character::roll_new("Test".to_string(), CharacterClass::Thief, Background::Outcast, 42)
+        Character::roll_new(
+            "Test".to_string(),
+            CharacterClass::Thief,
+            Background::Outcast,
+            42,
+        )
     }
 
     #[test]
@@ -286,6 +316,9 @@ mod tests {
                 passes += 1;
             }
         }
-        assert!(passes >= 12, "High-cunning thief should pass easy stealth often");
+        assert!(
+            passes >= 12,
+            "High-cunning thief should pass easy stealth often"
+        );
     }
 }

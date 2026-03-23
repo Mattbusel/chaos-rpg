@@ -3,7 +3,7 @@
 //! Every attack, dodge, crit, and spell is determined by chaining
 //! mathematical algorithms. No dice. Pure chaos.
 
-use crate::chaos_pipeline::{chaos_roll_verbose, biased_chaos_roll, roll_damage, ChaosRollResult};
+use crate::chaos_pipeline::{biased_chaos_roll, chaos_roll_verbose, roll_damage, ChaosRollResult};
 use crate::character::{Character, CharacterClass};
 use crate::enemy::Enemy;
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,8 @@ pub enum CombatAction {
     Attack,
     HeavyAttack,
     Defend,
-    UseSpell(usize),   // spell index
-    UseItem(usize),    // item index
+    UseSpell(usize), // spell index
+    UseItem(usize),  // item index
     Flee,
     Taunt,
 }
@@ -39,16 +39,37 @@ impl CombatAction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CombatEvent {
-    PlayerAttack { damage: i64, is_crit: bool },
-    EnemyAttack { damage: i64, is_crit: bool },
-    PlayerDefend { damage_reduced: i64 },
+    PlayerAttack {
+        damage: i64,
+        is_crit: bool,
+    },
+    EnemyAttack {
+        damage: i64,
+        is_crit: bool,
+    },
+    PlayerDefend {
+        damage_reduced: i64,
+    },
     PlayerFled,
     PlayerFleeFailed,
-    SpellCast { name: String, damage: i64, backfired: bool },
-    EnemyDied { xp: u64, gold: i64 },
-    PlayerHealed { amount: i64 },
-    StatusApplied { name: String },
-    ChaosEvent { description: String },
+    SpellCast {
+        name: String,
+        damage: i64,
+        backfired: bool,
+    },
+    EnemyDied {
+        xp: u64,
+        gold: i64,
+    },
+    PlayerHealed {
+        amount: i64,
+    },
+    StatusApplied {
+        name: String,
+    },
+    ChaosEvent {
+        description: String,
+    },
 }
 
 impl CombatEvent {
@@ -72,8 +93,14 @@ impl CombatEvent {
                 format!("You brace! {} damage absorbed.", damage_reduced)
             }
             CombatEvent::PlayerFled => "You escape into the chaos!".to_string(),
-            CombatEvent::PlayerFleeFailed => "You can't escape — the math won't allow it!".to_string(),
-            CombatEvent::SpellCast { name, damage, backfired } => {
+            CombatEvent::PlayerFleeFailed => {
+                "You can't escape — the math won't allow it!".to_string()
+            }
+            CombatEvent::SpellCast {
+                name,
+                damage,
+                backfired,
+            } => {
                 if *backfired {
                     format!("☢ {} BACKFIRES! You take {} damage!", name, damage)
                 } else {
@@ -123,7 +150,8 @@ impl CombatState {
     }
 
     fn next_seed(&mut self) -> u64 {
-        self.seed = self.seed
+        self.seed = self
+            .seed
             .wrapping_mul(6364136223846793005)
             .wrapping_add(1442695040888963407);
         self.seed
@@ -193,7 +221,11 @@ pub fn resolve_action(
             );
             let is_crit = roll.is_critical();
             let base_dmg = 12 + player.stats.force / 4;
-            let mut damage = roll_damage(base_dmg, player.stats.force + player.stats.entropy / 2, seed);
+            let mut damage = roll_damage(
+                base_dmg,
+                player.stats.force + player.stats.entropy / 2,
+                seed,
+            );
 
             if is_crit {
                 damage *= 2;
@@ -202,7 +234,8 @@ pub fn resolve_action(
                 // Heavy attack whiffs catastrophically
                 damage = 0;
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your swing goes wide — the Lorenz butterfly mocks you.".to_string(),
+                    description: "Your swing goes wide — the Lorenz butterfly mocks you."
+                        .to_string(),
                 });
             }
 
@@ -236,11 +269,14 @@ pub fn resolve_action(
             let taunt_roll = chaos_roll_verbose(player.stats.cunning as f64 * 0.01, seed);
             if taunt_roll.is_critical() {
                 state.enemy_stunned = true;
-                events.push(CombatEvent::StatusApplied { name: "STUNNED (enemy)".to_string() });
+                events.push(CombatEvent::StatusApplied {
+                    name: "STUNNED (enemy)".to_string(),
+                });
             } else if taunt_roll.is_catastrophe() {
                 // Taunt backfires: enemy gets enraged
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you.".to_string(),
+                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you."
+                        .to_string(),
                 });
             }
         }
@@ -288,7 +324,10 @@ pub fn resolve_action(
         }
 
         player.take_damage(enemy_dmg);
-        events.push(CombatEvent::EnemyAttack { damage: enemy_dmg, is_crit });
+        events.push(CombatEvent::EnemyAttack {
+            damage: enemy_dmg,
+            is_crit,
+        });
     } else {
         state.enemy_stunned = false;
         events.push(CombatEvent::ChaosEvent {
@@ -313,7 +352,9 @@ pub fn resolve_action(
 }
 
 fn generate_chaos_event(player: &mut Character, enemy: &mut Enemy, seed: &mut u64) -> CombatEvent {
-    *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    *seed = seed
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     let event_type = *seed % 6;
 
     match event_type {
@@ -370,7 +411,9 @@ mod tests {
 
         let initial_hp = enemy.hp;
         let (events, _) = resolve_action(&mut player, &mut enemy, CombatAction::Attack, &mut state);
-        assert!(events.iter().any(|e| matches!(e, CombatEvent::PlayerAttack { .. })));
+        assert!(events
+            .iter()
+            .any(|e| matches!(e, CombatEvent::PlayerAttack { .. })));
         assert!(enemy.hp < initial_hp || enemy.hp == 0);
     }
 
@@ -382,13 +425,17 @@ mod tests {
             let mut player = make_player();
             let mut enemy = generate_enemy(1, seed);
             let mut state = CombatState::new(seed);
-            let (_, outcome) = resolve_action(&mut player, &mut enemy, CombatAction::Flee, &mut state);
+            let (_, outcome) =
+                resolve_action(&mut player, &mut enemy, CombatAction::Flee, &mut state);
             if outcome == CombatOutcome::PlayerFled {
                 escaped = true;
                 break;
             }
             attempts += 1;
         }
-        assert!(escaped || attempts >= 50, "Should be able to flee sometimes");
+        assert!(
+            escaped || attempts >= 50,
+            "Should be able to flee sometimes"
+        );
     }
 }

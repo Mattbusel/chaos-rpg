@@ -4,21 +4,54 @@ use crate::chaos_pipeline::{chaos_roll_verbose, roll_stat};
 use serde::{Deserialize, Serialize};
 
 const VERBS: &[&str] = &[
-    "Invoke", "Summon", "Cast", "Unleash", "Whisper", "Detonate",
-    "Caress", "Insult", "Become", "Unbecome", "Calculate", "Ferment",
-    "Yeet", "Gently Place", "Aggressively Suggest",
+    "Invoke",
+    "Summon",
+    "Cast",
+    "Unleash",
+    "Whisper",
+    "Detonate",
+    "Caress",
+    "Insult",
+    "Become",
+    "Unbecome",
+    "Calculate",
+    "Ferment",
+    "Yeet",
+    "Gently Place",
+    "Aggressively Suggest",
 ];
 
 const NOUNS: &[&str] = &[
-    "Fire", "Ice", "Bees", "Gravity", "Time", "Math", "Regret", "Fractal",
-    "Nothing", "Everything", "A Sandwich", "Screaming", "Silence",
-    "Friendship", "Taxes", "The Concept of Damage", "A Smaller Spell",
+    "Fire",
+    "Ice",
+    "Bees",
+    "Gravity",
+    "Time",
+    "Math",
+    "Regret",
+    "Fractal",
+    "Nothing",
+    "Everything",
+    "A Sandwich",
+    "Screaming",
+    "Silence",
+    "Friendship",
+    "Taxes",
+    "The Concept of Damage",
+    "A Smaller Spell",
 ];
 
 const MODIFIERS: &[&str] = &[
-    "of Doom", "Gently", "With Extreme Prejudice", "(But Worse)",
-    "Recursively", "In Reverse", "Twice", "At Great Personal Cost",
-    "For Free", "By Accident",
+    "of Doom",
+    "Gently",
+    "With Extreme Prejudice",
+    "(But Worse)",
+    "Recursively",
+    "In Reverse",
+    "Twice",
+    "At Great Personal Cost",
+    "For Free",
+    "By Accident",
 ];
 
 const SIDE_EFFECTS: &[&str] = &[
@@ -42,15 +75,21 @@ const SIDE_EFFECTS: &[&str] = &[
 ];
 
 const SCALING_STATS: &[&str] = &[
-    "Vitality", "Force", "Mana", "Cunning", "Precision", "Entropy", "Luck",
+    "Vitality",
+    "Force",
+    "Mana",
+    "Cunning",
+    "Precision",
+    "Entropy",
+    "Luck",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spell {
     pub name: String,
-    pub damage: i64,       // can be negative (heals enemies)
-    pub mana_cost: i64,    // can be negative (gives mana)
-    pub aoe_radius: i64,   // 0=self, positive=area, negative=hits own party
+    pub damage: i64,     // can be negative (heals enemies)
+    pub mana_cost: i64,  // can be negative (gives mana)
+    pub aoe_radius: i64, // 0=self, positive=area, negative=hits own party
     pub side_effect: String,
     pub scaling_stat: String,
     pub scaling_factor: f64, // can be negative
@@ -69,13 +108,13 @@ impl Spell {
 
         // Damage — chaos roll mapped to wide range
         let dmg_roll = chaos_roll_verbose(seed as f64 * 1e-9, seed.wrapping_add(1));
-        let damage = (dmg_roll.final_value * 1000.0) as i64
-            + roll_stat(-500, 500, seed.wrapping_add(2));
+        let damage =
+            (dmg_roll.final_value * 1000.0) as i64 + roll_stat(-500, 500, seed.wrapping_add(2));
 
         // Mana cost — can be negative!
         let mana_roll = chaos_roll_verbose(seed as f64 * 1e-9, seed.wrapping_add(3));
-        let mana_cost = (mana_roll.final_value * 50.0) as i64
-            + roll_stat(-20, 60, seed.wrapping_add(4));
+        let mana_cost =
+            (mana_roll.final_value * 50.0) as i64 + roll_stat(-20, 60, seed.wrapping_add(4));
 
         // AoE
         let aoe_roll = chaos_roll_verbose(seed as f64 * 1e-9, seed.wrapping_add(5));
@@ -84,8 +123,7 @@ impl Spell {
         let fx_idx = ((seed.wrapping_mul(99999)) % SIDE_EFFECTS.len() as u64) as usize;
         let side_effect = SIDE_EFFECTS[fx_idx].to_string();
 
-        let stat_idx =
-            ((seed.wrapping_mul(31337)) % SCALING_STATS.len() as u64) as usize;
+        let stat_idx = ((seed.wrapping_mul(31337)) % SCALING_STATS.len() as u64) as usize;
         let scaling_stat = SCALING_STATS[stat_idx].to_string();
 
         let scale_roll = chaos_roll_verbose(seed as f64 * 1e-9, seed.wrapping_add(6));
@@ -125,20 +163,37 @@ impl Spell {
         lines.push(format!("{}┌{}┐{}", cyan, "─".repeat(width), reset));
 
         let name_display = self.name.chars().take(inner - 2).collect::<String>();
-        lines.push(format!("{}│ ⚡ {:<width$}│{}", cyan, name_display, reset, width = inner - 4));
+        lines.push(format!(
+            "{}│ ⚡ {:<width$}│{}",
+            cyan,
+            name_display,
+            reset,
+            width = inner - 4
+        ));
 
         let dmg_sign = if self.damage >= 0 { "+" } else { "" };
         lines.push(format!(
             "{}│   Damage: {}{:<width$}│{}",
-            cyan, dmg_sign, self.damage, reset,
+            cyan,
+            dmg_sign,
+            self.damage,
+            reset,
             width = inner - 11
         ));
 
         let mana_sign = if self.mana_cost >= 0 { "" } else { "" };
-        let mana_note = if self.mana_cost < 0 { " (GIVES mana!)" } else { "" };
+        let mana_note = if self.mana_cost < 0 {
+            " (GIVES mana!)"
+        } else {
+            ""
+        };
         lines.push(format!(
             "{}│   Mana Cost: {}{}{:<w$}│{}",
-            cyan, mana_sign, self.mana_cost, mana_note, reset,
+            cyan,
+            mana_sign,
+            self.mana_cost,
+            mana_note,
+            reset,
             w = (inner - 14 - mana_note.len()).max(1)
         ));
 
@@ -149,14 +204,24 @@ impl Spell {
         };
         lines.push(format!(
             "{}│   AoE: {:<width$}│{}",
-            cyan, aoe_desc, reset,
+            cyan,
+            aoe_desc,
+            reset,
             width = inner - 9
         ));
 
-        let scale_sign = if self.scaling_factor >= 0.0 { "×" } else { "×" };
+        let scale_sign = if self.scaling_factor >= 0.0 {
+            "×"
+        } else {
+            "×"
+        };
         lines.push(format!(
             "{}│   Scales: {} {:.2}{:<w$}│{}",
-            cyan, self.scaling_stat, scale_sign, self.scaling_factor, reset,
+            cyan,
+            self.scaling_stat,
+            scale_sign,
+            self.scaling_factor,
+            reset,
             w = (inner - self.scaling_stat.len() - 13).max(1)
         ));
 
@@ -168,7 +233,9 @@ impl Spell {
         };
         lines.push(format!(
             "{}│   Side FX: {:<w$}│{}",
-            cyan, fx_display, reset,
+            cyan,
+            fx_display,
+            reset,
             w = (inner - 13).max(1)
         ));
 
@@ -182,7 +249,9 @@ impl Spell {
             .join("→");
         lines.push(format!(
             "{}│   [{:<width$}]│{}",
-            cyan, engines_str, reset,
+            cyan,
+            engines_str,
+            reset,
             width = inner - 4
         ));
 
@@ -214,6 +283,9 @@ mod tests {
                 break;
             }
         }
-        assert!(found_negative, "Should occasionally generate negative-cost spells");
+        assert!(
+            found_negative,
+            "Should occasionally generate negative-cost spells"
+        );
     }
 }

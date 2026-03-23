@@ -44,9 +44,8 @@ pub fn fourier_harmonic(input: f64, seed: u64) -> f64 {
     let mut weight_sum = 0.0_f64;
 
     for k in 1..=harmonics {
-        let phase = ((seed.wrapping_mul(k).wrapping_add(k * 31337)) as f64 * 1e-10).fract()
-            * 2.0
-            * PI;
+        let phase =
+            ((seed.wrapping_mul(k).wrapping_add(k * 31337)) as f64 * 1e-10).fract() * 2.0 * PI;
         let freq = k as f64;
         let amplitude = 1.0 / freq; // 1/f spectrum
         sum += amplitude * (freq * input * PI + phase).sin();
@@ -70,7 +69,11 @@ pub fn prime_density_sieve(input: f64, seed: u64) -> f64 {
     let limit = ((start + window) as f64).sqrt() as usize + 1;
     for p in 2..=limit {
         if p < start {
-            let first_mult = if start % p == 0 { start } else { start + p - (start % p) };
+            let first_mult = if start % p == 0 {
+                start
+            } else {
+                start + p - (start % p)
+            };
             let offset = first_mult - start;
             let mut j = offset;
             while j < window {
@@ -218,7 +221,9 @@ pub fn logistic_map(input: f64, seed: u64) -> f64 {
 /// Computes φ(n) / n, the ratio of integers coprime to n.
 /// Uses seed-derived n. The more prime-like n is, the higher the ratio.
 pub fn euler_totient(input: f64, seed: u64) -> f64 {
-    let n = ((input.abs() * 997.0) as u64).wrapping_add(seed % 9973).wrapping_add(2);
+    let n = ((input.abs() * 997.0) as u64)
+        .wrapping_add(seed % 9973)
+        .wrapping_add(2);
     let n = (n % 9999) + 2; // keep in [2, 10000]
 
     let mut result = n;
@@ -249,7 +254,9 @@ pub fn euler_totient(input: f64, seed: u64) -> f64 {
 /// Measures the Collatz stopping time for a seed-derived number.
 /// The 3n+1 conjecture: simple rule, insane complexity.
 pub fn collatz_chain(input: f64, seed: u64) -> f64 {
-    let start = ((input.abs() * 9973.0) as u64).wrapping_add(seed).wrapping_add(3);
+    let start = ((input.abs() * 9973.0) as u64)
+        .wrapping_add(seed)
+        .wrapping_add(3);
     let mut n = (start % 100_000) + 3;
     let mut steps = 0u64;
     let max_steps = 2000u64;
@@ -372,6 +379,9 @@ mod tests {
                 break;
             }
         }
-        assert!(!all_same, "All engines returned identical results for different seeds");
+        assert!(
+            !all_same,
+            "All engines returned identical results for different seeds"
+        );
     }
 }

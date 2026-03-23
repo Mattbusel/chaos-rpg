@@ -4,7 +4,7 @@
 //! The floor number and seed determine the geometry, hazards, and loot.
 
 use crate::chaos_pipeline::{chaos_roll_verbose, roll_stat};
-use crate::enemy::{Enemy, generate_enemy};
+use crate::enemy::{generate_enemy, Enemy};
 use serde::{Deserialize, Serialize};
 
 // ─── ROOM TYPES ──────────────────────────────────────────────────────────────
@@ -14,12 +14,12 @@ pub enum RoomType {
     Combat,
     Treasure,
     Shop,
-    Shrine,     // buff room
+    Shrine, // buff room
     Trap,
     Boss,
-    Portal,     // advance floor early
-    Empty,      // rare rest room
-    ChaosRift,  // pure randomness
+    Portal,    // advance floor early
+    Empty,     // rare rest room
+    ChaosRift, // pure randomness
 }
 
 impl RoomType {
@@ -56,10 +56,10 @@ impl RoomType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EnvEffect {
-    ManaBoost(i64),      // +mana per turn
-    DamageAura(i64),     // take damage per turn from environment
-    SpeedBoost,          // player goes first always
-    ChaosAmplify(f64),   // multiply all chaos roll values
+    ManaBoost(i64),    // +mana per turn
+    DamageAura(i64),   // take damage per turn from environment
+    SpeedBoost,        // player goes first always
+    ChaosAmplify(f64), // multiply all chaos roll values
     StatDebuff { stat: String, amount: i64 },
     VisionBlur,          // can't see enemy stats
     GoldMultiplier(f64), // gold drops multiplied
@@ -222,7 +222,12 @@ pub fn generate_floor(floor_num: u32, seed: u64) -> Floor {
     }
 
     let _ = roll; // used for rng influence
-    Floor { number: floor_num, rooms, current_room: 0, seed }
+    Floor {
+        number: floor_num,
+        rooms,
+        current_room: 0,
+        seed,
+    }
 }
 
 fn generate_room(floor: u32, seed: u64, is_last: bool) -> Room {
@@ -231,7 +236,11 @@ fn generate_room(floor: u32, seed: u64, is_last: bool) -> Room {
 
     let room_type = if is_last {
         // Last room on non-boss floors: portal or combat
-        if val > 0.3 { RoomType::Portal } else { RoomType::Combat }
+        if val > 0.3 {
+            RoomType::Portal
+        } else {
+            RoomType::Combat
+        }
     } else {
         // Weighted distribution
         match (val + 1.0) / 2.0 {
@@ -248,7 +257,14 @@ fn generate_room(floor: u32, seed: u64, is_last: bool) -> Room {
     let description = pick_room_desc(&room_type, seed);
     let env_effect = generate_env_effect(floor, seed.wrapping_add(777));
 
-    Room { room_type, description, env_effect, floor, seed, visited: false }
+    Room {
+        room_type,
+        description,
+        env_effect,
+        floor,
+        seed,
+        visited: false,
+    }
 }
 
 fn pick_room_desc(room_type: &RoomType, seed: u64) -> String {
@@ -280,7 +296,15 @@ fn generate_env_effect(floor: u32, seed: u64) -> EnvEffect {
         2 => EnvEffect::SpeedBoost,
         3 => EnvEffect::ChaosAmplify(1.0 + roll.final_value.abs()),
         4 => {
-            let stats = ["Vitality", "Force", "Mana", "Cunning", "Precision", "Entropy", "Luck"];
+            let stats = [
+                "Vitality",
+                "Force",
+                "Mana",
+                "Cunning",
+                "Precision",
+                "Entropy",
+                "Luck",
+            ];
             let stat_idx = (seed.wrapping_add(10) % stats.len() as u64) as usize;
             EnvEffect::StatDebuff {
                 stat: stats[stat_idx].to_string(),

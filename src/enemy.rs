@@ -3,7 +3,7 @@
 //! Every enemy is procedurally generated — name, stats, abilities, loot.
 //! Floor number and seed determine what horrors await.
 
-use crate::chaos_pipeline::{roll_stat, chaos_roll_verbose};
+use crate::chaos_pipeline::{chaos_roll_verbose, roll_stat};
 use serde::{Deserialize, Serialize};
 
 // ─── TIERS ───────────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ pub struct Enemy {
     pub max_hp: i64,
     pub base_damage: i64,
     pub attack_modifier: i64,
-    pub chaos_level: f64,   // feeds into chaos rolls as input
+    pub chaos_level: f64, // feeds into chaos rolls as input
     pub xp_reward: u64,
     pub gold_reward: i64,
     pub ascii_sprite: &'static str,
@@ -106,31 +106,62 @@ impl Enemy {
 // ─── NAME & SPRITE TABLES ────────────────────────────────────────────────────
 
 const MINION_NAMES: &[&str] = &[
-    "Fractal Imp", "Entropy Sprite", "Logic Wraith", "Sigma Rat", "Null Bat",
-    "Zeta Goblin", "Drift Slime", "Collatz Shade", "Prime Leech", "Fourier Gnat",
-    "Divergence Tick", "Singularity Moth",
+    "Fractal Imp",
+    "Entropy Sprite",
+    "Logic Wraith",
+    "Sigma Rat",
+    "Null Bat",
+    "Zeta Goblin",
+    "Drift Slime",
+    "Collatz Shade",
+    "Prime Leech",
+    "Fourier Gnat",
+    "Divergence Tick",
+    "Singularity Moth",
 ];
 
 const ELITE_NAMES: &[&str] = &[
-    "Lorenz Stalker", "Mandelbrot Hound", "Riemann Specter", "Golden Asp",
-    "Logistic Troll", "Euler Revenant", "Modular Knight", "Fibonacci Worm",
-    "Cantor Serpent", "Phase-Space Wraith",
+    "Lorenz Stalker",
+    "Mandelbrot Hound",
+    "Riemann Specter",
+    "Golden Asp",
+    "Logistic Troll",
+    "Euler Revenant",
+    "Modular Knight",
+    "Fibonacci Worm",
+    "Cantor Serpent",
+    "Phase-Space Wraith",
 ];
 
 const CHAMPION_NAMES: &[&str] = &[
-    "The Divergence", "Attractor Beast", "Phase-Lock Horror", "Sieve Colossus",
-    "Spiral Tyrant", "Zeta Construct", "Totient Golem", "Chaos Shepherd",
-    "The Bifurcation", "Orbit Breaker",
+    "The Divergence",
+    "Attractor Beast",
+    "Phase-Lock Horror",
+    "Sieve Colossus",
+    "Spiral Tyrant",
+    "Zeta Construct",
+    "Totient Golem",
+    "Chaos Shepherd",
+    "The Bifurcation",
+    "Orbit Breaker",
 ];
 
 const BOSS_NAMES: &[&str] = &[
-    "Lord Mandelbrot", "The Strange Attractor", "Absolute Uncertainty",
-    "The Null Hypothesis", "Infinite Regress", "Bifurcation King",
-    "Grand Collatz", "The Omega Point",
+    "Lord Mandelbrot",
+    "The Strange Attractor",
+    "Absolute Uncertainty",
+    "The Null Hypothesis",
+    "Infinite Regress",
+    "Bifurcation King",
+    "Grand Collatz",
+    "The Omega Point",
 ];
 
 const ABOMINATION_NAMES: &[&str] = &[
-    "THE HEAT DEATH", "RECURSIVE INFINITY", "GODELS DAEMON", "THE P!=NP PROOF",
+    "THE HEAT DEATH",
+    "RECURSIVE INFINITY",
+    "GODELS DAEMON",
+    "THE P!=NP PROOF",
 ];
 
 const SPECIAL_ABILITIES: &[&str] = &[
@@ -144,23 +175,17 @@ const SPECIAL_ABILITIES: &[&str] = &[
 ];
 
 // Sprites stored as static strings
-const SPRITE_IMP: &str =
-    "  (o_o)\n  /||\\\n  d  b";
+const SPRITE_IMP: &str = "  (o_o)\n  /||\\\n  d  b";
 
-const SPRITE_WRAITH: &str =
-    "  ~*~\n  \\|/\n   V";
+const SPRITE_WRAITH: &str = "  ~*~\n  \\|/\n   V";
 
-const SPRITE_KNIGHT: &str =
-    "  /-\\\n (X X)\n  |=|\n  / \\";
+const SPRITE_KNIGHT: &str = "  /-\\\n (X X)\n  |=|\n  / \\";
 
-const SPRITE_GOLEM: &str =
-    "  [#]\n  |#|\n /###\\";
+const SPRITE_GOLEM: &str = "  [#]\n  |#|\n /###\\";
 
-const SPRITE_BOSS: &str =
-    " /=====\\\n|(O) (O)|\n|  ~~~  |\n \\=====/\n  ||||";
+const SPRITE_BOSS: &str = " /=====\\\n|(O) (O)|\n|  ~~~  |\n \\=====/\n  ||||";
 
-const SPRITE_ABOMINATION: &str =
-    "##############\n# [UNDEFINED] #\n# (x_INFINITY)#\n##############";
+const SPRITE_ABOMINATION: &str = "##############\n# [UNDEFINED] #\n# (x_INFINITY)#\n##############";
 
 // ─── GENERATION ──────────────────────────────────────────────────────────────
 
@@ -218,7 +243,11 @@ fn pick_name_sprite(tier: &EnemyTier, seed: u64) -> (String, &'static str) {
     match tier {
         EnemyTier::Minion => {
             let idx = (seed % MINION_NAMES.len() as u64) as usize;
-            let sprite = if seed % 2 == 0 { SPRITE_IMP } else { SPRITE_WRAITH };
+            let sprite = if seed % 2 == 0 {
+                SPRITE_IMP
+            } else {
+                SPRITE_WRAITH
+            };
             (MINION_NAMES[idx].to_string(), sprite)
         }
         EnemyTier::Elite => {

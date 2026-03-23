@@ -5,10 +5,9 @@
 //! The result is deterministic chaos: same seed = same fate.
 
 use crate::math_engines::{
-    ALL_ENGINES, ENGINE_NAMES, MathEngine,
-    lorenz_attractor, fourier_harmonic, prime_density_sieve, riemann_zeta_partial,
-    fibonacci_golden_spiral, mandelbrot_escape, logistic_map, euler_totient,
-    collatz_chain, modular_exp_hash,
+    collatz_chain, euler_totient, fibonacci_golden_spiral, fourier_harmonic, logistic_map,
+    lorenz_attractor, mandelbrot_escape, modular_exp_hash, prime_density_sieve,
+    riemann_zeta_partial, MathEngine, ALL_ENGINES, ENGINE_NAMES,
 };
 
 /// A single step in the chaos chain
@@ -110,10 +109,13 @@ pub fn chaos_roll_verbose(input: f64, seed: u64) -> ChaosRollResult {
 
     for i in 0..chain_len {
         // Pick engine deterministically from seed+position
-        let engine_idx = (seed.wrapping_mul(2654435761).wrapping_add(i as u64 * 1234567891))
-            as usize
+        let engine_idx = (seed
+            .wrapping_mul(2654435761)
+            .wrapping_add(i as u64 * 1234567891)) as usize
             % ALL_ENGINES.len();
-        let engine_seed = seed.wrapping_add(i as u64 * 9999991).wrapping_mul(6364136223846793005);
+        let engine_seed = seed
+            .wrapping_add(i as u64 * 9999991)
+            .wrapping_mul(6364136223846793005);
         let engine = ALL_ENGINES[engine_idx];
         let output = engine(value, engine_seed);
 
@@ -155,8 +157,9 @@ pub fn destiny_roll(input: f64, seed: u64) -> ChaosRollResult {
     let mut value = input;
 
     for (i, (engine, name)) in engines.iter().enumerate() {
-        let engine_seed =
-            seed.wrapping_mul(2654435761u64.wrapping_add(i as u64)).wrapping_add(i as u64 * 9876543211);
+        let engine_seed = seed
+            .wrapping_mul(2654435761u64.wrapping_add(i as u64))
+            .wrapping_add(i as u64 * 9876543211);
         let output = engine(value, engine_seed);
         chain.push(ChainStep {
             engine_name: name,
@@ -168,7 +171,11 @@ pub fn destiny_roll(input: f64, seed: u64) -> ChaosRollResult {
     }
 
     let game_value = ((value + 1.0) / 2.0 * 100.0).round() as i64;
-    ChaosRollResult { final_value: value, chain, game_value }
+    ChaosRollResult {
+        final_value: value,
+        chain,
+        game_value,
+    }
 }
 
 /// Bias a chaos roll toward positive or negative outcomes.
@@ -240,8 +247,9 @@ impl ChaosPipeline {
         let mut value = input;
 
         for (i, (engine, name)) in self.engines.iter().enumerate() {
-            let engine_seed =
-                seed.wrapping_mul(self.seed_modifier).wrapping_add(i as u64 * 777777777);
+            let engine_seed = seed
+                .wrapping_mul(self.seed_modifier)
+                .wrapping_add(i as u64 * 777777777);
             let output = engine(value, engine_seed);
             chain.push(ChainStep {
                 engine_name: name,
@@ -253,7 +261,11 @@ impl ChaosPipeline {
         }
 
         let game_value = ((value + 1.0) / 2.0 * 100.0).round() as i64;
-        ChaosRollResult { final_value: value, chain, game_value }
+        ChaosRollResult {
+            final_value: value,
+            chain,
+            game_value,
+        }
     }
 }
 
@@ -292,7 +304,10 @@ mod tests {
                 positive_count += 1;
             }
         }
-        assert!(positive_count >= 18, "Positive bias should mostly give positive results");
+        assert!(
+            positive_count >= 18,
+            "Positive bias should mostly give positive results"
+        );
     }
 
     #[test]

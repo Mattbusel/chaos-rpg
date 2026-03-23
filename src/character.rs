@@ -3,7 +3,7 @@
 //! CHAOS RPG has 4 character classes and 7 unbounded stats.
 //! Stats can exceed any limit — there is no cap. The universe is your cap.
 
-use crate::chaos_pipeline::{destiny_roll, roll_stat, chaos_roll_verbose};
+use crate::chaos_pipeline::{chaos_roll_verbose, destiny_roll, roll_stat};
 use serde::{Deserialize, Serialize};
 
 // ─── CLASSES ─────────────────────────────────────────────────────────────────
@@ -28,10 +28,18 @@ impl CharacterClass {
 
     pub fn description(&self) -> &'static str {
         match self {
-            CharacterClass::Mage => "Bends chaos through pure mathematical will. High MANA and ENTROPY, low VITALITY.",
-            CharacterClass::Berserker => "Channels pain into exponential power. VITALITY and FORCE scale catastrophically.",
-            CharacterClass::Ranger => "Reads the prime number patterns in nature. Balanced stats with deadly PRECISION.",
-            CharacterClass::Thief => "Exploits the logistic map's chaotic phase transitions. Master of CUNNING and LUCK.",
+            CharacterClass::Mage => {
+                "Bends chaos through pure mathematical will. High MANA and ENTROPY, low VITALITY."
+            }
+            CharacterClass::Berserker => {
+                "Channels pain into exponential power. VITALITY and FORCE scale catastrophically."
+            }
+            CharacterClass::Ranger => {
+                "Reads the prime number patterns in nature. Balanced stats with deadly PRECISION."
+            }
+            CharacterClass::Thief => {
+                "Exploits the logistic map's chaotic phase transitions. Master of CUNNING and LUCK."
+            }
         }
     }
 
@@ -97,12 +105,12 @@ impl std::fmt::Display for CharacterClass {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Background {
-    Scholar,      // +MANA +ENTROPY
-    Wanderer,     // +LUCK +PRECISION
-    Gladiator,    // +FORCE +VITALITY
-    Outcast,      // +CUNNING +ENTROPY
-    Merchant,     // +LUCK +CUNNING
-    Cultist,      // +MANA +ENTROPY (extreme)
+    Scholar,   // +MANA +ENTROPY
+    Wanderer,  // +LUCK +PRECISION
+    Gladiator, // +FORCE +VITALITY
+    Outcast,   // +CUNNING +ENTROPY
+    Merchant,  // +LUCK +CUNNING
+    Cultist,   // +MANA +ENTROPY (extreme)
 }
 
 impl Background {
@@ -119,12 +127,37 @@ impl Background {
 
     pub fn stat_bonus(&self) -> StatBlock {
         match self {
-            Background::Scholar => StatBlock { mana: 15, entropy: 10, ..StatBlock::zero() },
-            Background::Wanderer => StatBlock { luck: 15, precision: 10, ..StatBlock::zero() },
-            Background::Gladiator => StatBlock { force: 15, vitality: 10, ..StatBlock::zero() },
-            Background::Outcast => StatBlock { cunning: 15, entropy: 10, ..StatBlock::zero() },
-            Background::Merchant => StatBlock { luck: 10, cunning: 15, ..StatBlock::zero() },
-            Background::Cultist => StatBlock { mana: 20, entropy: 20, vitality: -10, ..StatBlock::zero() },
+            Background::Scholar => StatBlock {
+                mana: 15,
+                entropy: 10,
+                ..StatBlock::zero()
+            },
+            Background::Wanderer => StatBlock {
+                luck: 15,
+                precision: 10,
+                ..StatBlock::zero()
+            },
+            Background::Gladiator => StatBlock {
+                force: 15,
+                vitality: 10,
+                ..StatBlock::zero()
+            },
+            Background::Outcast => StatBlock {
+                cunning: 15,
+                entropy: 10,
+                ..StatBlock::zero()
+            },
+            Background::Merchant => StatBlock {
+                luck: 10,
+                cunning: 15,
+                ..StatBlock::zero()
+            },
+            Background::Cultist => StatBlock {
+                mana: 20,
+                entropy: 20,
+                vitality: -10,
+                ..StatBlock::zero()
+            },
         }
     }
 }
@@ -135,18 +168,26 @@ impl Background {
 /// Values can theoretically grow without limit (wrapping at ±100,000 in display).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatBlock {
-    pub vitality: i64,   // HP multiplier, resistance
-    pub force: i64,      // Physical damage, carry weight
-    pub mana: i64,       // Spell power, magic resist
-    pub cunning: i64,    // Critical chance, trap detection
-    pub precision: i64,  // Accuracy, ranged damage
-    pub entropy: i64,    // Chaos bonus to all rolls
-    pub luck: i64,       // General fortune modifier
+    pub vitality: i64,  // HP multiplier, resistance
+    pub force: i64,     // Physical damage, carry weight
+    pub mana: i64,      // Spell power, magic resist
+    pub cunning: i64,   // Critical chance, trap detection
+    pub precision: i64, // Accuracy, ranged damage
+    pub entropy: i64,   // Chaos bonus to all rolls
+    pub luck: i64,      // General fortune modifier
 }
 
 impl StatBlock {
     pub fn zero() -> Self {
-        StatBlock { vitality: 0, force: 0, mana: 0, cunning: 0, precision: 0, entropy: 0, luck: 0 }
+        StatBlock {
+            vitality: 0,
+            force: 0,
+            mana: 0,
+            cunning: 0,
+            precision: 0,
+            entropy: 0,
+            luck: 0,
+        }
     }
 
     pub fn add(&self, other: &StatBlock) -> StatBlock {
@@ -162,7 +203,13 @@ impl StatBlock {
     }
 
     pub fn total(&self) -> i64 {
-        self.vitality + self.force + self.mana + self.cunning + self.precision + self.entropy + self.luck
+        self.vitality
+            + self.force
+            + self.mana
+            + self.cunning
+            + self.precision
+            + self.entropy
+            + self.luck
     }
 
     pub fn power_level(&self) -> PowerTier {
@@ -202,12 +249,12 @@ impl PowerTier {
 
     pub fn color_code(&self) -> &'static str {
         match self {
-            PowerTier::Mortal => "\x1b[37m",        // white
-            PowerTier::Awakened => "\x1b[32m",      // green
-            PowerTier::Champion => "\x1b[36m",      // cyan
-            PowerTier::Legendary => "\x1b[33m",     // yellow
-            PowerTier::Transcendent => "\x1b[35m",  // magenta
-            PowerTier::Godlike => "\x1b[91m",       // bright red
+            PowerTier::Mortal => "\x1b[37m",       // white
+            PowerTier::Awakened => "\x1b[32m",     // green
+            PowerTier::Champion => "\x1b[36m",     // cyan
+            PowerTier::Legendary => "\x1b[33m",    // yellow
+            PowerTier::Transcendent => "\x1b[35m", // magenta
+            PowerTier::Godlike => "\x1b[91m",      // bright red
         }
     }
 }
@@ -232,7 +279,12 @@ pub struct Character {
 
 impl Character {
     /// Roll a new character with destiny (all 10 engines)
-    pub fn roll_new(name: String, class: CharacterClass, background: Background, seed: u64) -> Self {
+    pub fn roll_new(
+        name: String,
+        class: CharacterClass,
+        background: Background,
+        seed: u64,
+    ) -> Self {
         let weights = class.stat_weights();
         let bg_bonus = background.stat_bonus();
 
@@ -342,11 +394,11 @@ impl Character {
 
 pub fn stat_color(value: i64) -> &'static str {
     match value {
-        i64::MIN..=29 => "\x1b[31m",  // red
-        30..=59 => "\x1b[33m",        // yellow
-        60..=89 => "\x1b[32m",        // green
-        90..=149 => "\x1b[36m",       // cyan
-        _ => "\x1b[35m",              // magenta (godlike)
+        i64::MIN..=29 => "\x1b[31m", // red
+        30..=59 => "\x1b[33m",       // yellow
+        60..=89 => "\x1b[32m",       // green
+        90..=149 => "\x1b[36m",      // cyan
+        _ => "\x1b[35m",             // magenta (godlike)
     }
 }
 
@@ -355,10 +407,7 @@ pub fn display_stat(name: &str, value: i64) -> String {
     let reset = "\x1b[0m";
     let bar_len = (value.clamp(0, 100) as usize / 5).min(20);
     let bar = "▓".repeat(bar_len) + &"░".repeat(20 - bar_len);
-    format!(
-        "  {:12} {}{:>6}{} [{}]",
-        name, color, value, reset, bar
-    )
+    format!("  {:12} {}{:>6}{} [{}]", name, color, value, reset, bar)
 }
 
 #[cfg(test)]
@@ -376,7 +425,10 @@ mod tests {
         assert!(c.max_hp > 0);
         assert!(c.current_hp > 0);
         assert_eq!(c.level, 1);
-        assert!(c.stats.mana > c.stats.force, "Mage should have mana > force");
+        assert!(
+            c.stats.mana > c.stats.force,
+            "Mage should have mana > force"
+        );
     }
 
     #[test]
@@ -392,7 +444,12 @@ mod tests {
 
     #[test]
     fn character_takes_damage_correctly() {
-        let mut c = Character::roll_new("X".to_string(), CharacterClass::Thief, Background::Outcast, 1);
+        let mut c = Character::roll_new(
+            "X".to_string(),
+            CharacterClass::Thief,
+            Background::Outcast,
+            1,
+        );
         let initial_hp = c.current_hp;
         c.take_damage(10);
         assert_eq!(c.current_hp, initial_hp - 10);
@@ -400,7 +457,12 @@ mod tests {
 
     #[test]
     fn hp_cannot_go_below_zero() {
-        let mut c = Character::roll_new("X".to_string(), CharacterClass::Ranger, Background::Wanderer, 2);
+        let mut c = Character::roll_new(
+            "X".to_string(),
+            CharacterClass::Ranger,
+            Background::Wanderer,
+            2,
+        );
         c.take_damage(1_000_000);
         assert_eq!(c.current_hp, 0);
         assert!(!c.is_alive());
