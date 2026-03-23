@@ -9,6 +9,28 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 ---
 
+## Screenshots
+
+<table>
+<tr>
+<td><img src="docs/screenshots/character-creation.png" width="420" alt="Character Creation"/><br/><sub>8 classes · 4 backgrounds · 4 difficulties</sub></td>
+<td><img src="docs/screenshots/combat-chain.png" width="420" alt="Chaos Engine combat chain"/><br/><sub>The Chaos Engine — 8 linked math functions, live chain output</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body chart with MATH.ABSENT"/><br/><sub>13-part body system — injuries cascade into MATH.ABSENT</sub></td>
+<td><img src="docs/screenshots/crafting.png" width="420" alt="Crafting bench"/><br/><sub>Crafting bench — Reforge, Augment, Corrupt, Mirror and more</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/tutorial.png" width="420" alt="Tutorial slide 1"/><br/><sub>Built-in 5-slide tutorial — press ? on the title screen</sub></td>
+<td><img src="docs/screenshots/scoreboard.png" width="420" alt="Hall of Chaos scoreboard"/><br/><sub>Hall of Chaos + Hall of Misery — two separate leaderboards</sub></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshots/game-over.png" width="420" alt="Run summary on death"/><br/><sub>Full run summary on death — damage dealt, best hit, D/T ratio, power tier</sub></td>
+</tr>
+</table>
+
+---
+
 ## Download (No Rust Required)
 
 Pre-built binaries are attached to every [GitHub Release](https://github.com/Mattbusel/chaos-rpg/releases).
