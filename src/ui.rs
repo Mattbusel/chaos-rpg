@@ -139,6 +139,66 @@ pub fn press_enter(msg: &str) {
 
 // ─── BOX DRAWING UTILITIES ────────────────────────────────────────────────────
 
+/// Count visible display columns in a string, skipping ANSI escape sequences.
+pub fn visible_len(s: &str) -> usize {
+    let mut len = 0usize;
+    let mut in_esc = false;
+    for c in s.chars() {
+        if c == '\x1b' {
+            in_esc = true;
+        } else if in_esc {
+            if c.is_ascii_alphabetic() {
+                in_esc = false;
+            }
+        } else {
+            len += 1;
+        }
+    }
+    len
+}
+
+/// Right-pad `s` to `width` visible columns with spaces (ANSI-aware).
+pub fn pad_visible(s: &str, width: usize) -> String {
+    let v = visible_len(s);
+    if v < width {
+        format!("{}{}", s, " ".repeat(width - v))
+    } else {
+        s.to_string()
+    }
+}
+
+/// Truncate `s` to at most `max_cols` visible columns (ANSI-aware).
+/// Appends '…' if truncated.
+pub fn truncate_visible(s: &str, max_cols: usize) -> String {
+    if visible_len(s) <= max_cols {
+        return s.to_string();
+    }
+    // Walk chars, keeping track of visible count, stop before ANSI sequences.
+    let mut out = String::new();
+    let mut vis = 0usize;
+    let mut in_esc = false;
+    let target = max_cols.saturating_sub(1); // 1 col for the ellipsis
+    for c in s.chars() {
+        if c == '\x1b' {
+            in_esc = true;
+            out.push(c);
+        } else if in_esc {
+            out.push(c);
+            if c.is_ascii_alphabetic() {
+                in_esc = false;
+            }
+        } else {
+            if vis >= target {
+                break;
+            }
+            out.push(c);
+            vis += 1;
+        }
+    }
+    out.push('…');
+    out
+}
+
 /// Draw a full-width labeled box header
 pub fn box_header(label: &str, color: &str, width: usize) {
     let inner = width.saturating_sub(4);
@@ -146,7 +206,6 @@ pub fn box_header(label: &str, color: &str, width: usize) {
     println!("{}╔{}╗{}", color, "═".repeat(width - 2), RESET);
     println!("{}║ {}{}{} ║", color, BOLD, padded, RESET);
     println!("{}╚{}╝{}", color, "═".repeat(width - 2), RESET);
-    // fix trailing RESET
     print!("{}", RESET);
 }
 
@@ -154,12 +213,9 @@ pub fn box_section(lines: &[String], color: &str, width: usize) {
     let inner = width.saturating_sub(4);
     println!("{}┌{}┐{}", color, "─".repeat(width - 2), RESET);
     for line in lines {
-        let display = if line.len() > inner {
-            format!("{}…", &line[..inner - 1])
-        } else {
-            format!("{:<width$}", line, width = inner)
-        };
-        println!("{}│ {} │{}", color, display, RESET);
+        let truncated = truncate_visible(line, inner);
+        let padded = pad_visible(&truncated, inner);
+        println!("{}│ {} │{}", color, padded, RESET);
     }
     println!("{}└{}┘{}", color, "─".repeat(width - 2), RESET);
 }
@@ -593,28 +649,23 @@ pub fn show_character_sheet(c: &Character) {
         RESET
     );
     {
-        // Show passive name + truncated description to fit the 50-wide box.
-        // Visible budget: "  ║  Passive: " (14) + name + " — " (3) + desc + "║" (1) = 50
+        // Passive: "  ║  [PASSIVE] Name — desc  ║" — box inner is 48 visible cols
         let pname = c.class.passive_name();
         let pdesc = c.class.passive_desc();
-        let used = 14 + pname.len() + 3 + 1; // 14 prefix, 3 separator, 1 border
-        let remaining = 50usize.saturating_sub(used);
-        let desc_truncated = if pdesc.len() > remaining && remaining > 1 {
-            format!("{}…", &pdesc[..remaining.saturating_sub(1)])
+        // prefix "  [PASSIVE] " = 12 visible, name, " -- " = 4, desc, trailing up to border
+        let prefix_vis = 12 + pname.len() + 4;
+        let desc_budget = 48usize.saturating_sub(prefix_vis);
+        let desc_show = if pdesc.len() > desc_budget && desc_budget > 1 {
+            format!("{}…", &pdesc[..desc_budget.saturating_sub(1)])
         } else {
-            pdesc[..pdesc.len().min(remaining)].to_string()
+            pdesc.to_string()
         };
-        println!(
-            "  {}║  {}Passive: {}{}{} — {}{}║{}",
-            col,
-            t_magic(),
-            BOLD,
-            pname,
-            RESET,
-            desc_truncated,
-            col,
-            RESET
+        let full_line = format!(
+            "{}[PASSIVE]{} {} -- {}",
+            t_magic(), RESET, pname, desc_show
         );
+        let padded = pad_visible(&full_line, 48);
+        println!("  {}║  {}{}║{}", col, padded, col, RESET);
     }
     println!(
         "  {}╠══════════════════════════════════════════════════╣{}",
@@ -656,21 +707,35 @@ pub fn show_character_sheet(c: &Character) {
         "  {}╠══════════════════════════════════════════════════╣{}",
         col, RESET
     );
-    println!(
-        "  {}║  Spells: {}  Items: {}  Difficulty: {}  SP: {}{}║{}",
-        col,
-        c.known_spells.len(),
-        c.inventory.len(),
-        c.difficulty.name(),
-        c.skill_points,
-        col,
-        RESET
-    );
+    // Inventory / spells / skill points row
+    {
+        let row = format!(
+            "Spells: {}  Items: {}  Difficulty: {}  SP: {}",
+            c.known_spells.len(), c.inventory.len(), c.difficulty.name(), c.skill_points
+        );
+        println!("  {}║  {}{}║{}", col, pad_visible(&row, 48), col, RESET);
+    }
+    // Faction reputation row
+    {
+        use crate::factions::Faction;
+        let fr = &c.faction_rep;
+        let row = format!(
+            "{}ORDER:{} {:>4}  {}CULT:{} {:>4}  {}WATCH:{} {:>4}",
+            "\x1b[34m", RESET, fr.get(Faction::OrderOfConvergence),
+            "\x1b[31m", RESET, fr.get(Faction::CultOfDivergence),
+            "\x1b[35m", RESET, fr.get(Faction::WatchersOfBoundary),
+        );
+        println!("  {}║  {}{}║{}", col, pad_visible(&row, 48), col, RESET);
+    }
     println!(
         "  {}╚══════════════════════════════════════════════════╝{}",
         col, RESET
     );
-    // Body injury summary — only show if any injuries exist.
+    // Body summary — always shown
+    println!();
+    println!("  {}Body:{}", DIM, RESET);
+    println!("  {}", c.body.combat_summary());
+    // Full body chart if any injuries
     let has_injuries = c.body.parts.values().any(|s| s.injury.is_some());
     if has_injuries {
         println!();
@@ -821,10 +886,18 @@ pub fn show_combat_menu(player: &Character, enemy: &crate::enemy::Enemy, round: 
         RESET
     );
 
-    // Status badges
+    // Status badges — use visible_len padding so ANSI codes don't break alignment
     let badges = player.status_badge_line();
     if !badges.is_empty() {
-        println!("  {}║  Status: {}{:<30}{}║{}", c, badges, "", c, RESET);
+        // Box inner = w-4 = 52; "Status: " = 8; leaves 44 for badges
+        let status_label = format!("Status: {}", badges);
+        println!("  {}║  {}{}║{}", c, pad_visible(&status_label, 52), c, RESET);
+    }
+    // Body injury indicator in combat
+    let body_summary = player.body.combat_summary();
+    if !body_summary.is_empty() {
+        let brow = format!("{}Body:{} {}", DIM, RESET, body_summary);
+        println!("  {}║  {}{}║{}", c, pad_visible(&brow, 52), c, RESET);
     }
 
     println!("  {}╠{}╣{}", c, bar, RESET);
@@ -895,13 +968,20 @@ pub fn read_combat_action() -> crate::combat::CombatAction {
                 let idx = s[1..].parse::<usize>().unwrap_or(1).saturating_sub(1);
                 return CombatAction::UseItem(idx);
             }
-            "?" => {
-                println!(
-                    "  {}Use 't' after combat to review the last chaos trace.{}",
-                    DIM, RESET
-                );
+            "?" | "help" => {
+                println!();
+                println!("  {}--- COMBAT ACTIONS ---{}", CYAN, RESET);
+                println!("  {}[A]{} Attack      — standard attack, builds combo streak", GREEN, RESET);
+                println!("  {}[H]{} Heavy       — consumes combo for big hit", YELLOW, RESET);
+                println!("  {}[D]{} Defend      — reduce next hit by VIT/3 + FOR/5", CYAN, RESET);
+                println!("  {}[T]{} Taunt       — draw enemy attack, boosts next strike", MAGENTA, RESET);
+                println!("  {}[F]{} Flee        — attempt escape (LCK-based, leg injuries penalize)", RED, RESET);
+                println!("  {}[S1-S9]{} Spell   — cast a known spell by number", BRIGHT_CYAN, RESET);
+                println!("  {}[I1-I9]{} Item    — use inventory item by number", GREEN, RESET);
+                println!("  {}Note:{} engine trace shows automatically after each action.", DIM, RESET);
+                println!();
             }
-            _ => println!("  {}a/h/d/t/f/s#/i#{}", DIM, RESET),
+            _ => println!("  {}Unknown: a/h/d/t/f/s#/i#  (? for help){}", DIM, RESET),
         }
     }
 }
@@ -928,6 +1008,42 @@ pub fn display_combat_events(events: &[crate::combat::CombatEvent]) {
         };
         println!("  {}{}{}", color, line, RESET);
     }
+}
+
+// ─── FACTION REP DISPLAY ──────────────────────────────────────────────────────
+
+pub fn show_faction_rep(player: &crate::character::Character) {
+    use crate::factions::{Faction, vendor_greeting};
+    let col = t_primary();
+    let fr = &player.faction_rep;
+    println!();
+    println!("  {}╔══════════════════════════════════════════════════╗{}", col, RESET);
+    println!("  {}║           FACTION REPUTATION                     ║{}", col, RESET);
+    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
+    for faction in Faction::all() {
+        let rep = fr.get(faction);
+        let tier = fr.tier(faction);
+        let fc = faction.color();
+        let tc = tier.color();
+        // Bar: -500 to +500 mapped to 20 cols
+        let bar_pct = ((rep + 500) as f64 / 1000.0).clamp(0.0, 1.0);
+        let filled = (bar_pct * 20.0) as usize;
+        let bar = format!("[{}{}{}]",
+            "\x1b[32m".to_owned() + &"█".repeat(filled),
+            "\x1b[90m".to_owned() + &"░".repeat(20 - filled),
+            RESET);
+        println!("  {}║  {}{:<24}{} {}{}  {:>5}{} {}{}",
+            col, fc, faction.name(), RESET,
+            tc, tier.name(), RESET,
+            rep, RESET, bar);
+        println!("  {}║    {}\"{}\"{}",
+            col, DIM, vendor_greeting(faction, tier), RESET);
+        println!("  {}║{}", col, RESET);
+    }
+    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
+    println!("  {}║  {}Gaining rep with Order/Cult lowers the other.   {}║{}", col, DIM, col, RESET);
+    println!("  {}║  {}Watchers are neutral -- no cross-penalty.       {}║{}", col, DIM, col, RESET);
+    println!("  {}╚══════════════════════════════════════════════════╝{}", col, RESET);
 }
 
 // ─── FLOOR / ROOM DISPLAY ─────────────────────────────────────────────────────

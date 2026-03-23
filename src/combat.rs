@@ -580,6 +580,41 @@ pub fn resolve_action(
                     ),
                 });
             }
+            // Deep status effects: floor 3+ enemies have a chance to inflict pipeline ailments
+            if player.floor >= 3 {
+                use crate::character::StatusEffect;
+                let deep_seed = enemy_seed.wrapping_mul(0xdeadc0de).wrapping_add(state.turn as u64);
+                let roll_pct = deep_seed % 100;
+                // Threshold scales with floor: floor 3 = 8%, floor 10 = 15%, floor 20+ = 25%
+                let threshold = (8 + player.floor / 2).min(25) as u64;
+                if roll_pct < threshold {
+                    let effect_idx = (deep_seed >> 8) % 6;
+                    let duration = 2 + (player.floor / 4).min(3);
+                    let (effect, name) = match effect_idx {
+                        0 => (StatusEffect::Fracture(duration), "FRACTURE"),
+                        1 => (StatusEffect::Resonance(duration), "RESONANCE"),
+                        2 => (StatusEffect::PhaseLock(duration), "PHASE LOCK"),
+                        3 => (StatusEffect::DimensionalBleed(duration), "DIM.BLEED"),
+                        4 => (StatusEffect::Recursive(duration), "RECURSIVE"),
+                        _ => (StatusEffect::Nullified(duration), "NULLIFIED"),
+                    };
+                    player.add_status(effect);
+                    events.push(CombatEvent::ChaosEvent {
+                        description: format!(
+                            "DEEP AILMENT: {} applied for {} rounds! ({})",
+                            name, duration,
+                            match effect_idx {
+                                0 => "some rolls use 1 engine only",
+                                1 => "roll output feeds next roll input",
+                                2 => "all rolls share the same seed",
+                                3 => "enemy uses your stat biases",
+                                4 => "each engine runs twice",
+                                _ => "all rolls return 0.0 -- no crits",
+                            }
+                        ),
+                    });
+                }
+            }
         }
     } else {
         state.enemy_stunned = false;

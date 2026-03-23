@@ -213,7 +213,10 @@ fn run_game(mode: GameMode) {
                 player.kills
             );
             println!();
-            println!("  [E] Enter room   [C] Character sheet   [T] Last chaos trace");
+            println!("  {}[E]{} Enter room   {}[C]{} Character   {}[B]{} Body chart",
+                ui::GREEN, ui::RESET, ui::CYAN, ui::RESET, ui::YELLOW, ui::RESET);
+            println!("  {}[P]{} Skill tree   {}[F]{} Factions    {}[T]{} Last trace",
+                ui::MAGENTA, ui::RESET, ui::BRIGHT_CYAN, ui::RESET, ui::DIM, ui::RESET);
             if floor.rooms_remaining() == 0 {
                 println!(
                     "  {}[D] Descend to floor {}{}",
@@ -228,7 +231,32 @@ fn run_game(mode: GameMode) {
 
             match input.trim() {
                 "c" => {
+                    ui::clear_screen();
                     ui::show_character_sheet(&player);
+                    ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+                    continue 'rooms;
+                }
+                "b" => {
+                    ui::clear_screen();
+                    println!();
+                    println!("  {}=== BODY CHART ==={}", ui::YELLOW, ui::RESET);
+                    println!();
+                    for line in player.body.display_lines() {
+                        println!("  {}", line);
+                    }
+                    println!();
+                    println!("  {}{}", ui::DIM, player.body.combat_summary());
+                    println!("{}", ui::RESET);
+                    ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+                    continue 'rooms;
+                }
+                "p" => {
+                    ui::show_passive_tree_ui(&mut player, floor_seed);
+                    continue 'rooms;
+                }
+                "f" => {
+                    ui::clear_screen();
+                    ui::show_faction_rep(&player);
                     ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                     continue 'rooms;
                 }
