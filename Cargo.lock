@@ -385,6 +385,7 @@ dependencies = [
  "chaos-rpg-core",
  "rand",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -22,12 +22,16 @@ use chaos_rpg_core::{
     skill_checks::{perform_skill_check, Difficulty as SkillDiff, SkillType},
     spells::Spell,
     world::{generate_floor, room_enemy, Floor, RoomType},
+    achievements::{AchievementStore, RunSummary, CombatSnapshot},
+    run_history::{RunHistory, RunRecord},
 };
 
 mod renderer;
 mod sprites;
 mod theme;
 mod ui_overlay;
+mod visual_config;
+use visual_config as vc;
 
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
 
@@ -102,6 +106,8 @@ enum AppScreen {
     GameOver,
     Victory,
     Scoreboard,
+    Achievements,
+    RunHistory,
 }
 
 // ─── ROOM EVENT ───────────────────────────────────────────────────────────────
@@ -148,10 +154,10 @@ impl Particle {
         Self { x, y: y as f32, text: text.into(), col, age: 0, lifetime }
     }
     fn alive(&self) -> bool { self.age < self.lifetime }
-    fn step(&mut self) { self.age += 1; self.y -= 0.45; }
-    /// Dim color in the last 40% of lifetime.
+    fn step(&mut self) { self.age += 1; self.y -= visual_config::PARTICLE_DRIFT; }
+    /// Dim color in the last 30% of lifetime.
     fn render_col(&self) -> (u8, u8, u8) {
-        let fade_at = self.lifetime * 3 / 5;
+        let fade_at = (self.lifetime as f32 * visual_config::PARTICLE_FADE_START) as u32;
         if self.age <= fade_at { return self.col; }
         let pct = 1.0 - (self.age - fade_at) as f32 / (self.lifetime - fade_at).max(1) as f32;
         (
@@ -229,10 +235,19 @@ struct State {
     kill_linger: u32,                       // frames to stay on combat after kill
     post_combat_screen: Option<AppScreen>,  // screen to go to after linger
     // ── Passive tree browser ──
-    passive_scroll: usize,                  // scroll offset for passive tree list
+    passive_scroll: usize,
     // ── Tutorial ──
-    tutorial_slide: usize,                  // 0 = inactive, 1-N = showing slide N
-    save_exists: bool,                      // whether a save file was found at startup
+    tutorial_slide: usize,
+    save_exists: bool,
+    // ── Achievements ──
+    achievements: AchievementStore,
+    achievement_banner: Option<String>,     // currently displayed banner text
+    achievement_banner_frames: u32,         // frames remaining for banner
+    // ── Run history ──
+    run_history: RunHistory,
+    history_scroll: usize,
+    // ── Death recap clipboard ──
+    last_recap_text: String,                // shareable text of last run
 }
 
 impl State {
@@ -276,6 +291,12 @@ impl State {
             passive_scroll: 0,
             tutorial_slide: 0,
             save_exists: save_path().exists(),
+            achievements: AchievementStore::load(),
+            achievement_banner: None,
+            achievement_banner_frames: 0,
+            run_history: RunHistory::load(),
+            history_scroll: 0,
+            last_recap_text: String::new(),
         }
     }
 
@@ -845,63 +866,65 @@ impl State {
                     // Enemy takes damage from player
                     CombatEvent::PlayerAttack { damage, is_crit } => {
                         let (text, col, lt) = if *is_crit {
-                            (format!("★ {} ★", damage), (255u8, 215u8, 0u8), 22u32)
+                            (format!("★ {} ★", damage), (255u8, 215u8, 0u8), vc::particle_lifetime_crit())
                         } else {
-                            (format!("{}", damage), (80, 220, 80), 18)
+                            (format!("{}", damage), (80, 220, 80), vc::particle_lifetime_normal())
                         };
-                        // Jitter x slightly using frame so stacked hits don't overlap
                         let jx = 12 + (self.frame % 8) as i32;
                         self.particles.push(Particle::new(jx, 7, text, col, lt));
-                        self.enemy_flash = if *is_crit { 7 } else { 3 };
+                        self.enemy_flash = if *is_crit { vc::flash_crit() } else { vc::flash_normal() };
                         self.enemy_flash_col = col;
                     }
                     // Player takes damage from enemy
                     CombatEvent::EnemyAttack { damage, is_crit } => {
                         let (text, col, lt) = if *is_crit {
-                            (format!("☠ -{} !", damage), (255u8, 60u8, 0u8), 22u32)
+                            (format!("☠ -{} !", damage), (255u8, 60u8, 0u8), vc::particle_lifetime_crit())
                         } else {
-                            (format!("-{}", damage), (220, 50, 50), 18)
+                            (format!("-{}", damage), (220, 50, 50), vc::particle_lifetime_normal())
                         };
                         let jx = 53 + (self.frame % 8) as i32;
                         self.particles.push(Particle::new(jx, 7, text, col, lt));
-                        self.player_flash = if *is_crit { 8 } else { 4 };
-                        if *is_crit { self.hit_shake = 5; }
+                        self.player_flash = if *is_crit { vc::flash_crit() } else { vc::flash_normal() };
+                        if *is_crit { self.hit_shake = vc::shake_crit(); }
+                        else if self.is_boss_fight { self.hit_shake = vc::shake_boss(); }
                     }
                     // Healing
                     CombatEvent::PlayerHealed { amount } => {
                         self.particles.push(Particle::new(55, 9,
-                            format!("+{}", amount), (50, 220, 100), 18));
+                            format!("+{}", amount), (50, 220, 100), vc::particle_lifetime_heal()));
                     }
                     // Spell cast
                     CombatEvent::SpellCast { damage, backfired, .. } => {
                         if *backfired {
                             self.spell_beam_col = (220, 50, 50);
                             self.particles.push(Particle::new(50, 5,
-                                format!("BACKFIRE! -{}", damage), (255, 80, 0), 26));
-                            self.hit_shake = 4;
+                                format!("BACKFIRE! -{}", damage), (255, 80, 0), vc::particle_lifetime_backfire()));
+                            self.hit_shake = vc::shake_heavy();
                         } else {
                             self.spell_beam_col = (80, 140, 255);
                             self.particles.push(Particle::new(14, 6,
-                                format!("✦ {}", damage), (130, 190, 255), 22));
-                            self.enemy_flash = 6;
+                                format!("✦ {}", damage), (130, 190, 255), vc::particle_lifetime_spell()));
+                            self.enemy_flash = vc::flash_normal();
                             self.enemy_flash_col = (80, 140, 255);
                         }
-                        self.spell_beam = 12;
+                        self.spell_beam = vc::beam_charge() + vc::beam_hold();
                     }
                     // Enemy kill reward
                     CombatEvent::EnemyDied { xp, gold } => {
                         self.particles.push(Particle::new(8, 4,
-                            format!("+{} XP  +{}g", xp, gold), (255, 215, 0), 28));
+                            format!("+{} XP  +{}g", xp, gold), (255, 215, 0), vc::particle_lifetime_reward()));
+                        self.enemy_flash = vc::kill_flash();
+                        self.enemy_flash_col = (255, 255, 255); // white death flash
                     }
                     // Status applied
                     CombatEvent::StatusApplied { name } => {
                         self.particles.push(Particle::new(14, 11,
-                            format!("[{}]", name), (200, 150, 60), 16));
+                            format!("[{}]", name), (200, 150, 60), vc::particle_lifetime_status()));
                     }
                     // Defend
                     CombatEvent::PlayerDefend { damage_reduced } if *damage_reduced > 0 => {
                         self.particles.push(Particle::new(55, 6,
-                            format!("BLOCK -{}", damage_reduced), (80, 140, 200), 18));
+                            format!("BLOCK -{}", damage_reduced), (80, 140, 200), vc::particle_lifetime_normal()));
                     }
                     _ => {}
                 }
@@ -1095,7 +1118,7 @@ impl State {
                         AppScreen::FloorNav
                     }
                 };
-                self.kill_linger = 35;
+                self.kill_linger = vc::kill_linger();
                 self.post_combat_screen = Some(next_screen);
             }
 
@@ -1173,7 +1196,7 @@ impl State {
                 name: p.name.clone(), class: p.class.name().to_string(),
                 level: p.level, floor: p.floor, power_tier: tier.name().to_string(),
                 misery_index: misery, cause_of_death: p.run_stats.cause_of_death.clone(),
-                kills: p.kills, score: score_val, date: String::new(), epitaph,
+                kills: p.kills, score: score_val, date: String::new(), epitaph: epitaph.clone(),
             };
             let mut legacy = LegacyData::load();
             legacy.record_run(
@@ -1182,6 +1205,75 @@ impl State {
                 p.run_stats.deaths_to_backfire > 0, false, p.seed, tier.name(),
             );
             legacy.save();
+
+            // Run history
+            let mode_str = match self.game_mode {
+                GameMode::Story    => "Story",
+                GameMode::Infinite => "Infinite",
+                GameMode::Daily    => "Daily",
+            };
+            let record = RunRecord {
+                date:           chrono_date_simple(),
+                name:           p.name.clone(),
+                class:          p.class.name().to_string(),
+                difficulty:     p.difficulty.name().to_string(),
+                game_mode:      mode_str.to_string(),
+                floor:          p.floor,
+                level:          p.level,
+                kills:          p.kills as u64,
+                score:          score_val,
+                damage_dealt:   p.run_stats.damage_dealt,
+                damage_taken:   p.run_stats.damage_taken,
+                highest_hit:    p.run_stats.highest_single_hit,
+                spells_cast:    p.run_stats.spells_cast,
+                items_used:     p.items_used,
+                gold:           p.gold,
+                misery_index:   misery,
+                corruption:     p.corruption,
+                power_tier:     tier.name().to_string(),
+                cause_of_death: p.run_stats.cause_of_death.clone(),
+                seed:           p.seed,
+                won:            self.screen == AppScreen::Victory,
+                epitaph:        epitaph.clone(),
+            };
+            self.run_history.push(record);
+
+            // Achievement check
+            let run_summary = RunSummary {
+                floor:           p.floor,
+                kills:           p.kills as u64,
+                level:           p.level,
+                class:           p.class.name().to_string(),
+                difficulty:      p.difficulty.name().to_string(),
+                damage_dealt:    p.run_stats.damage_dealt,
+                damage_taken:    p.run_stats.damage_taken,
+                highest_hit:     p.run_stats.highest_single_hit,
+                spells_cast:     p.run_stats.spells_cast,
+                items_used:      p.items_used,
+                gold:            p.gold,
+                misery_index:    misery,
+                corruption:      p.corruption,
+                power_tier:      tier.name().to_string(),
+                total_stats:     p.stats.total(),
+                cause_of_death:  p.run_stats.cause_of_death.clone(),
+                rooms_cleared:   p.rooms_cleared,
+                deaths_in_run:   0,
+                fled_count:      0,
+                all_stats_negative: all_neg,
+                total_runs:      self.run_history.runs.len() as u32,
+                total_deaths:    0,
+                won:             self.screen == AppScreen::Victory,
+                seed:            p.seed,
+            };
+            self.achievements.check_run(&run_summary);
+            self.achievements.save();
+            if let Some(banner) = self.achievements.pop_banner() {
+                self.achievement_banner = Some(banner);
+                self.achievement_banner_frames = 180;
+            }
+
+            // Build shareable recap text
+            self.last_recap_text = build_recap_text(p, score_val, misery, tier.name(), &epitaph, mode_str, p.seed);
         }
     }
 }
@@ -1257,7 +1349,37 @@ impl GameState for State {
             AppScreen::PassiveTree      => self.draw_passive_tree(ctx),
             AppScreen::GameOver         => self.draw_game_over(ctx),
             AppScreen::Victory          => self.draw_victory(ctx),
+            AppScreen::Achievements     => self.draw_achievements(ctx),
+            AppScreen::RunHistory       => self.draw_run_history(ctx),
             AppScreen::Scoreboard       => self.draw_scoreboard(ctx),
+        }
+
+        // Achievement banner overlay — shown on top of any screen
+        if self.achievement_banner_frames > 0 {
+            self.achievement_banner_frames -= 1;
+            if let Some(ref banner_text) = self.achievement_banner.clone() {
+                let t = self.theme().clone();
+                let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+                let gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+                let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+                let alpha = if self.achievement_banner_frames < 40 {
+                    self.achievement_banner_frames as f32 / 40.0
+                } else { 1.0 };
+                let fade_gld = RGB::from_u8(
+                    (t.gold.0 as f32 * alpha) as u8,
+                    (t.gold.1 as f32 * alpha) as u8,
+                    (t.gold.2 as f32 * alpha) as u8,
+                );
+                let txt: String = banner_text.chars().take(50).collect();
+                let box_w = (txt.len() as i32 + 5).max(24);
+                let bx = ((80 - box_w) / 2).max(0);
+                ctx.draw_box(bx, 1, box_w, 4, fade_gld, bg);
+                ctx.print_color(bx + 2, 2, gld, bg, "ACHIEVEMENT UNLOCKED");
+                ctx.print_color(bx + 2, 3, hd,  bg, &txt);
+                if self.achievement_banner_frames == 0 {
+                    self.achievement_banner = None;
+                }
+            }
         }
 
         self.handle_input(ctx);
@@ -1373,11 +1495,13 @@ impl State {
 
         // ── Hint bar ──────────────────────────────────────────────────────
         draw_separator(ctx, 2, 44, 75, &t);
-        print_hint(ctx, 4,  45, "↑↓",    " Navigate  ", &t);
-        print_hint(ctx, 22, 45, "Enter",  " Select  ",  &t);
-        print_hint(ctx, 38, 45, "T",      " Theme  ",   &t);
-        print_hint(ctx, 47, 45, "?",      " Tutorial  ", &t);
-        print_hint(ctx, 62, 45, "Q",      " Quit",       &t);
+        print_hint(ctx, 2,  45, "↑↓",   " Nav  ",     &t);
+        print_hint(ctx, 14, 45, "Enter"," Select  ",  &t);
+        print_hint(ctx, 28, 45, "T",    " Theme  ",   &t);
+        print_hint(ctx, 36, 45, "?",    " Tutorial  ",&t);
+        print_hint(ctx, 49, 45, "J",    " Achiev  ",  &t);
+        print_hint(ctx, 61, 45, "H",    " History  ", &t);
+        print_hint(ctx, 72, 45, "Q",    " Quit",       &t);
 
         // ── Theme badge & tagline ──────────────────────────────────────────
         let tname = format!(" {} [T] ", t.name);
@@ -2101,7 +2225,7 @@ impl State {
         // 1. Enemy panel hit flash — redraw border in effect color
         if self.enemy_flash > 0 {
             self.enemy_flash -= 1;
-            let t_scale = self.enemy_flash as f32 / 7.0;
+            let t_scale = self.enemy_flash as f32 / vc::flash_crit() as f32;
             let ec = self.enemy_flash_col;
             let r = (ec.0 as f32 * t_scale + 40.0 * (1.0 - t_scale)) as u8;
             let g = (ec.1 as f32 * t_scale + 40.0 * (1.0 - t_scale)) as u8;
@@ -2124,19 +2248,34 @@ impl State {
             ctx.draw_box(0, 0, 79, 49, RGB::from_u8(intensity, intensity / 4, 0), bg);
         }
 
-        // 4. Spell beam — animated line of chars across the centre gap (y=23)
+        // 4. Spell beam — charge then fire across the centre gap (y=23)
         if self.spell_beam > 0 {
             self.spell_beam -= 1;
             let bc = self.spell_beam_col;
-            let bc_rgb = RGB::from_u8(bc.0, bc.1, bc.2);
-            let beam_chars = ["~","≈","∿","~","≋","~"];
-            let beam_offset = (self.frame / 2) as usize;
-            for bx in 2..77i32 {
-                let c = beam_chars[(bx as usize + beam_offset) % beam_chars.len()];
-                ctx.print_color(bx, 23, bc_rgb, bg, c);
+            let total = vc::beam_charge() + vc::beam_hold();
+            let elapsed = total - self.spell_beam;
+            if elapsed < vc::beam_charge() {
+                // Charge phase: fill left-to-right progressively
+                let filled = (elapsed as i32 * 75 / vc::beam_charge() as i32).min(75);
+                let charge_col = RGB::from_u8(
+                    (bc.0 as u32 * elapsed as u32 / vc::beam_charge() as u32) as u8,
+                    (bc.1 as u32 * elapsed as u32 / vc::beam_charge() as u32) as u8,
+                    (bc.2 as u32 * elapsed as u32 / vc::beam_charge() as u32) as u8,
+                );
+                for bx in 2..(2 + filled) {
+                    ctx.print_color(bx, 23, charge_col, bg, "·");
+                }
+            } else {
+                // Fire phase: full animated beam
+                let bc_rgb = RGB::from_u8(bc.0, bc.1, bc.2);
+                let beam_chars = ["~","≈","∿","~","≋","~"];
+                let beam_offset = (self.frame / 2) as usize;
+                for bx in 2..77i32 {
+                    let c = beam_chars[(bx as usize + beam_offset) % beam_chars.len()];
+                    ctx.print_color(bx, 23, bc_rgb, bg, c);
+                }
+                ctx.print_color(39, 23, RGB::from_u8(255, 255, 200), bg, "✦");
             }
-            // Bright flash centre dot
-            ctx.print_color(39, 23, RGB::from_u8(255, 255, 200), bg, "✦");
         }
 
         // 5. Floating damage numbers — step and render
@@ -3151,6 +3290,8 @@ impl State {
                     self.tutorial_slide = 1;
                     self.screen = AppScreen::Tutorial;
                 }
+                VirtualKeyCode::J => self.screen = AppScreen::Achievements,
+                VirtualKeyCode::H => { self.history_scroll = 0; self.screen = AppScreen::RunHistory; }
                 _ => {}
             },
 
@@ -3506,6 +3647,22 @@ impl State {
                 }
                 _ => {}
             },
+
+            AppScreen::Achievements => match key {
+                VirtualKeyCode::Escape | VirtualKeyCode::Q | VirtualKeyCode::Return => {
+                    self.screen = AppScreen::Title;
+                }
+                _ => {}
+            },
+
+            AppScreen::RunHistory => match key {
+                VirtualKeyCode::Up   => { if self.history_scroll > 0 { self.history_scroll -= 1; } }
+                VirtualKeyCode::Down => { self.history_scroll = (self.history_scroll + 1).min(self.run_history.runs.len().saturating_sub(1)); }
+                VirtualKeyCode::Escape | VirtualKeyCode::Q | VirtualKeyCode::Return => {
+                    self.screen = AppScreen::Title;
+                }
+                _ => {}
+            },
         }
     }
 
@@ -3620,6 +3777,259 @@ impl State {
             }
             _ => {}
         }
+    }
+}
+
+// ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+
+/// Returns current date as "YYYY-MM-DD" using only std.
+fn chrono_date_simple() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Days since epoch
+    let days = secs / 86400;
+    // Gregorian calendar calculation
+    let z = days + 719468;
+    let era = z / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02}", y, m, d)
+}
+
+/// Build the shareable plain-text run recap.
+fn build_recap_text(
+    p: &chaos_rpg_core::character::Character,
+    score: u64,
+    misery: f64,
+    tier: &str,
+    epitaph: &str,
+    mode: &str,
+    seed: u64,
+) -> String {
+    let ratio = if p.run_stats.damage_taken > 0 {
+        p.run_stats.damage_dealt as f64 / p.run_stats.damage_taken as f64
+    } else {
+        p.run_stats.damage_dealt as f64
+    };
+    format!(
+        "=== CHAOS RPG — Run Recap ===\n\
+         Date      : {date}\n\
+         Seed      : {seed}\n\
+         Mode      : {mode}\n\
+         Character : {name} ({class} / {diff}) Lv.{level}\n\
+         Tier      : {tier}\n\
+         \n\
+         Floor     : {floor}\n\
+         Score     : {score}\n\
+         Kills     : {kills}\n\
+         Gold      : {gold}g\n\
+         \n\
+         Dmg Dealt : {dealt}\n\
+         Dmg Taken : {taken}\n\
+         D/T Ratio : {ratio:.2}\n\
+         Best Hit  : {best}\n\
+         Spells    : {spells}\n\
+         \n\
+         Misery    : {misery:.1}\n\
+         Corruption: {corr}\n\
+         Cause     : {cod}\n\
+         \n\
+         \"{epitaph}\"\n\
+         \n\
+         Play free at https://mfletcherdev.itch.io/chaos-rpg\n\
+         ==============================",
+        date    = chrono_date_simple(),
+        seed    = seed,
+        mode    = mode,
+        name    = p.name,
+        class   = p.class.name(),
+        diff    = p.difficulty.name(),
+        level   = p.level,
+        tier    = tier,
+        floor   = p.floor,
+        score   = score,
+        kills   = p.kills,
+        gold    = p.gold,
+        dealt   = p.run_stats.damage_dealt,
+        taken   = p.run_stats.damage_taken,
+        ratio   = ratio,
+        best    = p.run_stats.highest_single_hit,
+        spells  = p.run_stats.spells_cast,
+        misery  = misery,
+        corr    = p.corruption,
+        cod     = p.run_stats.cause_of_death,
+        epitaph = epitaph,
+    )
+}
+
+// ─── ACHIEVEMENTS SCREEN ─────────────────────────────────────────────────────
+
+impl State {
+    fn draw_achievements(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let _ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let _gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+        let dim  = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let suc  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
+        let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 79, 49, "ACHIEVEMENTS", &t);
+
+        let all = chaos_rpg_core::achievements::all_achievements();
+        let total = all.len();
+        let unlocked_count = all.iter().filter(|a| self.achievements.is_unlocked(&a.id)).count();
+
+        // Header
+        ctx.print_color(4, 2, hd, bg, &format!("Achievements — {}/{} Unlocked", unlocked_count, total));
+
+        // Progress bar
+        let bar_w = 72i32;
+        let filled = if total > 0 { (unlocked_count as i32 * bar_w) / total as i32 } else { 0 };
+        for i in 0..bar_w {
+            let c = if i < filled { suc } else { muted };
+            ctx.print_color(4 + i, 3, c, bg, if i < filled { "█" } else { "░" });
+        }
+
+        draw_separator(ctx, 2, 4, 75, &t);
+
+        // Rarity legend (compact)
+        let rarity_colors = [
+            ("Common",    (180u8, 180u8, 180u8)),
+            ("Uncommon",  (100,   220,   100)),
+            ("Rare",      (80,    140,   255)),
+            ("Epic",      (180,   80,    220)),
+            ("Legendary", (255,   160,   30)),
+            ("Mythic",    (255,   60,    60)),
+            ("Omega",     (255,   20,    220)),
+        ];
+        let mut lx = 4i32;
+        for (name, col) in &rarity_colors {
+            let rc = RGB::from_u8(col.0, col.1, col.2);
+            ctx.print_color(lx, 5, rc, bg, &format!("■{}", name));
+            lx += name.len() as i32 + 3;
+        }
+
+        draw_separator(ctx, 2, 6, 75, &t);
+
+        // List — 2 columns, scrollable
+        let list_y_start = 7i32;
+        let list_h = 38i32;
+        let per_page = list_h as usize;
+        let scroll = 0usize; // static for now — no scroll needed with 2 cols
+
+        let mut col_x = [4i32, 42i32];
+        let mut rows = [list_y_start; 2];
+
+        for (i, ach) in all.iter().enumerate().skip(scroll * 2).take(per_page * 2) {
+            let col = i % 2;
+            let y = rows[col];
+            if y >= list_y_start + list_h { continue; }
+
+            let unlocked = self.achievements.is_unlocked(&ach.id);
+            let rarity_col = match ach.rarity {
+                chaos_rpg_core::achievements::AchievementRarity::Common    => (180u8, 180u8, 180u8),
+                chaos_rpg_core::achievements::AchievementRarity::Uncommon  => (100, 220, 100),
+                chaos_rpg_core::achievements::AchievementRarity::Rare      => (80,  140, 255),
+                chaos_rpg_core::achievements::AchievementRarity::Epic      => (180,  80, 220),
+                chaos_rpg_core::achievements::AchievementRarity::Legendary => (255, 160,  30),
+                chaos_rpg_core::achievements::AchievementRarity::Mythic    => (255,  60,  60),
+                chaos_rpg_core::achievements::AchievementRarity::Omega     => (255,  20, 220),
+            };
+            let rc = RGB::from_u8(rarity_col.0, rarity_col.1, rarity_col.2);
+
+            let icon = if unlocked { "★" } else { "○" };
+            let name_col = if unlocked { rc } else { muted };
+            let name: String = ach.name.chars().take(30).collect();
+            ctx.print_color(col_x[col],     y, name_col, bg, &format!("{} {}", icon, name));
+            if unlocked {
+                let desc: String = ach.description.chars().take(33).collect();
+                ctx.print_color(col_x[col] + 2, y + 1, dim, bg, &desc);
+            } else {
+                ctx.print_color(col_x[col] + 2, y + 1, muted, bg, "???");
+            }
+
+            rows[col] += 3;
+        }
+
+        draw_separator(ctx, 2, 46, 75, &t);
+        print_hint(ctx, 4, 47, "Esc / Enter", " Back to title", &t);
+    }
+
+    fn draw_run_history(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let gld  = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+        let dim  = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let suc  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
+        let dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
+        let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 79, 49, "RUN HISTORY", &t);
+
+        let runs = self.run_history.runs.clone();
+        let total = runs.len();
+
+        ctx.print_color(4, 2, hd, bg,
+            &format!("Last {} runs  (newest first) — ↑↓ to scroll", total.min(50)));
+
+        draw_separator(ctx, 2, 3, 75, &t);
+
+        // Column headers
+        ctx.print_color(4,  4, ac, bg, "Date");
+        ctx.print_color(16, 4, ac, bg, "Name/Class");
+        ctx.print_color(34, 4, ac, bg, "Floor");
+        ctx.print_color(40, 4, ac, bg, "Score");
+        ctx.print_color(50, 4, ac, bg, "Kills");
+        ctx.print_color(57, 4, ac, bg, "Mode");
+        ctx.print_color(65, 4, ac, bg, "Diff");
+        ctx.print_color(71, 4, ac, bg, "Result");
+
+        draw_separator(ctx, 2, 5, 75, &t);
+
+        let visible_rows = 34usize;
+        let start = self.history_scroll.min(total.saturating_sub(1));
+        let end   = (start + visible_rows).min(total);
+
+        for (row, rec) in runs[start..end].iter().enumerate() {
+            let y = 6 + row as i32;
+            let result_col = if rec.won { suc } else { dng };
+            let result_str = if rec.won { "WON" } else { "died" };
+
+            let date_str: String = rec.date.chars().take(10).collect();
+            let ident: String = format!("{}/{}", &rec.name.chars().take(7).collect::<String>(), &rec.class.chars().take(9).collect::<String>());
+            ctx.print_color(4,  y, muted, bg, &date_str);
+            ctx.print_color(16, y, hd,    bg, &ident);
+            ctx.print_color(34, y, gld,   bg, &format!("{}", rec.floor));
+            ctx.print_color(40, y, ac,    bg, &format!("{}", rec.score));
+            ctx.print_color(50, y, suc,   bg, &format!("{}", rec.kills));
+            ctx.print_color(57, y, dim,   bg, &rec.game_mode.chars().take(7).collect::<String>());
+            ctx.print_color(65, y, dim,   bg, &rec.difficulty.chars().take(6).collect::<String>());
+            ctx.print_color(71, y, result_col, bg, result_str);
+        }
+
+        // Scroll indicator
+        if total > visible_rows {
+            let pct = if total > 1 { start * 100 / (total - 1) } else { 0 };
+            ctx.print_color(76, 6, dim, bg, &format!("{}%", pct));
+        }
+
+        draw_separator(ctx, 2, 46, 75, &t);
+        print_hint(ctx, 4,  47, "↑↓",    " Scroll   ",    &t);
+        print_hint(ctx, 18, 47, "Esc",   " Back to title", &t);
     }
 }
 

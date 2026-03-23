@@ -11,6 +11,8 @@ pub mod misery_system;
 pub mod run_stats;
 pub mod legacy_system;
 pub mod achievement_system;
+pub mod achievements;
+pub mod run_history;
 pub mod io_util;
 pub mod atlas;
 pub mod body;
