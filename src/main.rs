@@ -1,14 +1,14 @@
 use chaos_rpg::{
+    chaos_pipeline::chaos_roll_verbose,
     character::{Character, CharacterClass},
-    combat::{CombatAction, CombatOutcome, CombatState, resolve_action},
+    combat::{resolve_action, CombatAction, CombatOutcome, CombatState},
     enemy::Enemy,
     items::Item,
     npcs::shop_npc,
     scoreboard::{save_score, ScoreEntry},
-    skill_checks::{perform_skill_check, SkillType, Difficulty},
+    skill_checks::{perform_skill_check, Difficulty, SkillType},
     ui::{self, GameMode},
-    chaos_pipeline::chaos_roll_verbose,
-    world::{generate_floor, Room, RoomType, room_enemy},
+    world::{generate_floor, room_enemy, Room, RoomType},
 };
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -63,20 +63,30 @@ fn run_game(mode: GameMode) {
     println!();
 
     let intro = match player.class {
-        CharacterClass::Mage =>
-            "You emerged from the fractal abyss, equations swirling in your wake.",
-        CharacterClass::Berserker =>
-            "The Lorenz attractor knows your rage. It feeds on it.",
-        CharacterClass::Ranger =>
-            "You read the prime spirals in every shadow. Nothing escapes you.",
-        CharacterClass::Thief =>
-            "Logistic map r=3.9: you are the period-doubling cascade no one sees coming.",
+        CharacterClass::Mage => {
+            "You emerged from the fractal abyss, equations swirling in your wake."
+        }
+        CharacterClass::Berserker => "The Lorenz attractor knows your rage. It feeds on it.",
+        CharacterClass::Ranger => {
+            "You read the prime spirals in every shadow. Nothing escapes you."
+        }
+        CharacterClass::Thief => {
+            "Logistic map r=3.9: you are the period-doubling cascade no one sees coming."
+        }
     };
     println!("  {}{}{}", ui::MAGENTA, intro, ui::RESET);
     println!();
-    ui::press_enter(&format!("  {}Begin your descent [ENTER]...{}", ui::DIM, ui::RESET));
+    ui::press_enter(&format!(
+        "  {}Begin your descent [ENTER]...{}",
+        ui::DIM,
+        ui::RESET
+    ));
 
-    let max_floor = if mode == GameMode::Story { 10u32 } else { u32::MAX };
+    let max_floor = if mode == GameMode::Story {
+        10u32
+    } else {
+        u32::MAX
+    };
     let mut last_roll: Option<chaos_rpg::chaos_pipeline::ChaosRollResult> = None;
     let mut floor_seed = seed;
 
@@ -99,7 +109,10 @@ fn run_game(mode: GameMode) {
 
         println!(
             "  HP: {}  Gold: {}  Floor: {}  Kills: {}",
-            player.hp_bar(16), player.gold, player.floor, player.kills
+            player.hp_bar(16),
+            player.gold,
+            player.floor,
+            player.kills
         );
         println!();
         println!("  {}Map:{} {}", ui::DIM, ui::RESET, floor.minimap());
@@ -108,7 +121,12 @@ fn run_game(mode: GameMode) {
             ui::DIM, ui::RESET
         );
         println!();
-        ui::press_enter(&format!("  {}[ENTER] to begin floor {}...{}", ui::DIM, player.floor, ui::RESET));
+        ui::press_enter(&format!(
+            "  {}[ENTER] to begin floor {}...{}",
+            ui::DIM,
+            player.floor,
+            ui::RESET
+        ));
 
         'rooms: loop {
             let room = floor.current().clone();
@@ -116,8 +134,10 @@ fn run_game(mode: GameMode) {
             ui::clear_screen();
             println!(
                 "  {}Floor {} — Room {}/{}{}",
-                ui::YELLOW, player.floor,
-                floor.current_room + 1, floor.rooms.len(),
+                ui::YELLOW,
+                player.floor,
+                floor.current_room + 1,
+                floor.rooms.len(),
                 ui::RESET
             );
             println!("  {}", floor.minimap());
@@ -130,14 +150,18 @@ fn run_game(mode: GameMode) {
 
             println!(
                 "  HP: {}  Gold: {}  Kills: {}",
-                player.hp_bar(16), player.gold, player.kills
+                player.hp_bar(16),
+                player.gold,
+                player.kills
             );
             println!();
             println!("  [E] Enter room   [C] Character sheet   [T] Last chaos trace");
             if floor.rooms_remaining() == 0 {
                 println!(
                     "  {}[D] Descend to floor {}{}",
-                    ui::CYAN, player.floor + 1, ui::RESET
+                    ui::CYAN,
+                    player.floor + 1,
+                    ui::RESET
                 );
             }
             println!();
@@ -259,7 +283,11 @@ fn handle_room(
                 for modifier in &item.stat_modifiers {
                     apply_stat_modifier(player, &modifier.stat, modifier.value);
                 }
-                println!("  {}Item effects applied to your stats!{}", ui::GREEN, ui::RESET);
+                println!(
+                    "  {}Item effects applied to your stats!{}",
+                    ui::GREEN,
+                    ui::RESET
+                );
             }
 
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
@@ -276,7 +304,9 @@ fn handle_room(
             let heal_cost = 15 + player.floor as i64 * 2;
             println!(
                 "  [H] Healing potion — {}{}g{} (+40 HP)",
-                ui::YELLOW, heal_cost, ui::RESET
+                ui::YELLOW,
+                heal_cost,
+                ui::RESET
             );
             println!();
 
@@ -285,13 +315,24 @@ fn handle_room(
                 let rarity_color = item.rarity.color_code();
                 println!(
                     "  [{}] {}{}{} — {}{}g{}",
-                    i + 1, rarity_color, item.name, ui::RESET,
-                    ui::YELLOW, price, ui::RESET
+                    i + 1,
+                    rarity_color,
+                    item.name,
+                    ui::RESET,
+                    ui::YELLOW,
+                    price,
+                    ui::RESET
                 );
                 for m in &item.stat_modifiers {
                     let sign = if m.value >= 0 { "+" } else { "" };
-                    println!("      {}  {}: {}{}{}",
-                        ui::DIM, m.stat, sign, m.value, ui::RESET);
+                    println!(
+                        "      {}  {}: {}{}{}",
+                        ui::DIM,
+                        m.stat,
+                        sign,
+                        m.value,
+                        ui::RESET
+                    );
                 }
             }
 
@@ -317,7 +358,10 @@ fn handle_room(
                     } else {
                         println!(
                             "  {}Need {}g. You have {}g.{}",
-                            ui::RED, heal_cost, player.gold, ui::RESET
+                            ui::RED,
+                            heal_cost,
+                            player.gold,
+                            ui::RESET
                         );
                     }
                     continue;
@@ -338,7 +382,10 @@ fn handle_room(
                         } else {
                             println!(
                                 "  {}Need {}g, have {}g.{}",
-                                ui::RED, price, player.gold, ui::RESET
+                                ui::RED,
+                                price,
+                                player.gold,
+                                ui::RESET
                             );
                         }
                     }
@@ -360,7 +407,15 @@ fn handle_room(
                 println!("{}", line);
             }
 
-            let stats = ["vitality", "force", "mana", "cunning", "precision", "entropy", "luck"];
+            let stats = [
+                "vitality",
+                "force",
+                "mana",
+                "cunning",
+                "precision",
+                "entropy",
+                "luck",
+            ];
             let stat_idx = (seed % stats.len() as u64) as usize;
             let stat_name = stats[stat_idx];
             let buff = 3 + roll.to_range(1, 10) as i64 + player.floor as i64 / 2;
@@ -368,12 +423,20 @@ fn handle_room(
             apply_stat_modifier(player, stat_name, buff);
             println!(
                 "  {}The shrine blesses you! +{} {}!{}",
-                ui::MAGENTA, buff, stat_name, ui::RESET
+                ui::MAGENTA,
+                buff,
+                stat_name,
+                ui::RESET
             );
 
             let hp_restore = player.max_hp / 5;
             player.heal(hp_restore);
-            println!("  {}You feel restored. +{} HP.{}", ui::GREEN, hp_restore, ui::RESET);
+            println!(
+                "  {}You feel restored. +{} HP.{}",
+                ui::GREEN,
+                hp_restore,
+                ui::RESET
+            );
 
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
             RoomOutcome::Continue
@@ -402,7 +465,12 @@ fn handle_room(
             } else {
                 let trap_damage = 5 + player.floor as i64 * 3 + (seed % 10) as i64;
                 player.take_damage(trap_damage);
-                println!("  {}TRAP TRIGGERED! -{} HP!{}", ui::RED, trap_damage, ui::RESET);
+                println!(
+                    "  {}TRAP TRIGGERED! -{} HP!{}",
+                    ui::RED,
+                    trap_damage,
+                    ui::RESET
+                );
                 if !player.is_alive() {
                     ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                     return RoomOutcome::PlayerDied;
@@ -440,7 +508,12 @@ fn handle_room(
 
             let hp_gain = 5 + player.floor as i64 * 2;
             player.heal(hp_gain);
-            println!("  {}The stillness restores you. +{} HP.{}", ui::GREEN, hp_gain, ui::RESET);
+            println!(
+                "  {}The stillness restores you. +{} HP.{}",
+                ui::GREEN,
+                hp_gain,
+                ui::RESET
+            );
 
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
             RoomOutcome::Continue
@@ -469,7 +542,12 @@ fn handle_room(
                 1 => {
                     let damage = (player.max_hp / 4).max(1);
                     player.take_damage(damage);
-                    println!("  {}CHAOS PUNISHMENT: -{} HP!{}", ui::RED, damage, ui::RESET);
+                    println!(
+                        "  {}CHAOS PUNISHMENT: -{} HP!{}",
+                        ui::RED,
+                        damage,
+                        ui::RESET
+                    );
                     if !player.is_alive() {
                         ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                         return RoomOutcome::PlayerDied;
@@ -480,7 +558,9 @@ fn handle_room(
                     apply_stat_modifier(player, "entropy", stat_bonus);
                     println!(
                         "  {}CHAOS ASCENSION: +{} Entropy!{}",
-                        ui::MAGENTA, stat_bonus, ui::RESET
+                        ui::MAGENTA,
+                        stat_bonus,
+                        ui::RESET
                     );
                 }
                 3 => {
@@ -495,11 +575,22 @@ fn handle_room(
                     apply_stat_modifier(player, "luck", stat_gain);
                     println!(
                         "  {}CHAOS TRADE: -{} gold, +{} Luck!{}",
-                        ui::YELLOW, gold_loss, stat_gain, ui::RESET
+                        ui::YELLOW,
+                        gold_loss,
+                        stat_gain,
+                        ui::RESET
                     );
                 }
                 _ => {
-                    for stat in &["vitality", "force", "mana", "cunning", "precision", "entropy", "luck"] {
+                    for stat in &[
+                        "vitality",
+                        "force",
+                        "mana",
+                        "cunning",
+                        "precision",
+                        "entropy",
+                        "luck",
+                    ] {
                         apply_stat_modifier(player, stat, 1);
                     }
                     println!("  {}CHAOS HARMONY: All stats +1!{}", ui::MAGENTA, ui::RESET);
@@ -566,7 +657,10 @@ fn do_combat_encounter(
             CombatOutcome::PlayerWon { xp, gold } => {
                 println!(
                     "  {}Victory! +{} XP, +{} gold.{}",
-                    ui::YELLOW, xp, gold, ui::RESET
+                    ui::YELLOW,
+                    xp,
+                    gold,
+                    ui::RESET
                 );
                 if player.level > level_before {
                     ui::show_level_up(player.level, "Chaos has amplified your stats!");
@@ -587,10 +681,7 @@ fn do_combat_encounter(
                     "  Your HP: {}  |  {} HP: {}",
                     player.current_hp, enemy.name, enemy.hp
                 );
-                ui::press_enter(&format!(
-                    "  {}[ENTER] next round...{}",
-                    ui::DIM, ui::RESET
-                ));
+                ui::press_enter(&format!("  {}[ENTER] next round...{}", ui::DIM, ui::RESET));
             }
         }
     }
