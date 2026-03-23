@@ -54,6 +54,8 @@ enum AppScreen {
     Combat,
     Shop,
     Crafting,
+    CharacterSheet,
+    BodyChart,
     GameOver,
     Victory,
     Scoreboard,
@@ -940,6 +942,8 @@ impl GameState for State {
             AppScreen::Combat           => self.draw_combat(ctx),
             AppScreen::Shop             => self.draw_shop(ctx),
             AppScreen::Crafting         => self.draw_crafting(ctx),
+            AppScreen::CharacterSheet   => self.draw_character_sheet(ctx),
+            AppScreen::BodyChart        => self.draw_body_chart(ctx),
             AppScreen::GameOver         => self.draw_game_over(ctx),
             AppScreen::Victory          => self.draw_victory(ctx),
             AppScreen::Scoreboard       => self.draw_scoreboard(ctx),
@@ -1329,25 +1333,83 @@ impl State {
                     current.room_type.name(), current.description));
         }
 
-        // ── Log panel ─────────────────────────────────────────────────────────
-        draw_subpanel(ctx, 30, 3, 49, 20, "CHAOS LOG", &t);
-        let log_start = self.combat_log.len().saturating_sub(16);
-        for (i, line) in self.combat_log[log_start..].iter().enumerate() {
-            let fg = if line.contains("BOSS") || line.contains("☠") { dng }
-                     else if line.contains("Victory") || line.contains("LEVEL") { gld }
-                     else if line.contains('+') { suc }
-                     else { dim };
-            ctx.print_color(32, 5 + i as i32, fg, bg, &line.chars().take(44).collect::<String>());
+        // ── Current room preview panel ────────────────────────────────────────
+        draw_subpanel(ctx, 30, 3, 49, 20, "CURRENT ROOM", &t);
+        if let Some(ref floor) = self.floor {
+            let current = floor.current();
+            let rc = room_col(&current.room_type, &t);
+            let room_col_rgb = RGB::from_u8(rc.0, rc.1, rc.2);
+
+            // Icon + room type name (large)
+            let icon_line = format!("{}  {}", current.room_type.icon(), current.room_type.name());
+            ctx.print_color(32, 5, room_col_rgb, bg, &icon_line.chars().take(44).collect::<String>());
+
+            draw_separator(ctx, 31, 7, 46, &t);
+
+            // Room description
+            let desc_words: Vec<&str> = current.description.split_whitespace().collect();
+            let mut line = String::new();
+            let mut dy = 9i32;
+            for word in &desc_words {
+                if line.len() + word.len() + 1 > 42 {
+                    ctx.print_color(32, dy, dim, bg, &line);
+                    dy += 1;
+                    line = word.to_string();
+                } else {
+                    if !line.is_empty() { line.push(' '); }
+                    line.push_str(word);
+                }
+            }
+            if !line.is_empty() && dy <= 14 {
+                ctx.print_color(32, dy, dim, bg, &line);
+                dy += 1;
+            }
+
+            // Room hint based on type
+            let hint = match current.room_type {
+                RoomType::Combat     => "Be ready to fight. Choose your first action wisely.",
+                RoomType::Boss       => "BOSS ROOM — Powerful enemy, big rewards.",
+                RoomType::Treasure   => "Free item inside. May be cursed.",
+                RoomType::Shop       => "Spend gold on items, spells, or healing.",
+                RoomType::Shrine     => "Stat bonus + HP restore. Usually safe.",
+                RoomType::Trap       => "Unavoidable. Cunning helps dodge damage.",
+                RoomType::Portal     => "Skip ahead. High risk, high reward.",
+                RoomType::Empty      => "Quiet room. Heals a small amount of HP.",
+                RoomType::ChaosRift  => "Pure chaos. Anything can happen.",
+                RoomType::CraftingBench => "Reforge, augment, corrupt your items.",
+            };
+            let hint_y = (dy + 1).min(16);
+            draw_separator(ctx, 31, hint_y - 1, 46, &t);
+            let hint_words: Vec<&str> = hint.split_whitespace().collect();
+            let mut hline = String::new();
+            let mut hy = hint_y;
+            for word in hint_words {
+                if hline.len() + word.len() + 1 > 42 {
+                    ctx.print_color(32, hy, ac, bg, &hline);
+                    hy += 1;
+                    hline = word.to_string();
+                } else {
+                    if !hline.is_empty() { hline.push(' '); }
+                    hline.push_str(word);
+                }
+            }
+            if !hline.is_empty() {
+                ctx.print_color(32, hy, ac, bg, &hline);
+            }
+
+            // Room number progress
+            let room_prog = format!("Room {}/{}", floor.current_room + 1, floor.rooms.len());
+            ctx.print_color(32, 20, dim, bg, &room_prog);
         }
 
         // ── Actions bar ───────────────────────────────────────────────────────
         draw_separator(ctx, 1, 38, 77, &t);
-        ctx.print_color(2, 39, hd, bg, "ACTIONS");
-        let y = 40i32;
-        print_hint(ctx, 2, y,   "E",   " Enter Room   ", &t);
-        print_hint(ctx, 20, y,  "C",   " Character   ", &t);
-        print_hint(ctx, 36, y,  "S",   " Scores   ", &t);
-        print_hint(ctx, 49, y,  "Q",   " Quit", &t);
+        let y = 39i32;
+        print_hint(ctx, 2, y,   "E",     " Enter Room  ", &t);
+        print_hint(ctx, 20, y,  "C",     " Character   ", &t);
+        print_hint(ctx, 36, y,  "B",     " Body Chart  ", &t);
+        print_hint(ctx, 52, y,  "S",     " Scores  ", &t);
+        print_hint(ctx, 64, y,  "Q",     " Quit", &t);
         if self.floor.as_ref().map(|f| f.rooms_remaining() == 0).unwrap_or(false) {
             ctx.print_color(2, y + 1, gld, bg, "  [ D ] Descend to next floor  ▼");
         }
@@ -1666,6 +1728,218 @@ impl State {
         }
     }
 
+    // ── CHARACTER SHEET ───────────────────────────────────────────────────────
+
+    fn draw_character_sheet(&mut self, ctx: &mut BTerm) {
+        use chaos_rpg_core::factions::{Faction, ReputationTier};
+
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+
+        let p = match &self.player { Some(p) => p.clone(), None => { self.screen = AppScreen::FloorNav; return; } };
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 79, 49, "", &t);
+
+        // Header
+        let header = format!(" {} — {} (Lv.{}) ", p.name, p.class.name(), p.level);
+        print_center(ctx, 0, 1, 79, t.heading, &t, &header);
+        draw_separator(ctx, 1, 2, 77, &t);
+
+        // ── Left column: core stats ──
+        draw_subpanel(ctx, 1, 3, 24, 20, "STATS", &t);
+        let stats = [
+            ("Force",     p.stats.force),
+            ("Vitality",  p.stats.vitality),
+            ("Mana",      p.stats.mana),
+            ("Cunning",   p.stats.cunning),
+            ("Precision", p.stats.precision),
+            ("Entropy",   p.stats.entropy),
+            ("Luck",      p.stats.luck),
+        ];
+        for (i, (name, val)) in stats.iter().enumerate() {
+            // stat_line/draw_bar_solid take (u8,u8,u8) tuples
+            let col = if *val < 0 { t.danger } else if *val >= 50 { t.gold } else { t.heading };
+            stat_line(ctx, 3, 5 + i as i32 * 2, name, &format!("{:+}", val), col, &t);
+            let bar_val = (*val).max(0).min(100);
+            draw_bar_solid(ctx, 3, 6 + i as i32 * 2, 20, bar_val, 100, col, &t);
+        }
+
+        // Power tier
+        let tier = p.power_tier();
+        let tier_rgb = tier.rgb();
+        let tier_col = if tier.has_effect() {
+            use chaos_rpg_core::power_tier::TierEffect;
+            match tier.effect() {
+                TierEffect::Rainbow | TierEffect::RainbowFast => {
+                    let pal = [(220u8,60u8,60u8),(220,180,40),(60,200,80),(80,200,220),(80,80,220),(180,60,200)];
+                    pal[((self.frame / 4) as usize) % pal.len()]
+                }
+                TierEffect::Pulse => {
+                    if (self.frame / 15) % 2 == 0 { tier_rgb } else { (tier_rgb.0/2, tier_rgb.1/2, tier_rgb.2/2) }
+                }
+                _ => tier_rgb,
+            }
+        } else { tier_rgb };
+        let (plabel, pval) = p.power_display();
+        stat_line(ctx, 3, 20, &format!("{}: ", plabel), &pval, tier_col, &t);
+
+        // ── Middle column: run info ──
+        draw_subpanel(ctx, 27, 3, 25, 20, "RUN INFO", &t);
+        stat_line(ctx, 29, 5,  "Floor  ", &format!("{}", p.floor),  t.accent, &t);
+        stat_line(ctx, 29, 6,  "Kills  ", &format!("{}", p.kills),  t.success, &t);
+        stat_line(ctx, 29, 7,  "Gold   ", &format!("{}g", p.gold),  t.gold, &t);
+        stat_line(ctx, 29, 8,  "XP     ", &format!("{}", p.xp),     t.xp, &t);
+        stat_line(ctx, 29, 9,  "HP     ", &format!("{}/{}", p.current_hp, p.max_hp),
+            t.hp_color(p.current_hp as f32 / p.max_hp.max(1) as f32), &t);
+        stat_line(ctx, 29, 10, "MP     ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
+        stat_line(ctx, 29, 11, "Corrupt", &format!("{}", p.corruption), t.warn, &t);
+        stat_line(ctx, 29, 12, "SkPts  ", &format!("{} avail", p.skill_points), t.accent, &t);
+        if p.misery.misery_index >= 100.0 {
+            stat_line(ctx, 29, 13, "Misery ", &format!("{:.0}", p.misery.misery_index), t.warn, &t);
+        }
+        if p.underdog_multiplier() > 1.01 {
+            stat_line(ctx, 29, 14, "Underdg", &format!("×{:.2}", p.underdog_multiplier()), t.gold, &t);
+        }
+        if p.misery.defiance_rolls > 0 {
+            stat_line(ctx, 29, 15, "Defianc", &format!("{}", p.misery.defiance_rolls), t.accent, &t);
+        }
+        if p.misery.spite > 0.0 {
+            stat_line(ctx, 29, 16, "Spite  ", &format!("{:.0}", p.misery.spite), t.danger, &t);
+        }
+        stat_line(ctx, 29, 17, "Class  ", p.class.name(), t.heading, &t);
+        stat_line(ctx, 29, 18, "BG     ", p.background.name(), t.dim, &t);
+
+        // ── Right column: factions ──
+        draw_subpanel(ctx, 54, 3, 24, 20, "FACTIONS", &t);
+        let factions = [
+            ("Order",    p.faction_rep.order,    Faction::OrderOfConvergence),
+            ("Cult",     p.faction_rep.cult,     Faction::CultOfDivergence),
+            ("Watchers", p.faction_rep.watchers, Faction::WatchersOfBoundary),
+        ];
+        for (i, (fname, frep, fvar)) in factions.iter().enumerate() {
+            let ftier = ReputationTier::from_rep(*frep);
+            let fc = match ftier {
+                ReputationTier::Hostile    => dng,
+                ReputationTier::Neutral    => dim,
+                ReputationTier::Recognized => suc,
+                ReputationTier::Trusted    => gld,
+                ReputationTier::Exalted    => hd,
+            };
+            let fy = 5 + i as i32 * 5;
+            ctx.print_color(56, fy, fc, bg, fname);
+            ctx.print_color(56, fy + 1, fc, bg, &format!("  {} ({:+})", ftier.name(), frep));
+            if let Some(bonus) = chaos_rpg_core::factions::FactionRep::passive_bonus(*fvar, ftier) {
+                let bonus_short: String = bonus.chars().take(20).collect();
+                ctx.print_color(56, fy + 2, dim, bg, &format!("  {}", bonus_short));
+            }
+        }
+
+        // ── Inventory ──
+        draw_subpanel(ctx, 1, 24, 38, 18, "INVENTORY", &t);
+        if p.inventory.is_empty() {
+            ctx.print_color(3, 26, dim, bg, "(empty)");
+        }
+        for (i, item) in p.inventory.iter().take(8).enumerate() {
+            let iy = 26 + i as i32 * 2;
+            let ic = match item.rarity {
+                Rarity::Common    => dim,
+                Rarity::Uncommon  => suc,
+                Rarity::Rare      => ac,
+                Rarity::Epic      => RGB::from_u8(160, 0, 220),
+                Rarity::Legendary => gld,
+                Rarity::Mythical  => RGB::from_u8(255, 50, 50),
+                Rarity::Divine    => RGB::from_u8(255, 215, 0),
+                _                 => RGB::from_u8(255, 255, 255),
+            };
+            ctx.print_color(3, iy, ic, bg, &item.name.chars().take(22).collect::<String>());
+            let mods: String = item.stat_modifiers.iter()
+                .map(|m| format!("{:+}{}", m.value, &m.stat[..3.min(m.stat.len())]))
+                .collect::<Vec<_>>().join(" ");
+            ctx.print_color(3, iy + 1, dim, bg, &format!("  {}", mods.chars().take(30).collect::<String>()));
+        }
+
+        // ── Spells ──
+        draw_subpanel(ctx, 41, 24, 37, 18, "SPELLS", &t);
+        if p.known_spells.is_empty() {
+            ctx.print_color(43, 26, dim, bg, "(no spells known)");
+        }
+        for (i, spell) in p.known_spells.iter().take(8).enumerate() {
+            let sy = 26 + i as i32 * 2;
+            ctx.print_color(43, sy, ac, bg,
+                &format!("[{}] {}", i + 1, spell.name.chars().take(18).collect::<String>()));
+            ctx.print_color(43, sy + 1, dim, bg,
+                &format!("    {}mp  ×{:.1}", spell.mana_cost, spell.scaling_factor.abs()));
+        }
+
+        // Hint
+        draw_separator(ctx, 1, 46, 77, &t);
+        print_hint(ctx, 2, 47, "Esc / C", " Back to floor", &t);
+        print_hint(ctx, 28, 47, "B", " Body Chart", &t);
+    }
+
+    // ── BODY CHART ────────────────────────────────────────────────────────────
+
+    fn draw_body_chart(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
+        let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+
+        let p = match &self.player { Some(p) => p.clone(), None => { self.screen = AppScreen::FloorNav; return; } };
+
+        ctx.cls_bg(bg);
+        draw_panel(ctx, 0, 0, 79, 49, "", &t);
+        print_center(ctx, 0, 1, 79, t.heading, &t, "BODY CONDITION");
+        draw_separator(ctx, 1, 2, 77, &t);
+
+        // Combat summary at top
+        let summary = p.body.combat_summary();
+        ctx.print_color(2, 3, if summary.contains("CRITICAL") || summary.contains("SEVERED") { dng } else { dim }, bg, &summary.chars().take(75).collect::<String>());
+
+        draw_subpanel(ctx, 1, 5, 77, 36, "BODY PARTS", &t);
+
+        // Strip ANSI codes and render body display lines
+        let raw_lines = p.body.display_lines();
+        for (i, line) in raw_lines.iter().take(30).enumerate() {
+            // Strip ANSI escape codes (bracket-lib doesn't interpret them)
+            let clean: String = {
+                let mut out = String::new();
+                let mut chars = line.chars().peekable();
+                while let Some(c) = chars.next() {
+                    if c == '\x1b' {
+                        // skip until 'm'
+                        for nc in chars.by_ref() { if nc == 'm' { break; } }
+                    } else {
+                        out.push(c);
+                    }
+                }
+                out
+            };
+
+            // Color based on health keywords
+            let fg = if clean.contains("SEVERED") || clean.contains("MISSING") { dng }
+                     else if clean.contains("CRITICAL") || clean.contains("Broken") { dng }
+                     else if clean.contains("Wounded") || clean.contains("Bruised") { RGB::from_u8(200, 120, 40) }
+                     else if clean.contains("Healthy") || clean.contains("OK") { suc }
+                     else { hd };
+
+            ctx.print_color(3, 7 + i as i32, fg, bg, &clean.chars().take(73).collect::<String>());
+        }
+
+        draw_separator(ctx, 1, 44, 77, &t);
+        print_hint(ctx, 2, 45, "Esc / B", " Back to floor", &t);
+        print_hint(ctx, 28, 45, "C", " Character Sheet", &t);
+    }
+
     // ── GAME OVER ─────────────────────────────────────────────────────────────
 
     fn draw_game_over(&mut self, ctx: &mut BTerm) {
@@ -1874,10 +2148,10 @@ impl State {
                     }
                 }
                 VirtualKeyCode::C => {
-                    // Character sheet is shown inline via combat log - no separate screen needed
-                    if let Some(ref p) = self.player {
-                        for line in p.run_summary() { self.push_log(line); }
-                    }
+                    self.screen = AppScreen::CharacterSheet;
+                }
+                VirtualKeyCode::B => {
+                    self.screen = AppScreen::BodyChart;
                 }
                 VirtualKeyCode::S => self.screen = AppScreen::Scoreboard,
                 VirtualKeyCode::Q | VirtualKeyCode::Escape => {
@@ -2085,6 +2359,26 @@ impl State {
             AppScreen::Scoreboard => match key {
                 VirtualKeyCode::Escape | VirtualKeyCode::Q | VirtualKeyCode::Return => {
                     self.screen = AppScreen::Title;
+                }
+                _ => {}
+            },
+
+            AppScreen::CharacterSheet => match key {
+                VirtualKeyCode::Escape | VirtualKeyCode::C | VirtualKeyCode::Return => {
+                    self.screen = AppScreen::FloorNav;
+                }
+                VirtualKeyCode::B => {
+                    self.screen = AppScreen::BodyChart;
+                }
+                _ => {}
+            },
+
+            AppScreen::BodyChart => match key {
+                VirtualKeyCode::Escape | VirtualKeyCode::B | VirtualKeyCode::Return => {
+                    self.screen = AppScreen::FloorNav;
+                }
+                VirtualKeyCode::C => {
+                    self.screen = AppScreen::CharacterSheet;
                 }
                 _ => {}
             },
