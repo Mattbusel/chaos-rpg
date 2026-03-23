@@ -11,7 +11,7 @@ use std::io::{self, Write};
 use std::sync::OnceLock;
 
 use crate::character::{
-    display_stat, Boon, Character, CharacterClass, Background, ColorTheme, Difficulty,
+    display_stat, Background, Boon, Character, CharacterClass, ColorTheme, Difficulty,
 };
 
 // ─── GLOBAL THEME ─────────────────────────────────────────────────────────────
@@ -114,13 +114,8 @@ pub fn press_enter(msg: &str) {
 pub fn box_header(label: &str, color: &str, width: usize) {
     let inner = width.saturating_sub(4);
     let padded = format!("{:^width$}", label, width = inner);
-    println!(
-        "{}╔{}╗{}",
-        color,
-        "═".repeat(width - 2),
-        RESET
-    );
-    println!("{}║ {}{}{} ║{}", color, BOLD, padded, RESET, "");
+    println!("{}╔{}╗{}", color, "═".repeat(width - 2), RESET);
+    println!("{}║ {}{}{} ║", color, BOLD, padded, RESET);
     println!("{}╚{}╝{}", color, "═".repeat(width - 2), RESET);
     // fix trailing RESET
     print!("{}", RESET);
@@ -141,7 +136,7 @@ pub fn box_section(lines: &[String], color: &str, width: usize) {
 }
 
 pub fn separator(color: &str, width: usize) {
-    println!("{}{}{}",  color, "─".repeat(width), RESET);
+    println!("{}{}{}", color, "─".repeat(width), RESET);
 }
 
 // ─── TITLE SCREEN ─────────────────────────────────────────────────────────────
@@ -153,23 +148,74 @@ pub fn show_title() {
     let m = t_magic();
     let d = DIM;
     println!();
-    println!("{}╔══════════════════════════════════════════════════════╗{}", c, RESET);
-    println!("{}║{}                                                      {}║{}", c, RESET, c, RESET);
-    println!("{}║{}  {}  ___  _   _    _    ___  ____   ____  ____  ____  {}║{}", c, RESET, y, RESET, c);
-    println!("{}║{} {} / __|  | | |  / \\  / _ \\/ ___| |  _ \\|  _ \\/ ___| {}║{}", c, RESET, y, RESET, c);
-    println!("{}║{} {}| |     | |_| | / _ \\| | | \\___ \\ | |_) | |_) \\___  {}║{}", c, RESET, y, RESET, c);
-    println!("{}║{} {}| |___  |  _  |/ ___ \\ |_| |___) ||  _ <|  __/ ___) {}║{}", c, RESET, m, RESET, c);
-    println!("{}║{}  {}\\____|_| |_/_/   \\_\\____/|____/ |_| \\_\\_|   |____/ {}║{}", c, RESET, m, RESET, c);
-    println!("{}║{}                                                      {}║{}", c, RESET, c, RESET);
-    println!("{}║{}     {}Where math goes to die. 10 sacred algorithms.{}     {}║{}", c, RESET, d, RESET, c, RESET);
-    println!("{}║{}                                                      {}║{}", c, RESET, c, RESET);
-    println!("{}╠══════════════════════════════════════════════════════╣{}", c, RESET);
-    println!("{}║{}  {}[N]{} Story Mode      — 10 floors of pure chaos          {}║{}", c, RESET, GREEN, RESET, c, RESET);
-    println!("{}║{}  {}[I]{} Infinite Mode   — descend forever                  {}║{}", c, RESET, GREEN, RESET, c, RESET);
-    println!("{}║{}  {}[S]{} Scoreboard      — hall of the mathematically gifted {}║{}", c, RESET, YELLOW, RESET, c, RESET);
-    println!("{}║{}  {}[H]{} Help / Tutorial — the 10 algorithms explained       {}║{}", c, RESET, YELLOW, RESET, c, RESET);
-    println!("{}║{}  {}[X]{} Exit            — the chaos subsides                {}║{}", c, RESET, RED, RESET, c, RESET);
-    println!("{}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "{}╔══════════════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "{}║{}                                                      {}║{}",
+        c, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}  ___  _   _    _    ___  ____   ____  ____  ____  {}║{}",
+        c, RESET, y, RESET, c
+    );
+    println!(
+        "{}║{} {} / __|  | | |  / \\  / _ \\/ ___| |  _ \\|  _ \\/ ___| {}║{}",
+        c, RESET, y, RESET, c
+    );
+    println!(
+        "{}║{} {}| |     | |_| | / _ \\| | | \\___ \\ | |_) | |_) \\___  {}║{}",
+        c, RESET, y, RESET, c
+    );
+    println!(
+        "{}║{} {}| |___  |  _  |/ ___ \\ |_| |___) ||  _ <|  __/ ___) {}║{}",
+        c, RESET, m, RESET, c
+    );
+    println!(
+        "{}║{}  {}\\____|_| |_/_/   \\_\\____/|____/ |_| \\_\\_|   |____/ {}║{}",
+        c, RESET, m, RESET, c
+    );
+    println!(
+        "{}║{}                                                      {}║{}",
+        c, RESET, c, RESET
+    );
+    println!(
+        "{}║{}     {}Where math goes to die. 10 sacred algorithms.{}     {}║{}",
+        c, RESET, d, RESET, c, RESET
+    );
+    println!(
+        "{}║{}                                                      {}║{}",
+        c, RESET, c, RESET
+    );
+    println!(
+        "{}╠══════════════════════════════════════════════════════╣{}",
+        c, RESET
+    );
+    println!(
+        "{}║{}  {}[N]{} Story Mode      — 10 floors of pure chaos          {}║{}",
+        c, RESET, GREEN, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}[I]{} Infinite Mode   — descend forever                  {}║{}",
+        c, RESET, GREEN, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}[S]{} Scoreboard      — hall of the mathematically gifted {}║{}",
+        c, RESET, YELLOW, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}[H]{} Help / Tutorial — the 10 algorithms explained       {}║{}",
+        c, RESET, YELLOW, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}[X]{} Exit            — the chaos subsides                {}║{}",
+        c, RESET, RED, RESET, c, RESET
+    );
+    println!(
+        "{}╚══════════════════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
 }
 
@@ -200,10 +246,34 @@ pub fn select_difficulty() -> Difficulty {
     println!("  {}║       SELECT DIFFICULTY          ║{}", c, RESET);
     println!("  {}╚══════════════════════════════════╝{}", c, RESET);
     println!();
-    println!("  {}[1]{} Easy       — {}{}",        GREEN,   RESET, Difficulty::Easy.description(),    RESET);
-    println!("  {}[2]{} Normal     — {}{}",        CYAN,    RESET, Difficulty::Normal.description(),  RESET);
-    println!("  {}[3]{} Brutal     — {}{}",        YELLOW,  RESET, Difficulty::Brutal.description(),  RESET);
-    println!("  {}[4]{} CHAOS      — {}{}",        RED,     RESET, Difficulty::Chaos.description(),   RESET);
+    println!(
+        "  {}[1]{} Easy       — {}{}",
+        GREEN,
+        RESET,
+        Difficulty::Easy.description(),
+        RESET
+    );
+    println!(
+        "  {}[2]{} Normal     — {}{}",
+        CYAN,
+        RESET,
+        Difficulty::Normal.description(),
+        RESET
+    );
+    println!(
+        "  {}[3]{} Brutal     — {}{}",
+        YELLOW,
+        RESET,
+        Difficulty::Brutal.description(),
+        RESET
+    );
+    println!(
+        "  {}[4]{} CHAOS      — {}{}",
+        RED,
+        RESET,
+        Difficulty::Chaos.description(),
+        RESET
+    );
     println!();
     loop {
         match prompt("  DIFFICULTY >").as_str() {
@@ -225,10 +295,22 @@ pub fn select_color_theme() -> ColorTheme {
     println!("  {}║        SELECT COLOR THEME        ║{}", CYAN, RESET);
     println!("  {}╚══════════════════════════════════╝{}", CYAN, RESET);
     println!();
-    println!("  {}[1]{} Classic    — Standard ANSI terminal colors", CYAN, RESET);
-    println!("  {}[2]{} Neon       — Bright electric cyberpunk", BRIGHT_CYAN, RESET);
-    println!("  {}[3]{} Blood      — Deep reds and dark tones", BRIGHT_RED, RESET);
-    println!("  {}[4]{} Void       — Purple and shadow", BRIGHT_MAGENTA, RESET);
+    println!(
+        "  {}[1]{} Classic    — Standard ANSI terminal colors",
+        CYAN, RESET
+    );
+    println!(
+        "  {}[2]{} Neon       — Bright electric cyberpunk",
+        BRIGHT_CYAN, RESET
+    );
+    println!(
+        "  {}[3]{} Blood      — Deep reds and dark tones",
+        BRIGHT_RED, RESET
+    );
+    println!(
+        "  {}[4]{} Void       — Purple and shadow",
+        BRIGHT_MAGENTA, RESET
+    );
     println!("  {}[5]{} Monochrome — Grayscale only", WHITE, RESET);
     println!();
     loop {
@@ -253,9 +335,18 @@ pub fn create_character_ui() -> (String, CharacterClass, Background, Difficulty)
     clear_screen();
     let c = t_primary();
     println!();
-    println!("  {}╔══════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║           CHARACTER CREATION             ║{}", c, RESET);
-    println!("  {}╚══════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║           CHARACTER CREATION             ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
 
     let name = loop {
@@ -282,9 +373,18 @@ pub fn show_boon_select(seed: u64) -> Boon {
     let m = t_magic();
     clear_screen();
     println!();
-    println!("  {}╔══════════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║           ✦  CHOOSE YOUR BOON  ✦            ║{}", c, RESET);
-    println!("  {}╚══════════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║           ✦  CHOOSE YOUR BOON  ✦            ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
     println!("  {}A gift from the chaos — choose wisely.{}", m, RESET);
     println!();
@@ -322,9 +422,18 @@ fn select_class_ui() -> CharacterClass {
     clear_screen();
     let c = t_primary();
     println!();
-    println!("  {}╔══════════════════════════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║                     CHOOSE YOUR CLASS                        ║{}", c, RESET);
-    println!("  {}╚══════════════════════════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║                     CHOOSE YOUR CLASS                        ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
 
     for (i, (class, num)) in classes.iter().enumerate() {
@@ -340,11 +449,18 @@ fn select_class_ui() -> CharacterClass {
         };
         println!(
             "  {}[{}]{} {:12} — {}",
-            col, num, RESET, class.name(), class.description()
+            col,
+            num,
+            RESET,
+            class.name(),
+            class.description()
         );
         println!(
             "       {}Passive: {} — {}{}",
-            DIM, class.passive_name(), class.passive_desc(), RESET
+            DIM,
+            class.passive_name(),
+            class.passive_desc(),
+            RESET
         );
         println!();
     }
@@ -387,7 +503,11 @@ fn select_background_ui() -> Background {
     for (i, bg) in backgrounds.iter().enumerate() {
         println!(
             "  {}[{}]{} {:12} — {}",
-            t_primary(), i + 1, RESET, bg.name(), bg.description()
+            t_primary(),
+            i + 1,
+            RESET,
+            bg.name(),
+            bg.description()
         );
     }
     println!();
@@ -410,49 +530,97 @@ pub fn show_character_sheet(c: &Character) {
     let tier = c.power_tier();
     let name_col = t_warning();
     println!();
-    println!("  {}╔══════════════════════════════════════════════════╗{}", col, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════════╗{}",
+        col, RESET
+    );
     println!(
         "  {}║  {}{} {}{}  — Lv.{} {} ({}){}{}║{}",
-        col, name_col, c.name, RESET, col,
-        c.level, c.class.name(), c.background.name(),
-        RESET, col, RESET
+        col,
+        name_col,
+        c.name,
+        RESET,
+        col,
+        c.level,
+        c.class.name(),
+        c.background.name(),
+        RESET,
+        col,
+        RESET
     );
     println!(
         "  {}║  {}{}  {}{}{}║{}",
-        col, tier.color_code(), tier.name(),
-        DIM, tier.flavor(), RESET,
+        col,
+        tier.color_code(),
+        tier.name(),
+        DIM,
+        tier.flavor(),
+        RESET,
         RESET
     );
-    println!("  {}║  {}Passive: {}{} — {}{}║{}",
-        col, t_magic(), BOLD, c.class.passive_name(), RESET, col, RESET);
-    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
-    println!("  {}║  HP:  {}  {}║{}",
-        col, c.hp_bar(24), col, RESET);
-    println!("  {}║  Floor {}  Gold {}  Kills {}  XP {}{}  {}║{}",
-        col, c.floor, c.gold, c.kills, c.xp, DIM, col, RESET);
+    println!(
+        "  {}║  {}Passive: {}{} — {}{}║{}",
+        col,
+        t_magic(),
+        BOLD,
+        c.class.passive_name(),
+        RESET,
+        col,
+        RESET
+    );
+    println!(
+        "  {}╠══════════════════════════════════════════════════╣{}",
+        col, RESET
+    );
+    println!("  {}║  HP:  {}  {}║{}", col, c.hp_bar(24), col, RESET);
+    println!(
+        "  {}║  Floor {}  Gold {}  Kills {}  XP {}{}  {}║{}",
+        col, c.floor, c.gold, c.kills, c.xp, DIM, col, RESET
+    );
     if !c.status_effects.is_empty() {
-        println!("  {}║  Status: {}  {}║{}", col, c.status_badge_line(), col, RESET);
+        println!(
+            "  {}║  Status: {}  {}║{}",
+            col,
+            c.status_badge_line(),
+            col,
+            RESET
+        );
     }
-    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
+    println!(
+        "  {}╠══════════════════════════════════════════════════╣{}",
+        col, RESET
+    );
 
     let stats = [
-        ("Vitality",  c.stats.vitality),
-        ("Force",     c.stats.force),
-        ("Mana",      c.stats.mana),
-        ("Cunning",   c.stats.cunning),
+        ("Vitality", c.stats.vitality),
+        ("Force", c.stats.force),
+        ("Mana", c.stats.mana),
+        ("Cunning", c.stats.cunning),
         ("Precision", c.stats.precision),
-        ("Entropy",   c.stats.entropy),
-        ("Luck",      c.stats.luck),
+        ("Entropy", c.stats.entropy),
+        ("Luck", c.stats.luck),
     ];
     for (name, val) in &stats {
         println!("  {}║ {}{}", col, display_stat(name, *val), RESET);
     }
 
-    println!("  {}╠══════════════════════════════════════════════════╣{}", col, RESET);
-    println!("  {}║  Spells: {}  Items: {}  Difficulty: {}{}║{}",
-        col, c.known_spells.len(), c.inventory.len(),
-        c.difficulty.name(), col, RESET);
-    println!("  {}╚══════════════════════════════════════════════════╝{}", col, RESET);
+    println!(
+        "  {}╠══════════════════════════════════════════════════╣{}",
+        col, RESET
+    );
+    println!(
+        "  {}║  Spells: {}  Items: {}  Difficulty: {}{}║{}",
+        col,
+        c.known_spells.len(),
+        c.inventory.len(),
+        c.difficulty.name(),
+        col,
+        RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════════════╝{}",
+        col, RESET
+    );
 }
 
 // ─── ENEMY DISPLAY ────────────────────────────────────────────────────────────
@@ -474,16 +642,21 @@ pub fn show_enemy(enemy: &crate::enemy::Enemy) {
         RESET
     );
     let hp_pct = enemy.hp as f64 / enemy.max_hp as f64;
-    let hp_col = if hp_pct > 0.6 { GREEN } else if hp_pct > 0.3 { YELLOW } else { RED };
+    let hp_col = if hp_pct > 0.6 {
+        GREEN
+    } else if hp_pct > 0.3 {
+        YELLOW
+    } else {
+        RED
+    };
     let bar_len = 24usize;
     let filled = ((hp_pct * bar_len as f64) as usize).min(bar_len);
     println!(
-        "  {}[{}{}{}]{}",
+        "  {}[{}{}{}]",
         hp_col,
         "█".repeat(filled),
         "░".repeat(bar_len - filled),
         RESET,
-        ""
     );
     if let Some(ability) = enemy.special_ability {
         println!("  {}[ABILITY] {}{}", YELLOW, ability, RESET);
@@ -492,11 +665,7 @@ pub fn show_enemy(enemy: &crate::enemy::Enemy) {
 
 // ─── COMBAT MENU ──────────────────────────────────────────────────────────────
 
-pub fn show_combat_menu(
-    player: &Character,
-    enemy: &crate::enemy::Enemy,
-    round: u32,
-) {
+pub fn show_combat_menu(player: &Character, enemy: &crate::enemy::Enemy, round: u32) {
     let c = t_primary();
     let tier_col = enemy.tier_color();
     let w = 56usize;
@@ -506,38 +675,66 @@ pub fn show_combat_menu(
     println!("  {}╔{}╗{}", c, bar, RESET);
     println!(
         "  {}║  {} Round {:<3} {}  Floor {}  {}{}{}║{}",
-        c, BOLD, round, RESET, player.floor, DIM,
-        player.difficulty.name(), RESET, RESET
+        c,
+        BOLD,
+        round,
+        RESET,
+        player.floor,
+        DIM,
+        player.difficulty.name(),
+        RESET,
+        RESET
     );
     println!("  {}╠{}╣{}", c, bar, RESET);
 
     // Enemy info block
     println!(
         "  {}║  {}[{}]{} {:<36}{}║{}",
-        c, tier_col, enemy.tier.name(), RESET,
+        c,
+        tier_col,
+        enemy.tier.name(),
+        RESET,
         &enemy.name[..enemy.name.len().min(36)],
-        c, RESET
+        c,
+        RESET
     );
     let hp_pct = enemy.hp as f64 / enemy.max_hp as f64;
-    let e_col = if hp_pct > 0.6 { GREEN } else if hp_pct > 0.3 { YELLOW } else { RED };
+    let e_col = if hp_pct > 0.6 {
+        GREEN
+    } else if hp_pct > 0.3 {
+        YELLOW
+    } else {
+        RED
+    };
     let efill = ((hp_pct * 30.0) as usize).min(30);
     println!(
         "  {}║  {}HP [{}{}{}{}]{} {}/{:<12}{}║{}",
-        c, e_col,
-        "█".repeat(efill), "░".repeat(30 - efill),
-        RESET, e_col, RESET,
-        enemy.hp, enemy.max_hp,
-        c, RESET
+        c,
+        e_col,
+        "█".repeat(efill),
+        "░".repeat(30 - efill),
+        RESET,
+        e_col,
+        RESET,
+        enemy.hp,
+        enemy.max_hp,
+        c,
+        RESET
     );
 
     println!("  {}╠{}╣{}", c, bar, RESET);
 
     // Player info block
     println!(
-        "  {}║  {}{}{} Lv.{} {} {}{}║{}",
-        c, BOLD, player.name, RESET,
-        player.level, player.class.name(),
-        c, "", RESET
+        "  {}║  {}{}{} Lv.{} {} {}║{}",
+        c,
+        BOLD,
+        player.name,
+        RESET,
+        player.level,
+        player.class.name(),
+        c,
+        RESET
     );
     println!(
         "  {}║  {}  Gold: {}  Kills: {}{}║{}",
@@ -545,14 +742,26 @@ pub fn show_combat_menu(
     );
 
     let pfill = ((player.hp_percent() * 30.0) as usize).min(30);
-    let p_col = if player.hp_percent() > 0.6 { GREEN } else if player.hp_percent() > 0.3 { YELLOW } else { RED };
+    let p_col = if player.hp_percent() > 0.6 {
+        GREEN
+    } else if player.hp_percent() > 0.3 {
+        YELLOW
+    } else {
+        RED
+    };
     println!(
-        "  {}║  {}HP [{}{}{}{}]{} {}/{}{}{}║{}",
-        c, p_col,
-        "█".repeat(pfill), "░".repeat(30 - pfill),
-        RESET, p_col, RESET,
-        player.current_hp, player.max_hp,
-        c, "", RESET
+        "  {}║  {}HP [{}{}{}{}]{} {}/{}{}║{}",
+        c,
+        p_col,
+        "█".repeat(pfill),
+        "░".repeat(30 - pfill),
+        RESET,
+        p_col,
+        RESET,
+        player.current_hp,
+        player.max_hp,
+        c,
+        RESET
     );
 
     // Status badges
@@ -579,7 +788,12 @@ pub fn show_combat_menu(
             let name = &spell.name[..spell.name.len().min(28)];
             println!(
                 "  {}║    [S{}] {}{:<32}{}║{}",
-                c, i + 1, t_magic(), name, c, RESET
+                c,
+                i + 1,
+                t_magic(),
+                name,
+                c,
+                RESET
             );
         }
     }
@@ -590,7 +804,12 @@ pub fn show_combat_menu(
             let name = &item.name[..item.name.len().min(28)];
             println!(
                 "  {}║    [I{}] {}{:<32}{}║{}",
-                c, i + 1, item.rarity.color_code(), name, c, RESET
+                c,
+                i + 1,
+                item.rarity.color_code(),
+                name,
+                c,
+                RESET
             );
         }
     }
@@ -620,7 +839,10 @@ pub fn read_combat_action() -> crate::combat::CombatAction {
                 return CombatAction::UseItem(idx);
             }
             "?" => {
-                println!("  {}Use 't' after combat to review the last chaos trace.{}", DIM, RESET);
+                println!(
+                    "  {}Use 't' after combat to review the last chaos trace.{}",
+                    DIM, RESET
+                );
             }
             _ => println!("  {}a/h/d/t/f/s#/i#{}", DIM, RESET),
         }
@@ -661,18 +883,12 @@ pub fn show_floor_header(floor: u32, mode: &GameMode) {
     };
     let c = t_primary();
     println!();
-    println!(
-        "  {}╔══════════════════════════════╗{}",
-        c, RESET
-    );
+    println!("  {}╔══════════════════════════════╗{}", c, RESET);
     println!(
         "  {}║  Floor {:>3}  [{:<8}]       ║{}",
         c, floor, mode_str, RESET
     );
-    println!(
-        "  {}╚══════════════════════════════╝{}",
-        c, RESET
-    );
+    println!("  {}╚══════════════════════════════╝{}", c, RESET);
     println!();
 }
 
@@ -709,7 +925,10 @@ pub fn show_level_up(level: u32, msg: &str) {
     let c = t_warning();
     println!();
     println!("  {}╔═══════════════════════════════════╗{}", c, RESET);
-    println!("  {}║   *** LEVEL UP! Now Level {:>3} ***  ║{}", c, level, RESET);
+    println!(
+        "  {}║   *** LEVEL UP! Now Level {:>3} ***  ║{}",
+        c, level, RESET
+    );
     println!("  {}║   {}{}{}{}║{}", c, DIM, msg, RESET, c, RESET);
     println!("  {}╚═══════════════════════════════════╝{}", c, RESET);
     println!();
@@ -718,34 +937,88 @@ pub fn show_level_up(level: u32, msg: &str) {
 pub fn show_victory(player: &Character) {
     let c = t_warning();
     println!();
-    println!("  {}╔══════════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║                                              ║{}", c, RESET);
-    println!("  {}║     *** VICTORY — THE MATH YIELDS ***        ║{}", c, RESET);
-    println!("  {}║                                              ║{}", c, RESET);
-    println!("  {}║  {}{} has transcended the abyss!{}{}          ║{}", c, BOLD, player.name, RESET, c, RESET);
-    println!("  {}║  Score: {}{}{:<8}{}{}                         ║{}", c, t_magic(), BOLD, player.score(), RESET, c, RESET);
-    println!("  {}║                                              ║{}", c, RESET);
-    println!("  {}╚══════════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║                                              ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}║     *** VICTORY — THE MATH YIELDS ***        ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}║                                              ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}║  {}{} has transcended the abyss!{}{}          ║{}",
+        c, BOLD, player.name, RESET, c, RESET
+    );
+    println!(
+        "  {}║  Score: {}{}{:<8}{}{}                         ║{}",
+        c,
+        t_magic(),
+        BOLD,
+        player.score(),
+        RESET,
+        c,
+        RESET
+    );
+    println!(
+        "  {}║                                              ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
 }
 
 pub fn show_game_over(player: &Character) {
     let c = t_danger();
     println!();
-    println!("  {}╔══════════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║                                              ║{}", c, RESET);
-    println!("  {}║          *** GAME OVER ***                   ║{}", c, RESET);
-    println!("  {}║                                              ║{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║                                              ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}║          *** GAME OVER ***                   ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}║                                              ║{}",
+        c, RESET
+    );
     println!(
         "  {}║  {}{}{} fell on Floor {}  Level {}{}{}          ║{}",
         c, BOLD, player.name, RESET, player.floor, player.level, c, RESET, RESET
     );
     println!(
         "  {}║  Final Score: {}{}{:<10}{}{}                  ║{}",
-        c, t_warning(), BOLD, player.score(), RESET, c, RESET
+        c,
+        t_warning(),
+        BOLD,
+        player.score(),
+        RESET,
+        c,
+        RESET
     );
-    println!("  {}║                                              ║{}", c, RESET);
-    println!("  {}╚══════════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "  {}║                                              ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
 }
 
@@ -755,16 +1028,40 @@ pub fn show_scoreboard(scores: &[crate::scoreboard::ScoreEntry]) {
     clear_screen();
     let c = t_warning();
     println!();
-    println!("  {}╔══════════════════════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║                  HALL OF CHAOS — TOP SCORES              ║{}", c, RESET);
-    println!("  {}╠══════╦════════════════╦════════════╦═══════╦═══════╦═════╣{}", c, RESET);
-    println!("  {}║ {:>4} ║ {:<14} ║ {:<10} ║ {:>5} ║ {:>5} ║ Date  ║{}", c, "#", "Name", "Class", "Score", "Floor", RESET);
-    println!("  {}╠══════╬════════════════╬════════════╬═══════╬═══════╬═════╣{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║                  HALL OF CHAOS — TOP SCORES              ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╠══════╦════════════════╦════════════╦═══════╦═══════╦═════╣{}",
+        c, RESET
+    );
+    println!(
+        "  {}║ {:>4} ║ {:<14} ║ {:<10} ║ {:>5} ║ {:>5} ║ Date  ║{}",
+        c, "#", "Name", "Class", "Score", "Floor", RESET
+    );
+    println!(
+        "  {}╠══════╬════════════════╬════════════╬═══════╬═══════╬═════╣{}",
+        c, RESET
+    );
     if scores.is_empty() {
-        println!("  {}║  No scores yet. The void awaits your sacrifice.          ║{}", DIM, RESET);
+        println!(
+            "  {}║  No scores yet. The void awaits your sacrifice.          ║{}",
+            DIM, RESET
+        );
     } else {
         for (i, s) in scores.iter().enumerate().take(15) {
-            let row_col = if i == 0 { YELLOW } else if i < 3 { CYAN } else { WHITE };
+            let row_col = if i == 0 {
+                YELLOW
+            } else if i < 3 {
+                CYAN
+            } else {
+                WHITE
+            };
             println!(
                 "  {}║ {:>4} ║ {:<14} ║ {:<10} ║ {:>5} ║ {:>5} ║ {} ║{}",
                 row_col,
@@ -778,7 +1075,10 @@ pub fn show_scoreboard(scores: &[crate::scoreboard::ScoreEntry]) {
             );
         }
     }
-    println!("  {}╚══════╩════════════════╩════════════╩═══════╩═══════╩═════╝{}", c, RESET);
+    println!(
+        "  {}╚══════╩════════════════╩════════════╩═══════╩═══════╩═════╝{}",
+        c, RESET
+    );
     println!();
     press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));
 }
@@ -789,23 +1089,51 @@ pub fn show_help() {
     clear_screen();
     let c = t_primary();
     println!();
-    println!("  {}╔══════════════════════════════════════════════════════════╗{}", c, RESET);
-    println!("  {}║              CHAOS RPG — HOW TO PLAY                     ║{}", c, RESET);
-    println!("  {}╚══════════════════════════════════════════════════════════╝{}", c, RESET);
+    println!(
+        "  {}╔══════════════════════════════════════════════════════════╗{}",
+        c, RESET
+    );
+    println!(
+        "  {}║              CHAOS RPG — HOW TO PLAY                     ║{}",
+        c, RESET
+    );
+    println!(
+        "  {}╚══════════════════════════════════════════════════════════╝{}",
+        c, RESET
+    );
     println!();
     println!("  {}THE 10 SACRED ALGORITHMS:{}", t_warning(), RESET);
-    println!("  {}Lorenz{}     · Butterfly effect chaos attractor", CYAN, RESET);
-    println!("  {}Fourier{}    · Harmonic decomposition of fate", CYAN, RESET);
+    println!(
+        "  {}Lorenz{}     · Butterfly effect chaos attractor",
+        CYAN, RESET
+    );
+    println!(
+        "  {}Fourier{}    · Harmonic decomposition of fate",
+        CYAN, RESET
+    );
     println!("  {}Primes{}     · Density sieve of fortune", CYAN, RESET);
     println!("  {}Riemann{}    · Zeta function partial sums", CYAN, RESET);
     println!("  {}Fibonacci{}  · Golden spiral trajectory", CYAN, RESET);
-    println!("  {}Mandelbrot{} · Escape velocity (inside = cursed)", CYAN, RESET);
-    println!("  {}Logistic{}   · r=3.9 chaos regime bifurcation", CYAN, RESET);
+    println!(
+        "  {}Mandelbrot{} · Escape velocity (inside = cursed)",
+        CYAN, RESET
+    );
+    println!(
+        "  {}Logistic{}   · r=3.9 chaos regime bifurcation",
+        CYAN, RESET
+    );
     println!("  {}Euler{}      · Totient ratio irregularity", CYAN, RESET);
     println!("  {}Collatz{}    · 3n+1 stopping time", CYAN, RESET);
-    println!("  {}ModExp{}     · Modular exponentiation hash", CYAN, RESET);
+    println!(
+        "  {}ModExp{}     · Modular exponentiation hash",
+        CYAN, RESET
+    );
     println!();
-    println!("  {}STATS (all unbounded — can go negative):{}", t_warning(), RESET);
+    println!(
+        "  {}STATS (all unbounded — can go negative):{}",
+        t_warning(),
+        RESET
+    );
     println!("  VIT=HP  FOR=Damage  MAN=Magic  CUN=Crit");
     println!("  PRC=Accuracy  ENT=Chaos bonus  LCK=Fortune");
     println!();
@@ -815,12 +1143,24 @@ pub fn show_help() {
     println!();
     println!("  {}CLASSES:{}", t_warning(), RESET);
     for class in &[
-        CharacterClass::Mage, CharacterClass::Berserker,
-        CharacterClass::Ranger, CharacterClass::Thief,
-        CharacterClass::Necromancer, CharacterClass::Alchemist,
-        CharacterClass::Paladin, CharacterClass::VoidWalker,
+        CharacterClass::Mage,
+        CharacterClass::Berserker,
+        CharacterClass::Ranger,
+        CharacterClass::Thief,
+        CharacterClass::Necromancer,
+        CharacterClass::Alchemist,
+        CharacterClass::Paladin,
+        CharacterClass::VoidWalker,
     ] {
-        println!("  {}{:<12}{} {}Passive:{} {}", t_primary(), class.name(), RESET, DIM, RESET, class.passive_desc());
+        println!(
+            "  {}{:<12}{} {}Passive:{} {}",
+            t_primary(),
+            class.name(),
+            RESET,
+            DIM,
+            RESET,
+            class.passive_desc()
+        );
     }
     println!();
     press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));

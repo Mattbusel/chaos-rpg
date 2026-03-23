@@ -195,7 +195,6 @@ impl Rarity {
     }
 }
 
-
 // ─── Stat Modifier ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

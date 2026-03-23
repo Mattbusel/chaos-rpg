@@ -678,35 +678,35 @@ pub enum Boon {
 impl Boon {
     pub fn name(self) -> &'static str {
         match self {
-            Boon::BloodPact       => "Blood Pact",
-            Boon::ChaosBlessing   => "Chaos Blessing",
-            Boon::GoldVein        => "Gold Vein",
-            Boon::ScholarGift     => "Scholar's Gift",
+            Boon::BloodPact => "Blood Pact",
+            Boon::ChaosBlessing => "Chaos Blessing",
+            Boon::GoldVein => "Gold Vein",
+            Boon::ScholarGift => "Scholar's Gift",
             Boon::WarriorBlessing => "Warrior's Blessing",
-            Boon::LuckyBirth      => "Lucky Birth",
-            Boon::EntropicSoul    => "Entropic Soul",
-            Boon::CrystalSkin     => "Crystal Skin",
-            Boon::MathSavant      => "Math Savant",
-            Boon::VoidTouched     => "Void Touched",
-            Boon::PrimeBlood      => "Prime Blood",
-            Boon::ShadowStart     => "Shadow Start",
+            Boon::LuckyBirth => "Lucky Birth",
+            Boon::EntropicSoul => "Entropic Soul",
+            Boon::CrystalSkin => "Crystal Skin",
+            Boon::MathSavant => "Math Savant",
+            Boon::VoidTouched => "Void Touched",
+            Boon::PrimeBlood => "Prime Blood",
+            Boon::ShadowStart => "Shadow Start",
         }
     }
 
     pub fn description(self) -> &'static str {
         match self {
-            Boon::BloodPact       => "+50 max HP. Take 2 HP damage entering each room.",
-            Boon::ChaosBlessing   => "+10 Luck. Chaos rolls biased in your favor.",
-            Boon::GoldVein        => "Start with 200 gold.",
-            Boon::ScholarGift     => "Start with 3 extra chaos-generated spells.",
+            Boon::BloodPact => "+50 max HP. Take 2 HP damage entering each room.",
+            Boon::ChaosBlessing => "+10 Luck. Chaos rolls biased in your favor.",
+            Boon::GoldVein => "Start with 200 gold.",
+            Boon::ScholarGift => "Start with 3 extra chaos-generated spells.",
             Boon::WarriorBlessing => "+20 Force, +15 Vitality.",
-            Boon::LuckyBirth      => "+30 Luck.",
-            Boon::EntropicSoul    => "2× Entropy+Mana, half Vitality.",
-            Boon::CrystalSkin     => "Start with an 80 HP shield.",
-            Boon::MathSavant      => "All spell damage ×1.75.",
-            Boon::VoidTouched     => "All stats ×1.5.",
-            Boon::PrimeBlood      => "Each kill: +1 to your highest stat.",
-            Boon::ShadowStart     => "Start at 50% HP. All XP ×3.",
+            Boon::LuckyBirth => "+30 Luck.",
+            Boon::EntropicSoul => "2× Entropy+Mana, half Vitality.",
+            Boon::CrystalSkin => "Start with an 80 HP shield.",
+            Boon::MathSavant => "All spell damage ×1.75.",
+            Boon::VoidTouched => "All stats ×1.5.",
+            Boon::PrimeBlood => "Each kill: +1 to your highest stat.",
+            Boon::ShadowStart => "Start at 50% HP. All XP ×3.",
         }
     }
 
@@ -724,9 +724,18 @@ impl Boon {
     pub fn random_three(seed: u64) -> [Boon; 3] {
         use Boon::*;
         const ALL: [Boon; 12] = [
-            BloodPact, ChaosBlessing, GoldVein, ScholarGift, WarriorBlessing,
-            LuckyBirth, EntropicSoul, CrystalSkin, MathSavant, VoidTouched,
-            PrimeBlood, ShadowStart,
+            BloodPact,
+            ChaosBlessing,
+            GoldVein,
+            ScholarGift,
+            WarriorBlessing,
+            LuckyBirth,
+            EntropicSoul,
+            CrystalSkin,
+            MathSavant,
+            VoidTouched,
+            PrimeBlood,
+            ShadowStart,
         ];
         let a = (seed % 12) as usize;
         let b = ((seed.wrapping_mul(31337)) % 12) as usize;
@@ -784,7 +793,11 @@ impl Character {
             let destiny = destiny_roll(stat_seed as f64 * 1e-12, stat_seed);
             let chaos_mult = 1.0 + destiny.final_value * 3.0;
             let base = (weight as f64 * chaos_mult) as i64;
-            base + roll_stat(-(weight / 5 + 1), weight / 5 + 1, stat_seed.wrapping_add(77))
+            base + roll_stat(
+                -(weight / 5 + 1),
+                weight / 5 + 1,
+                stat_seed.wrapping_add(77),
+            )
         };
 
         let stats = StatBlock {
@@ -860,9 +873,16 @@ impl Character {
     pub fn apply_boon(&mut self, boon: Boon) {
         self.boon = Some(boon);
         match boon {
-            Boon::BloodPact => { self.max_hp += 50; self.current_hp = self.max_hp; }
-            Boon::ChaosBlessing => { self.stats.luck += 10; }
-            Boon::GoldVein => { self.gold += 200; }
+            Boon::BloodPact => {
+                self.max_hp += 50;
+                self.current_hp = self.max_hp;
+            }
+            Boon::ChaosBlessing => {
+                self.stats.luck += 10;
+            }
+            Boon::GoldVein => {
+                self.gold += 200;
+            }
             Boon::ScholarGift => {
                 for i in 0..3u64 {
                     self.known_spells.push(crate::spells::Spell::generate(
@@ -871,19 +891,27 @@ impl Character {
                 }
             }
             Boon::WarriorBlessing => {
-                self.stats.force += 20; self.stats.vitality += 15;
+                self.stats.force += 20;
+                self.stats.vitality += 15;
                 self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
                 self.current_hp = self.max_hp;
             }
-            Boon::LuckyBirth => { self.stats.luck += 30; }
+            Boon::LuckyBirth => {
+                self.stats.luck += 30;
+            }
             Boon::EntropicSoul => {
-                self.stats.entropy *= 2; self.stats.mana *= 2;
+                self.stats.entropy *= 2;
+                self.stats.mana *= 2;
                 self.stats.vitality /= 2;
                 self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
                 self.current_hp = self.max_hp;
             }
-            Boon::CrystalSkin => { self.add_status(StatusEffect::Shielded(80)); }
-            Boon::MathSavant => { self.spell_damage_mult = 1.75; }
+            Boon::CrystalSkin => {
+                self.add_status(StatusEffect::Shielded(80));
+            }
+            Boon::MathSavant => {
+                self.spell_damage_mult = 1.75;
+            }
             Boon::VoidTouched => {
                 let mult = |v: i64| (v as f64 * 1.5) as i64;
                 self.stats.vitality = mult(self.stats.vitality);
@@ -907,16 +935,34 @@ impl Character {
     /// PrimeBlood boon: +1 to highest stat on kill.
     pub fn prime_blood_tick(&mut self) {
         let max_val = [
-            self.stats.vitality, self.stats.force, self.stats.mana,
-            self.stats.cunning, self.stats.precision, self.stats.entropy, self.stats.luck,
-        ].iter().copied().max().unwrap_or(0);
-        if max_val == self.stats.vitality { self.stats.vitality += 1; self.max_hp += 3; }
-        else if max_val == self.stats.force { self.stats.force += 1; }
-        else if max_val == self.stats.mana { self.stats.mana += 1; }
-        else if max_val == self.stats.cunning { self.stats.cunning += 1; }
-        else if max_val == self.stats.precision { self.stats.precision += 1; }
-        else if max_val == self.stats.entropy { self.stats.entropy += 1; }
-        else { self.stats.luck += 1; }
+            self.stats.vitality,
+            self.stats.force,
+            self.stats.mana,
+            self.stats.cunning,
+            self.stats.precision,
+            self.stats.entropy,
+            self.stats.luck,
+        ]
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(0);
+        if max_val == self.stats.vitality {
+            self.stats.vitality += 1;
+            self.max_hp += 3;
+        } else if max_val == self.stats.force {
+            self.stats.force += 1;
+        } else if max_val == self.stats.mana {
+            self.stats.mana += 1;
+        } else if max_val == self.stats.cunning {
+            self.stats.cunning += 1;
+        } else if max_val == self.stats.precision {
+            self.stats.precision += 1;
+        } else if max_val == self.stats.entropy {
+            self.stats.entropy += 1;
+        } else {
+            self.stats.luck += 1;
+        }
     }
 
     pub fn is_alive(&self) -> bool {

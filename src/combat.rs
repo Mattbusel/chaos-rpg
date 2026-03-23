@@ -137,7 +137,7 @@ pub struct CombatState {
     /// The enemy's chaos roll for their counterattack — shown in compact trace.
     pub enemy_last_roll: Option<ChaosRollResult>,
     pub seed: u64,
-    pub combo_streak: u32,    // consecutive attacks without interruption
+    pub combo_streak: u32,     // consecutive attacks without interruption
     pub is_first_attack: bool, // Physicist passive: first attack has no catastrophe
 }
 
@@ -224,7 +224,9 @@ pub fn resolve_action(
                 // Override catastrophe: treat as neutral roll
                 if r.is_catastrophe() {
                     chaos_roll_verbose(player.stats.precision as f64 * 0.01, seed.wrapping_add(42))
-                } else { r }
+                } else {
+                    r
+                }
             } else {
                 chaos_roll_verbose(player.stats.force as f64 * 0.01, seed)
             };
@@ -249,7 +251,8 @@ pub fn resolve_action(
                 damage = (damage as f64 * combo_mult) as i64;
                 // Ranger passive: Ranger gets +10% extra per combo step
                 if player.class == CharacterClass::Ranger {
-                    damage = (damage as f64 * (1.0 + (state.combo_streak - 1) as f64 * 0.10)) as i64;
+                    damage =
+                        (damage as f64 * (1.0 + (state.combo_streak - 1) as f64 * 0.10)) as i64;
                 }
             }
 
@@ -271,11 +274,7 @@ pub fn resolve_action(
         }
 
         CombatAction::HeavyAttack => {
-            let roll = biased_chaos_roll(
-                player.stats.force as f64 * 0.01,
-                0.3,
-                seed,
-            );
+            let roll = biased_chaos_roll(player.stats.force as f64 * 0.01, 0.3, seed);
             let is_crit = roll.is_critical();
             let base_dmg = 12 + player.stats.force / 4;
             let mut damage = roll_damage(
@@ -284,14 +283,19 @@ pub fn resolve_action(
                 seed,
             );
 
-            if is_crit { damage *= 2; }
+            if is_crit {
+                damage *= 2;
+            }
 
             // Heavy attack consumes combo streak for a bonus, then resets
             if state.combo_streak >= 2 {
                 let combo_bonus = state.combo_streak as i64 * (base_dmg / 3).max(5);
                 damage += combo_bonus;
                 events.push(CombatEvent::ChaosEvent {
-                    description: format!("COMBO FINISHER ×{}! Bonus +{} damage!", state.combo_streak, combo_bonus),
+                    description: format!(
+                        "COMBO FINISHER ×{}! Bonus +{} damage!",
+                        state.combo_streak, combo_bonus
+                    ),
                 });
             }
             state.combo_streak = 0;
@@ -301,7 +305,8 @@ pub fn resolve_action(
             {
                 damage = 0;
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your swing goes wide — the Lorenz butterfly mocks you.".to_string(),
+                    description: "Your swing goes wide — the Lorenz butterfly mocks you."
+                        .to_string(),
                 });
             }
             state.is_first_attack = false;
@@ -350,7 +355,8 @@ pub fn resolve_action(
                 });
             } else if taunt_roll.is_catastrophe() {
                 events.push(CombatEvent::ChaosEvent {
-                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you.".to_string(),
+                    description: "Your taunt ENRAGES the enemy! They focus exclusively on you."
+                        .to_string(),
                 });
             }
         }
@@ -384,7 +390,14 @@ pub fn resolve_action(
                         damage = (damage as f64 * player.spell_damage_mult) as i64;
                         // Mage crit passive resets after one use
                         if player.class == CharacterClass::Mage && player.spell_damage_mult > 1.0 {
-                            player.spell_damage_mult = if matches!(player.boon, Some(crate::character::Boon::MathSavant)) { 1.75 } else { 1.0 };
+                            player.spell_damage_mult = if matches!(
+                                player.boon,
+                                Some(crate::character::Boon::MathSavant)
+                            ) {
+                                1.75
+                            } else {
+                                1.0
+                            };
                         }
                     }
                     state.combo_streak = 0; // spell resets combo
@@ -406,10 +419,14 @@ pub fn resolve_action(
                     // Side effects from spell text
                     if spell.side_effect.contains("burning") || spell.side_effect.contains("fire") {
                         player.add_status(crate::character::StatusEffect::Blessed(2));
-                        events.push(CombatEvent::StatusApplied { name: "BLESSED (2 turns)".to_string() });
+                        events.push(CombatEvent::StatusApplied {
+                            name: "BLESSED (2 turns)".to_string(),
+                        });
                     } else if spell.side_effect.contains("stun") {
                         state.enemy_stunned = true;
-                        events.push(CombatEvent::StatusApplied { name: "STUNNED (enemy)".to_string() });
+                        events.push(CombatEvent::StatusApplied {
+                            name: "STUNNED (enemy)".to_string(),
+                        });
                     }
                 }
             } else {
@@ -427,12 +444,14 @@ pub fn resolve_action(
                     match modifier.stat.to_lowercase().as_str() {
                         "vitality" => {
                             player.stats.vitality += modifier.value;
-                            player.max_hp = (50 + player.stats.vitality * 3 + player.stats.force).max(1);
+                            player.max_hp =
+                                (50 + player.stats.vitality * 3 + player.stats.force).max(1);
                             heal_amount += modifier.value * 3;
                         }
                         "force" => {
                             player.stats.force += modifier.value;
-                            player.max_hp = (50 + player.stats.vitality * 3 + player.stats.force).max(1);
+                            player.max_hp =
+                                (50 + player.stats.vitality * 3 + player.stats.force).max(1);
                         }
                         "mana" => player.stats.mana += modifier.value,
                         "cunning" => player.stats.cunning += modifier.value,
@@ -447,7 +466,10 @@ pub fn resolve_action(
                     let weapon_dmg = item.damage_or_defense.abs().max(1);
                     enemy.hp = (enemy.hp - weapon_dmg).max(0);
                     player.total_damage_dealt += weapon_dmg;
-                    events.push(CombatEvent::PlayerAttack { damage: weapon_dmg, is_crit: false });
+                    events.push(CombatEvent::PlayerAttack {
+                        damage: weapon_dmg,
+                        is_crit: false,
+                    });
                 } else {
                     let base_heal = player.item_heal_bonus(
                         item.damage_or_defense.abs().max(0) / 5 + heal_amount.max(0),
@@ -516,7 +538,7 @@ pub fn resolve_action(
         let mut enemy_dmg = roll_damage(base, base, enemy_seed);
 
         // Scale by game difficulty
-        enemy_dmg = (enemy_dmg * player.difficulty.enemy_damage_mult() as i64 / 100).max(1);
+        enemy_dmg = (enemy_dmg * player.difficulty.enemy_damage_mult() / 100).max(1);
 
         if is_crit {
             enemy_dmg = (enemy_dmg as f64 * 1.5) as i64;
@@ -557,9 +579,7 @@ pub fn resolve_action(
         // ChaosMath passive: Chaos Resonance — chaos events restore 15 HP
         if player.class == CharacterClass::VoidWalker {
             player.heal(15);
-            events.push(CombatEvent::PlayerHealed {
-                amount: 15,
-            });
+            events.push(CombatEvent::PlayerHealed { amount: 15 });
             events.push(CombatEvent::ChaosEvent {
                 description: "CHAOS RESONANCE: The math heals you!".to_string(),
             });

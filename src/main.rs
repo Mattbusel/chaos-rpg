@@ -317,10 +317,14 @@ fn handle_room(
                 apply_stat_modifier(player, &modifier.stat, modifier.value);
             }
             player.add_item(item);
-            println!("  {}Item added to inventory! (Use [I#] in combat){}", ui::GREEN, ui::RESET);
+            println!(
+                "  {}Item added to inventory! (Use [I#] in combat){}",
+                ui::GREEN,
+                ui::RESET
+            );
 
             // 25% chance to also find a spell scroll
-            if seed % 4 == 0 {
+            if seed.is_multiple_of(4) {
                 let spell = chaos_rpg::spells::Spell::generate(seed.wrapping_add(54321));
                 println!();
                 println!("  {}+ SPELL SCROLL FOUND +{}", ui::CYAN, ui::RESET);
@@ -328,7 +332,11 @@ fn handle_room(
                     println!("  {}", line);
                 }
                 player.add_spell(spell);
-                println!("  {}Spell learned! Use [S#] in combat.{}", ui::CYAN, ui::RESET);
+                println!(
+                    "  {}Spell learned! Use [S#] in combat.{}",
+                    ui::CYAN,
+                    ui::RESET
+                );
             }
 
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
@@ -420,7 +428,9 @@ fn handle_room(
                             if item.is_weapon || item.stat_modifiers.is_empty() {
                                 println!(
                                     "  {}Purchased {}! Added to inventory.{}",
-                                    ui::GREEN, item.name, ui::RESET
+                                    ui::GREEN,
+                                    item.name,
+                                    ui::RESET
                                 );
                                 player.add_item(item);
                             } else {
@@ -430,7 +440,9 @@ fn handle_room(
                                 }
                                 println!(
                                     "  {}Used {}! Stats updated.{}",
-                                    ui::GREEN, item.name, ui::RESET
+                                    ui::GREEN,
+                                    item.name,
+                                    ui::RESET
                                 );
                             }
                             println!("  {}Your gold: {}{}", ui::YELLOW, player.gold, ui::RESET);
@@ -770,7 +782,12 @@ fn do_combat_encounter(
                     let pick = ui::prompt("  [P] Pick up  [any] Leave >");
                     if pick.trim().eq_ignore_ascii_case("p") {
                         player.add_item(loot);
-                        println!("  {}Added to inventory. ({} items){}", ui::GREEN, player.inventory.len(), ui::RESET);
+                        println!(
+                            "  {}Added to inventory. ({} items){}",
+                            ui::GREEN,
+                            player.inventory.len(),
+                            ui::RESET
+                        );
                     }
                 }
 
@@ -850,7 +867,11 @@ fn events_to_outcome_str(events: &[chaos_rpg::combat::CombatEvent]) -> String {
                     format!("dealt {} damage", damage)
                 };
             }
-            CombatEvent::SpellCast { name, damage, backfired } => {
+            CombatEvent::SpellCast {
+                name,
+                damage,
+                backfired,
+            } => {
                 return if *backfired {
                     format!("{} BACKFIRED — took {} self-damage", name, damage)
                 } else {
@@ -858,7 +879,9 @@ fn events_to_outcome_str(events: &[chaos_rpg::combat::CombatEvent]) -> String {
                 };
             }
             CombatEvent::PlayerFled => return "escaped into the chaos".to_string(),
-            CombatEvent::PlayerFleeFailed => return "flee failed — math won't allow it".to_string(),
+            CombatEvent::PlayerFleeFailed => {
+                return "flee failed — math won't allow it".to_string()
+            }
             CombatEvent::PlayerDefend { damage_reduced } => {
                 return format!("defending — {} damage absorbed", damage_reduced);
             }
