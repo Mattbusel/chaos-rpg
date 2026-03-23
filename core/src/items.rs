@@ -359,6 +359,9 @@ pub struct Item {
     pub engine_locks: Vec<String>,
     /// Corruption implicit (if corrupted)
     pub corruption: Option<String>,
+    /// Charges remaining (0 = no charges / unlimited). Imbue op grants these.
+    #[serde(default)]
+    pub charges: u8,
 }
 
 impl Item {
@@ -432,6 +435,7 @@ impl Item {
             socketed_gems: Vec::new(),
             engine_locks: Vec::new(),
             corruption: None,
+            charges: 0,
         }
     }
 

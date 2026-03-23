@@ -248,6 +248,11 @@ struct State {
     history_scroll: usize,
     // ── Death recap clipboard ──
     last_recap_text: String,                // shareable text of last run
+    // ── Chaos engine viz overlay ──
+    chaos_viz_open: bool,
+    // ── Item filter (crafting) ──
+    item_filter: String,
+    item_filter_active: bool,
 }
 
 impl State {
@@ -297,6 +302,9 @@ impl State {
             run_history: RunHistory::load(),
             history_scroll: 0,
             last_recap_text: String::new(),
+            chaos_viz_open: false,
+            item_filter: String::new(),
+            item_filter_active: false,
         }
     }
 
@@ -2287,6 +2295,106 @@ impl State {
             if py < 2 || py > 32 { continue; } // clip to combat panels area
             ctx.print_color(p.x, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
         }
+
+        // 6. Chaos Engine Visualization overlay ([V])
+        if self.chaos_viz_open {
+            self.draw_chaos_viz_overlay(ctx);
+        }
+
+        // [V] hint at bottom
+        ctx.print_color(3, 48, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg,
+            if self.chaos_viz_open { "[V] Close Engine Viz" } else { "[V] Engine Viz" });
+    }
+
+    fn draw_chaos_viz_overlay(&self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+        let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
+        let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+        let suc = RGB::from_u8(t.success.0, t.success.1, t.success.2);
+        let dng = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
+        let muted = RGB::from_u8(t.muted.0, t.muted.1,   t.muted.2);
+
+        // Overlay box covers the bottom 3/4 of the screen
+        let ox = 2i32; let oy = 8i32;
+        let ow = 75i32; let oh = 38i32;
+        ctx.draw_box(ox, oy, ow, oh,
+            RGB::from_u8(t.accent.0 / 2, t.accent.1 / 2, t.accent.2 / 2), bg);
+        ctx.print_color(ox + 2, oy, hd, bg, " CHAOS ENGINE VISUALIZER ");
+        ctx.print_color(ox + ow - 10, oy, dim, bg, " [V] Close ");
+
+        match &self.last_roll {
+            None => {
+                ctx.print_color(ox + 3, oy + 4, muted, bg,
+                    "No chaos roll yet. Make a combat move to see the engine chain.");
+            }
+            Some(roll) => {
+                // Header: final verdict
+                let (verdict, verdict_col) = if roll.is_critical()       { ("CRITICAL HIT",  gld) }
+                    else if roll.final_value > 0.5                        { ("CLEAN HIT",     suc) }
+                    else if roll.final_value > 0.0                        { ("WEAK HIT",      ac) }
+                    else if roll.is_catastrophe()                         { ("CATASTROPHE",   RGB::from_u8(255, 20, 80)) }
+                    else                                                   { ("MISS / FAIL",   dng) };
+                ctx.print_color(ox + 3, oy + 2, verdict_col, bg,
+                    &format!("Final: {:+.4}   {}", roll.final_value, verdict));
+
+                // Progress bar
+                let bar_w = 60i32;
+                let filled = ((roll.final_value.clamp(-1.0, 1.0) + 1.0) / 2.0 * bar_w as f64) as i32;
+                for i in 0..bar_w {
+                    let c = if i < filled { verdict_col } else { muted };
+                    ctx.print_color(ox + 3 + i, oy + 3, c, bg, if i < filled { "█" } else { "░" });
+                }
+                ctx.print_color(ox + 3, oy + 3, muted, bg, "-1.0");
+                ctx.print_color(ox + 30, oy + 3, muted, bg, "0.0");
+                ctx.print_color(ox + ow - 8, oy + 3, muted, bg, "+1.0");
+
+                // Chain steps
+                ctx.print_color(ox + 3, oy + 5, hd, bg, "Engine Chain:");
+                ctx.print_color(ox + 3, oy + 6, dim, bg,
+                    "  #  Engine          Input      Output     Delta");
+                ctx.print_color(ox + 3, oy + 7, muted, bg,
+                    "  ─  ──────────────  ─────────  ─────────  ─────────");
+
+                for (i, step) in roll.chain.iter().enumerate() {
+                    let y = oy + 8 + i as i32 * 2;
+                    if y >= oy + oh - 4 { break; }
+
+                    let delta = step.output - step.input;
+                    let (out_col, delta_str) = if delta > 0.1      { (suc,   format!("{:+.3}", delta)) }
+                        else if delta < -0.1                        { (dng,   format!("{:+.3}", delta)) }
+                        else                                        { (muted, format!("{:+.3}", delta)) };
+
+                    // Animated "active" highlight on last step
+                    let is_last = i == roll.chain.len() - 1;
+                    let row_col = if is_last { ac } else { dim };
+
+                    let eng: String = step.engine_name.chars().take(14).collect();
+                    ctx.print_color(ox + 3,  y, row_col, bg, &format!("{:>3}", i + 1));
+                    ctx.print_color(ox + 7,  y, row_col, bg, &format!("{:<16}", eng));
+                    ctx.print_color(ox + 23, y, muted,   bg, &format!("{:>+9.4}", step.input));
+                    ctx.print_color(ox + 34, y, out_col, bg, &format!("{:>+9.4}", step.output));
+                    ctx.print_color(ox + 45, y, out_col, bg, &delta_str);
+
+                    // Tiny bar for this step's magnitude
+                    let mag = step.output.abs().min(1.0);
+                    let bar_len = (mag * 15.0) as usize;
+                    let bar_col = if step.output > 0.0 { suc } else { dng };
+                    let bar: String = "▪".repeat(bar_len);
+                    ctx.print_color(ox + 52, y, bar_col, bg, &bar);
+                }
+
+                // Footer: chain stats
+                let chain_len = roll.chain.len();
+                let pos_count = roll.chain.iter().filter(|s| s.output > s.input).count();
+                let neg_count = chain_len - pos_count;
+                ctx.print_color(ox + 3, oy + oh - 3, muted, bg,
+                    &format!("Chain depth: {}   Positive steps: {}   Negative steps: {}",
+                        chain_len, pos_count, neg_count));
+            }
+        }
     }
 
     // ── SHOP ──────────────────────────────────────────────────────────────────
@@ -2361,26 +2469,51 @@ impl State {
 
         match self.craft_phase {
             CraftPhase::SelectItem => {
-                draw_subpanel(ctx, 2, 3, 75, 38, "SELECT ITEM  ↑↓ Navigate · Enter Confirm", &t);
+                // Filter bar
+                let filter_lc = self.item_filter.to_lowercase();
+                let filter_label = if self.item_filter_active {
+                    format!("/ {}_ (Enter/Esc to finish)", &self.item_filter)
+                } else if !self.item_filter.is_empty() {
+                    format!("filter: \"{}\"  [/] to change · [Esc] clear", &self.item_filter)
+                } else {
+                    "[/] Filter items  ↑↓ Navigate  Enter Confirm".to_string()
+                };
+                draw_subpanel(ctx, 2, 3, 75, 38, &filter_label, &t);
+
                 if let Some(ref p) = self.player {
+                    let mut row = 0i32;
                     for (i, item) in p.inventory.iter().enumerate() {
+                        if !filter_lc.is_empty() {
+                            if !item.name.to_lowercase().contains(&filter_lc)
+                                && !item.rarity.name().to_lowercase().contains(&filter_lc) {
+                                continue;
+                            }
+                        }
                         let is_sel = i == self.craft_item_cursor;
-                        print_selectable(ctx, 5, 5 + i as i32 * 2, is_sel,
-                            &format!("[{}] {} · {}", i+1, item.name, item.rarity.name()),
+                        let y = 5 + row * 2;
+                        if y > 40 { break; }
+                        let charge_tag = if item.charges > 0 { format!(" [{}c]", item.charges) } else { String::new() };
+                        print_selectable(ctx, 5, y, is_sel,
+                            &format!("[{}] {}{} · {}", i+1, &item.name.chars().take(25).collect::<String>(), charge_tag, item.rarity.name()),
                             self.frame, &t);
                         if is_sel {
                             for (j, m) in item.stat_modifiers.iter().enumerate().take(3) {
                                 let vc = if m.value > 0 { ac } else { dng };
-                                ctx.print_color(10, 6 + i as i32 * 2 + j as i32, vc, bg,
+                                ctx.print_color(10, y + 1 + j as i32, vc, bg,
                                     &format!("{:+} {}", m.value, m.stat));
                             }
                         }
+                        row += 1;
+                    }
+                    if row == 0 && !filter_lc.is_empty() {
+                        ctx.print_color(5, 7, dim, bg, "No items match filter.");
                     }
                 }
                 draw_separator(ctx, 2, 44, 75, &t);
                 print_hint(ctx, 4, 45, "↑↓", " Navigate   ", &t);
                 print_hint(ctx, 20, 45, "Enter", " Select   ", &t);
-                print_hint(ctx, 35, 45, "Esc", " Leave", &t);
+                print_hint(ctx, 35, 45, "/", " Filter   ", &t);
+                print_hint(ctx, 48, 45, "Esc", " Leave", &t);
             }
             CraftPhase::SelectOp => {
                 let (item_name, item_rarity) = self.player.as_ref()
@@ -2393,12 +2526,14 @@ impl State {
                 draw_separator(ctx, 2, 5, 75, &t);
 
                 let ops = [
-                    ("Reforge",    "Chaos-reroll ALL stat modifiers from scratch",     t.warn),
-                    ("Augment",    "ADD one new chaos-rolled modifier",                 t.success),
-                    ("Annul",      "REMOVE one random modifier",                       t.danger),
-                    ("Corrupt",    "Unpredictable chaos effect — anything can happen", t.xp),
-                    ("Fuse",       "DOUBLE all values and upgrade rarity tier",        t.gold),
-                    ("EngineLock", "Lock a chaos engine signature into the item",      t.mana),
+                    ("Reforge",    "Chaos-reroll ALL stat modifiers from scratch",           t.warn),
+                    ("Augment",    "ADD one new chaos-rolled modifier",                       t.success),
+                    ("Annul",      "REMOVE one random modifier",                             t.danger),
+                    ("Corrupt",    "Choose risk tier — Safe/Risky/Reckless — to roll chaos", t.xp),
+                    ("Fuse",       "DOUBLE all values and upgrade rarity tier",              t.gold),
+                    ("EngineLock", "Lock a chaos engine signature into the item",            t.mana),
+                    ("Shatter",    "DESTROY item — scatter its mods to other items",         t.danger),
+                    ("Imbue",      "Grant item 3 CHARGES (bonus effect on use)",             t.mana),
                 ];
                 for (i, (name, desc, col)) in ops.iter().enumerate() {
                     let is_sel = i == self.craft_op_cursor;
@@ -2417,7 +2552,7 @@ impl State {
                 }
 
                 draw_separator(ctx, 2, 44, 75, &t);
-                print_hint(ctx, 4, 45, "↑↓ / 1-6", " Select op   ", &t);
+                print_hint(ctx, 4, 45, "↑↓ / 1-8", " Select op   ", &t);
                 print_hint(ctx, 28, 45, "Enter", " Apply   ", &t);
                 print_hint(ctx, 43, 45, "Esc", " Back", &t);
             }
@@ -3459,6 +3594,7 @@ impl State {
                     VirtualKeyCode::U => Some(CombatAction::UseItem(5)),
                     VirtualKeyCode::I => Some(CombatAction::UseItem(6)),
                     VirtualKeyCode::O => Some(CombatAction::UseItem(7)),
+                    VirtualKeyCode::V => { self.chaos_viz_open = !self.chaos_viz_open; None }
                     _ => None,
                 };
                 if let Some(act) = action {
@@ -3522,40 +3658,89 @@ impl State {
             },
 
             AppScreen::Crafting => match self.craft_phase {
-                CraftPhase::SelectItem => match key {
-                    VirtualKeyCode::Up => {
-                        if self.craft_item_cursor > 0 { self.craft_item_cursor -= 1; }
-                    }
-                    VirtualKeyCode::Down => {
-                        let len = self.player.as_ref().map(|p| p.inventory.len()).unwrap_or(0);
-                        if self.craft_item_cursor + 1 < len { self.craft_item_cursor += 1; }
-                    }
-                    VirtualKeyCode::Return => {
-                        let has_item = self.player.as_ref().map(|p| !p.inventory.is_empty()).unwrap_or(false);
-                        if has_item {
-                            self.craft_phase = CraftPhase::SelectOp;
-                            self.craft_op_cursor = 0;
-                            self.craft_message = String::new();
+                CraftPhase::SelectItem => {
+                    if self.item_filter_active {
+                        // Filter typing mode
+                        match key {
+                            VirtualKeyCode::Escape | VirtualKeyCode::Return => {
+                                self.item_filter_active = false;
+                                self.craft_item_cursor = 0;
+                            }
+                            VirtualKeyCode::Back => { self.item_filter.pop(); }
+                            k => {
+                                // Map VirtualKeyCode to char (basic a-z, 0-9, space)
+                                let ch: Option<char> = match k {
+                                    VirtualKeyCode::Space => Some(' '),
+                                    VirtualKeyCode::Key0 => Some('0'), VirtualKeyCode::Key1 => Some('1'),
+                                    VirtualKeyCode::Key2 => Some('2'), VirtualKeyCode::Key3 => Some('3'),
+                                    VirtualKeyCode::Key4 => Some('4'), VirtualKeyCode::Key5 => Some('5'),
+                                    VirtualKeyCode::Key6 => Some('6'), VirtualKeyCode::Key7 => Some('7'),
+                                    VirtualKeyCode::Key8 => Some('8'), VirtualKeyCode::Key9 => Some('9'),
+                                    VirtualKeyCode::A => Some('a'), VirtualKeyCode::B => Some('b'),
+                                    VirtualKeyCode::C => Some('c'), VirtualKeyCode::D => Some('d'),
+                                    VirtualKeyCode::E => Some('e'), VirtualKeyCode::F => Some('f'),
+                                    VirtualKeyCode::G => Some('g'), VirtualKeyCode::H => Some('h'),
+                                    VirtualKeyCode::I => Some('i'), VirtualKeyCode::J => Some('j'),
+                                    VirtualKeyCode::K => Some('k'), VirtualKeyCode::L => Some('l'),
+                                    VirtualKeyCode::M => Some('m'), VirtualKeyCode::N => Some('n'),
+                                    VirtualKeyCode::O => Some('o'), VirtualKeyCode::P => Some('p'),
+                                    VirtualKeyCode::Q => Some('q'), VirtualKeyCode::R => Some('r'),
+                                    VirtualKeyCode::S => Some('s'), VirtualKeyCode::T => Some('t'),
+                                    VirtualKeyCode::U => Some('u'), VirtualKeyCode::V => Some('v'),
+                                    VirtualKeyCode::W => Some('w'), VirtualKeyCode::X => Some('x'),
+                                    VirtualKeyCode::Y => Some('y'), VirtualKeyCode::Z => Some('z'),
+                                    _ => None,
+                                };
+                                if let Some(c) = ch {
+                                    if self.item_filter.len() < 20 { self.item_filter.push(c); }
+                                }
+                            }
+                        }
+                    } else {
+                        match key {
+                            VirtualKeyCode::Up => {
+                                if self.craft_item_cursor > 0 { self.craft_item_cursor -= 1; }
+                            }
+                            VirtualKeyCode::Down => {
+                                let len = self.player.as_ref().map(|p| p.inventory.len()).unwrap_or(0);
+                                if self.craft_item_cursor + 1 < len { self.craft_item_cursor += 1; }
+                            }
+                            VirtualKeyCode::Return => {
+                                let has_item = self.player.as_ref().map(|p| !p.inventory.is_empty()).unwrap_or(false);
+                                if has_item {
+                                    self.craft_phase = CraftPhase::SelectOp;
+                                    self.craft_op_cursor = 0;
+                                    self.craft_message = String::new();
+                                }
+                            }
+                            VirtualKeyCode::Slash => {
+                                self.item_filter_active = true;
+                                self.item_filter.clear();
+                            }
+                            VirtualKeyCode::Escape => {
+                                if !self.item_filter.is_empty() {
+                                    self.item_filter.clear();
+                                } else {
+                                    self.advance_floor_room();
+                                    if self.screen != AppScreen::GameOver { self.screen = AppScreen::FloorNav; }
+                                }
+                            }
+                            _ => {}
                         }
                     }
-                    VirtualKeyCode::Escape => {
-                        self.advance_floor_room();
-                        if self.screen != AppScreen::GameOver { self.screen = AppScreen::FloorNav; }
-                    }
-                    _ => {}
-                },
+                }
                 CraftPhase::SelectOp => match key {
                     VirtualKeyCode::Up => { if self.craft_op_cursor > 0 { self.craft_op_cursor -= 1; } }
-                    VirtualKeyCode::Down => { if self.craft_op_cursor < 5 { self.craft_op_cursor += 1; } }
-                    VirtualKeyCode::Return => {
-                        self.apply_craft_op();
-                    }
+                    VirtualKeyCode::Down => { if self.craft_op_cursor < 7 { self.craft_op_cursor += 1; } }
+                    VirtualKeyCode::Return => { self.apply_craft_op(); }
                     VirtualKeyCode::Key1 => { self.craft_op_cursor = 0; self.apply_craft_op(); }
                     VirtualKeyCode::Key2 => { self.craft_op_cursor = 1; self.apply_craft_op(); }
                     VirtualKeyCode::Key3 => { self.craft_op_cursor = 2; self.apply_craft_op(); }
                     VirtualKeyCode::Key4 => { self.craft_op_cursor = 3; self.apply_craft_op(); }
                     VirtualKeyCode::Key5 => { self.craft_op_cursor = 4; self.apply_craft_op(); }
                     VirtualKeyCode::Key6 => { self.craft_op_cursor = 5; self.apply_craft_op(); }
+                    VirtualKeyCode::Key7 => { self.craft_op_cursor = 6; self.apply_craft_op(); }
+                    VirtualKeyCode::Key8 => { self.craft_op_cursor = 7; self.apply_craft_op(); }
                     VirtualKeyCode::Escape => {
                         self.craft_phase = CraftPhase::SelectItem;
                         self.craft_message = String::new();
@@ -3706,41 +3891,77 @@ impl State {
                     }
                 }
             }
-            3 => { // Corrupt
+            3 => { // Corrupt — risk-tiered
+                // Risk tier cycles with the cursor sub-key (frame parity used as proxy)
+                // Each time the player presses Enter the tier advances: Safe → Risky → Reckless
+                let risk = (self.frame / 60) % 3; // 0=Safe 1=Risky 2=Reckless
                 if let Some(ref mut p) = self.player {
                     let roll = chaos_roll_verbose(0.5, seed);
-                    let outcome = roll.to_range(0, 5);
+                    // Safe:  5 buckets (0-4), positive-weighted  — multiplier *1.2
+                    // Risky: 7 buckets, neutral                   — multiplier *1.5
+                    // Reckless: 9 buckets, destruction possible   — multiplier *2
+                    let (buckets, tag) = match risk {
+                        0 => (5u64, "SAFE"),
+                        1 => (7u64, "RISKY"),
+                        _ => (9u64, "RECKLESS"),
+                    };
+                    let outcome = roll.to_range(0, (buckets - 1) as i64) as u64;
                     let item = &mut p.inventory[idx];
-                    match outcome {
+                    let result = match outcome {
                         0 => {
-                            if item.socket_count < 6 { item.socket_count += 1; self.craft_message = "CORRUPTED: +1 socket!".to_string(); }
-                            else { self.craft_message = "CORRUPTED: item glows... nothing changes.".to_string(); }
+                            if item.socket_count < 6 { item.socket_count += 1; format!("[{}] +1 socket!", tag) }
+                            else { format!("[{}] glows... nothing changes.", tag) }
                         }
                         1 => {
                             if !item.stat_modifiers.is_empty() {
                                 let i2 = (seed.wrapping_add(99) % item.stat_modifiers.len() as u64) as usize;
-                                item.stat_modifiers[i2].value *= 2;
-                                self.craft_message = "CORRUPTED: a modifier was doubled!".to_string();
-                            } else { self.craft_message = "CORRUPTED: sparks, nothing happens.".to_string(); }
+                                let mult = if risk == 2 { 3 } else if risk == 1 { 2 } else { 2 };
+                                item.stat_modifiers[i2].value *= mult;
+                                format!("[{}] a modifier was ×{}!", tag, mult)
+                            } else { format!("[{}] sparks, nothing happens.", tag) }
                         }
                         2 => {
                             item.corruption = Some("Chaos-Touched".to_string());
-                            item.value += (item.value as f64 * 0.5) as i64;
-                            self.craft_message = "CORRUPTED: Chaos-Touched! (+50% value)".to_string();
+                            let bonus = if risk == 2 { 1.0 } else if risk == 1 { 0.75 } else { 0.5 };
+                            item.value += (item.value as f64 * bonus) as i64;
+                            format!("[{}] Chaos-Touched! (+{:.0}% value)", tag, bonus * 100.0)
                         }
                         3 => {
-                            item.stat_modifiers.pop();
-                            self.craft_message = "CORRUPTED: a modifier dissolved into void.".to_string();
+                            if item.stat_modifiers.is_empty() { format!("[{}] Nothing to remove.", tag) }
+                            else { item.stat_modifiers.pop(); format!("[{}] a modifier dissolved.", tag) }
                         }
                         4 => {
                             for m in &mut item.stat_modifiers { m.value = -m.value; }
-                            self.craft_message = "CORRUPTED: all modifiers INVERTED!".to_string();
+                            format!("[{}] all modifiers INVERTED!", tag)
                         }
-                        _ => {
-                            item.is_weapon = !item.is_weapon;
-                            self.craft_message = "CORRUPTED: item type transmogrified!".to_string();
+                        5 | 6 if risk >= 1 => {
+                            // Risky-exclusive: double or halve all mods
+                            let coin = seed % 2 == 0;
+                            for m in &mut item.stat_modifiers {
+                                if coin { m.value *= 2; } else { m.value /= 2; }
+                            }
+                            format!("[{}] mods {}!", tag, if coin { "DOUBLED" } else { "halved" })
                         }
-                    }
+                        7 | 8 if risk == 2 => {
+                            // Reckless-exclusive: item destroyed 5% or type flip
+                            if outcome == 8 {
+                                p.inventory.remove(idx);
+                                self.craft_message = "[RECKLESS] Item DESTROYED by chaos!".to_string();
+                                self.achievements.check_event("corrupt_used", -1);
+                                self.achievements.save();
+                                self.craft_phase = CraftPhase::SelectItem;
+                                return;
+                            } else {
+                                item.is_weapon = !item.is_weapon;
+                                format!("[RECKLESS] item type transmogrified!")
+                            }
+                        }
+                        _ => { item.is_weapon = !item.is_weapon; format!("[{}] transmogrified!", tag) }
+                    };
+                    self.craft_message = result;
+                    self.achievements.check_event("corrupt_used", 1);
+                    if risk == 2 { self.achievements.check_event("corrupt_used", 5); }
+                    self.achievements.save();
                 }
             }
             4 => { // Fuse
@@ -3773,6 +3994,36 @@ impl State {
                     p.gold -= cost;
                     p.inventory[idx].engine_locks.push(eng.clone());
                     self.craft_message = format!("ENGINE LOCKED: {} embedded! (-{}g)", eng, cost);
+                }
+            }
+            6 => { // Shatter — destroy item, scatter mods to other items
+                if let Some(ref mut p) = self.player {
+                    if p.inventory.len() < 2 {
+                        self.craft_message = "Need at least 2 items to Shatter.".to_string();
+                        return;
+                    }
+                    let mods: Vec<_> = p.inventory[idx].stat_modifiers.clone();
+                    let name = p.inventory[idx].name.clone();
+                    p.inventory.remove(idx);
+                    let n = p.inventory.len();
+                    if n > 0 && !mods.is_empty() {
+                        for (j, m) in mods.into_iter().enumerate() {
+                            let target = (seed.wrapping_add(j as u64 * 31337)) % n as u64;
+                            p.inventory[target as usize].stat_modifiers.push(m);
+                        }
+                        self.craft_message = format!("SHATTERED {}! Mods scattered to other items.", name);
+                    } else {
+                        self.craft_message = format!("SHATTERED {}! (No mods to scatter.)", name);
+                    }
+                    self.craft_phase = CraftPhase::SelectItem;
+                }
+            }
+            7 => { // Imbue — add charges
+                if let Some(ref mut p) = self.player {
+                    let item = &mut p.inventory[idx];
+                    let charges = if item.charges > 0 { item.charges + 3 } else { 3 };
+                    item.charges = charges.min(9);
+                    self.craft_message = format!("IMBUED! Item now has {} charges (+use for bonus effect).", item.charges);
                 }
             }
             _ => {}
