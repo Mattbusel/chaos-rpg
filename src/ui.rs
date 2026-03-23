@@ -178,15 +178,21 @@ pub fn draw_character_sheet(character: &crate::character::Character) {
     println!();
     let tier = character.power_tier();
     let tc = match tier {
+        crate::character::PowerTier::Abyssal => Color::DarkRed,
+        crate::character::PowerTier::Damned => Color::Red,
+        crate::character::PowerTier::Cursed => Color::Magenta,
         crate::character::PowerTier::Mortal => Color::White,
         crate::character::PowerTier::Awakened => Color::Green,
         crate::character::PowerTier::Champion => Color::Cyan,
         crate::character::PowerTier::Legendary => Color::Yellow,
         crate::character::PowerTier::Transcendent => Color::Magenta,
         crate::character::PowerTier::Godlike => Color::Red,
+        crate::character::PowerTier::BeyondMath => Color::White,
     };
     print!("  POWER: ");
-    println_colored(tier.name(), tc);
+    print_colored(tier.name(), tc);
+    println!();
+    println_colored(&format!("  {}", tier.flavor()), Color::DarkGrey);
 }
 
 pub fn draw_combat_screen(

@@ -340,12 +340,12 @@ pub fn resolve_action(
                     match modifier.stat.to_lowercase().as_str() {
                         "vitality" => {
                             player.stats.vitality += modifier.value;
-                            player.max_hp = 50 + player.stats.vitality * 3 + player.stats.force;
+                            player.max_hp = (50 + player.stats.vitality * 3 + player.stats.force).max(1);
                             heal_amount += modifier.value * 3;
                         }
                         "force" => {
                             player.stats.force += modifier.value;
-                            player.max_hp = 50 + player.stats.vitality * 3 + player.stats.force;
+                            player.max_hp = (50 + player.stats.vitality * 3 + player.stats.force).max(1);
                         }
                         "mana" => player.stats.mana += modifier.value,
                         "cunning" => player.stats.cunning += modifier.value,

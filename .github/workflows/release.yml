@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0)'
+        required: false
+        default: 'dev'
+  push:
+    tags: ['v*']
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Windows .exe
+        run: cargo build --release
+      - name: Upload Windows exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-windows-x64
+          path: target/release/chaos-rpg.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build Linux binary
+        run: cargo build --release
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-linux-x64
+          path: target/release/chaos-rpg
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build macOS binary
+        run: cargo build --release
+      - name: Upload macOS binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-rpg-macos-x64
+          path: target/release/chaos-rpg
+
+  create-release:
+    needs: [build-windows, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Rename binaries for release
+        run: |
+          mv artifacts/chaos-rpg-linux-x64/chaos-rpg artifacts/chaos-rpg-linux-x64/chaos-rpg-linux
+          mv artifacts/chaos-rpg-macos-x64/chaos-rpg artifacts/chaos-rpg-macos-x64/chaos-rpg-macos
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            artifacts/chaos-rpg-windows-x64/chaos-rpg.exe \
+            artifacts/chaos-rpg-linux-x64/chaos-rpg-linux \
+            artifacts/chaos-rpg-macos-x64/chaos-rpg-macos \
+            --title "CHAOS RPG ${{ github.ref_name }}" \
+            --notes "## CHAOS RPG ${{ github.ref_name }}
+
+          Every outcome determined by chaining 4-10 mathematical algorithms.
+
+          ### Downloads
+          - **chaos-rpg.exe** — Windows 64-bit
+          - **chaos-rpg-linux** — Linux 64-bit
+          - **chaos-rpg-macos** — macOS 64-bit
+
+          ### Usage
+          \`\`\`
+          chaos-rpg.exe
+          CHAOS_SEED=31337 chaos-rpg.exe    # reproducible run
+          \`\`\`
+
+          Same seed = same fate. Share seeds. The math does not care about your expectations."

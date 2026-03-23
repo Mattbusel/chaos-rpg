@@ -319,7 +319,7 @@ fn handle_room(
         }
 
         RoomType::Shop => {
-            let npc = shop_npc(player.floor, seed);
+            let mut npc = shop_npc(player.floor, seed);
             println!("  {}$ SHOP ${}", ui::CYAN, ui::RESET);
             println!();
             println!("  {}", npc.greeting());
@@ -393,15 +393,29 @@ fn handle_room(
 
                 if let Ok(idx) = trimmed.parse::<usize>() {
                     if idx >= 1 && idx <= npc.inventory.len() {
-                        let item = &npc.inventory[idx - 1];
+                        let item = npc.inventory[idx - 1].clone();
                         let price = npc.sale_price(item.value, player.stats.cunning);
                         if player.gold >= price {
                             player.gold -= price;
-                            let mods = item.stat_modifiers.clone();
-                            for modifier in &mods {
-                                apply_stat_modifier(player, &modifier.stat, modifier.value);
+                            npc.inventory.remove(idx - 1);
+                            // Weapons/armor go to inventory for combat use;
+                            // consumables apply immediately and are consumed.
+                            if item.is_weapon || item.stat_modifiers.is_empty() {
+                                println!(
+                                    "  {}Purchased {}! Added to inventory.{}",
+                                    ui::GREEN, item.name, ui::RESET
+                                );
+                                player.add_item(item);
+                            } else {
+                                // Consumable: apply modifiers now
+                                for modifier in item.stat_modifiers.clone() {
+                                    apply_stat_modifier(player, &modifier.stat, modifier.value);
+                                }
+                                println!(
+                                    "  {}Used {}! Stats updated.{}",
+                                    ui::GREEN, item.name, ui::RESET
+                                );
                             }
-                            println!("  {}Purchased! Stats updated.{}", ui::GREEN, ui::RESET);
                             println!("  {}Your gold: {}{}", ui::YELLOW, player.gold, ui::RESET);
                         } else {
                             println!(
@@ -653,20 +667,32 @@ fn do_combat_encounter(
     let level_before = player.level;
 
     loop {
+        // Tick status effects at the start of each round
+        {
+            let (tick_dmg, tick_msgs) = player.tick_status_effects();
+            if tick_dmg > 0 || !tick_msgs.is_empty() {
+                for msg in &tick_msgs {
+                    ui::println_color(ui::MAGENTA, &format!("  {}", msg));
+                }
+                if tick_dmg > 0 {
+                    println!("  {}Status damage: -{} HP{}", ui::RED, tick_dmg, ui::RESET);
+                }
+                if !player.is_alive() {
+                    ui::show_game_over(player);
+                    for line in player.run_summary() {
+                        println!("{}", line);
+                    }
+                    end_game_score(player);
+                    return RoomOutcome::PlayerDied;
+                }
+                ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+            }
+        }
+
         ui::clear_screen();
         ui::show_combat_menu(player, enemy, state.turn + 1);
 
         let action = ui::read_combat_action();
-
-        if matches!(action, CombatAction::UseSpell(_)) {
-            let spell_seed = state.seed.wrapping_add(77777);
-            let roll = chaos_roll_verbose(player.stats.mana as f64 * 0.01, spell_seed);
-            for line in roll.display_lines() {
-                println!("{}", line);
-            }
-            *last_roll = Some(roll);
-            ui::press_enter(&format!("  {}[ENTER] cast...{}", ui::DIM, ui::RESET));
-        }
 
         let (events, outcome) = resolve_action(player, enemy, action, &mut state);
 
@@ -688,11 +714,41 @@ fn do_combat_encounter(
                 );
                 if player.level > level_before {
                     ui::show_level_up(player.level, "Chaos has amplified your stats!");
+                    ui::show_character_sheet(player);
                 }
+
+                // Loot drop — 40% chance, guaranteed from bosses
+                let loot_seed = seed
+                    .wrapping_add(enemy.seed)
+                    .wrapping_add(state.turn as u64 * 9973);
+                let drop_chance = if is_boss { 100 } else { 40 };
+                if loot_seed % 100 < drop_chance {
+                    let loot = Item::generate(loot_seed);
+                    println!();
+                    println!("  {}★ Item dropped!{}", ui::YELLOW, ui::RESET);
+                    for line in loot.display_box() {
+                        println!("  {}", line);
+                    }
+                    println!();
+                    let pick = ui::prompt("  [P] Pick up  [any] Leave >");
+                    if pick.trim().eq_ignore_ascii_case("p") {
+                        player.add_item(loot);
+                        println!("  {}Added to inventory. ({} items){}", ui::GREEN, player.inventory.len(), ui::RESET);
+                    }
+                }
+
+                player.rooms_cleared += 1;
                 ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                 return RoomOutcome::Continue;
             }
             CombatOutcome::PlayerDied => {
+                ui::show_game_over(player);
+                println!();
+                for line in player.run_summary() {
+                    println!("{}", line);
+                }
+                println!();
+                ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                 return RoomOutcome::PlayerDied;
             }
             CombatOutcome::PlayerFled => {
