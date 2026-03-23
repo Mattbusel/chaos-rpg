@@ -326,7 +326,7 @@ impl Item {
             sign,
             self.damage_or_defense,
             reset,
-            width = inner - stat_label.len() - 4
+            width = inner - stat_label.len() - 4 - sign.len()
         ));
 
         for m in &self.stat_modifiers {

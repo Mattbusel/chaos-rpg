@@ -328,12 +328,8 @@ pub fn resolve_action(
         CombatAction::Flee => {
             let flee_roll = chaos_roll_verbose(player.stats.luck as f64 * 0.01, seed);
             let flee_chance = flee_roll.to_range(1, 100);
-            // Thief boon PhantomStep: first flee always succeeds (modeled via very low threshold)
-            let threshold = if matches!(player.boon, Some(crate::character::Boon::BloodPact)) {
-                0
-            } else {
-                40 + player.stats.cunning / 5
-            };
+            // Thief class gets bonus flee chance via CUNNING scaling
+            let threshold = 40 + player.stats.cunning / 5;
             state.combo_streak = 0;
 
             if flee_chance > threshold {
@@ -500,12 +496,15 @@ pub fn resolve_action(
         player.gain_xp(xp);
 
         // ── Class/boon death passives ─────────────────────────────────────
-        // Necromancer: Death Harvest — shield from fallen enemy
+        // Necromancer: Death Drain — absorb 8% of enemy max HP on kill
         if player.class == CharacterClass::Necromancer {
-            let shield = (enemy.max_hp as f64 * 0.30) as i64;
-            player.add_status(crate::character::StatusEffect::Shielded(shield));
-            events.push(CombatEvent::StatusApplied {
-                name: format!("DEATH SHIELD +{} (Necromancer)", shield),
+            let drain = ((enemy.max_hp as f64 * 0.08) as i64).max(1);
+            player.heal(drain);
+            events.push(CombatEvent::PlayerHealed {
+                amount: drain,
+            });
+            events.push(CombatEvent::ChaosEvent {
+                description: format!("Death Drain: absorbed {} HP from the fallen.", drain),
             });
         }
         // Thief passive: ShadowKill — if enemy was killed in one action, double gold

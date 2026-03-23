@@ -558,16 +558,30 @@ pub fn show_character_sheet(c: &Character) {
         RESET,
         RESET
     );
-    println!(
-        "  {}║  {}Passive: {}{} — {}{}║{}",
-        col,
-        t_magic(),
-        BOLD,
-        c.class.passive_name(),
-        RESET,
-        col,
-        RESET
-    );
+    {
+        // Show passive name + truncated description to fit the 50-wide box.
+        // Visible budget: "  ║  Passive: " (14) + name + " — " (3) + desc + "║" (1) = 50
+        let pname = c.class.passive_name();
+        let pdesc = c.class.passive_desc();
+        let used = 14 + pname.len() + 3 + 1; // 14 prefix, 3 separator, 1 border
+        let remaining = 50usize.saturating_sub(used);
+        let desc_truncated = if pdesc.len() > remaining && remaining > 1 {
+            format!("{}…", &pdesc[..remaining.saturating_sub(1)])
+        } else {
+            pdesc[..pdesc.len().min(remaining)].to_string()
+        };
+        println!(
+            "  {}║  {}Passive: {}{}{} — {}{}║{}",
+            col,
+            t_magic(),
+            BOLD,
+            pname,
+            RESET,
+            desc_truncated,
+            col,
+            RESET
+        );
+    }
     println!(
         "  {}╠══════════════════════════════════════════════════╣{}",
         col, RESET
@@ -706,13 +720,13 @@ pub fn show_combat_menu(player: &Character, enemy: &crate::enemy::Enemy, round: 
     } else {
         RED
     };
-    let efill = ((hp_pct * 30.0) as usize).min(30);
+    let efill = ((hp_pct * 20.0) as usize).min(20);
     println!(
-        "  {}║  {}HP [{}{}{}{}]{} {}/{:<12}{}║{}",
+        "  {}║  {}HP [{}{}{}{}]{} {}/{}{}║{}",
         c,
         e_col,
         "█".repeat(efill),
-        "░".repeat(30 - efill),
+        "░".repeat(20 - efill),
         RESET,
         e_col,
         RESET,
