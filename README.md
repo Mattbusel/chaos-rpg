@@ -354,16 +354,105 @@ Your character's total stat sum determines your power tier.
 
 | Key | Action |
 |-----|--------|
-| `A` | Attack (builds combo) |
-| `H` | Heavy Attack (consumes combo streak) |
-| `D` | Defend |
-| `T` | Taunt |
-| `F` | Flee |
+| `A` | Attack (builds combo streak) |
+| `H` | Heavy Attack (consumes combo streak as finisher) |
+| `D` | Defend (reduce incoming damage by VIT/3 + FOR/5) |
+| `T` | Taunt (draw attack, boost next hit) |
+| `F` | Flee (LCK-based escape; leg injuries penalize chance) |
 | `S1`-`S9` | Cast spell from known spells list |
-| `I1`-`I9` | Use item from inventory |
-| `P` | Open passive skill tree |
-| `B` | View body chart |
-| `?` | Show last chaos engine trace |
+| `I1`-`I9` | Use inventory item by number |
+| `?` | Show inline combat action reference |
+
+Engine trace prints automatically after every action -- no key needed.
+
+## Floor Navigation
+
+| Key | Action |
+|-----|--------|
+| `E` | Enter the current room |
+| `C` | View full character sheet (stats, boon, passive, faction rep, body) |
+| `B` | View body chart (all 12 parts, injuries, HP) |
+| `P` | Open passive skill tree allocator |
+| `F` | View faction reputation screen (ORDER / CULT / WATCH) |
+| `T` | Show last chaos engine trace |
+| `D` | Descend to next floor (available after all rooms cleared) |
+
+---
+
+## Quest System
+
+The quest log tracks objectives through their full lifecycle: NotStarted -> InProgress -> Completed / Failed / Abandoned.
+
+**Objective types:**
+- Kill N enemies of a specific type
+- Collect N of a specific item
+- Reach a location
+- Talk to an NPC
+- Survive N rounds
+
+Quests can have prerequisites -- completing earlier quests unlocks later ones. Rewards include gold, XP, and items.
+
+---
+
+## Magic System
+
+Six spell schools with distinct effect types:
+
+| School | Effect types |
+|--------|-------------|
+| Fire | Damage with variance |
+| Ice | AoE slow + damage |
+| Lightning | High variance damage |
+| Arcane | Buffs, summons |
+| Nature | Heals, area effects |
+| Shadow | Debuffs, DoT |
+
+The SpellBook tracks known spells, cooldown countdowns, and mana cost. The ManaPool manages current/max mana and per-turn regeneration.
+
+---
+
+## Enemy AI
+
+Enemies use a finite state machine with 7 states:
+
+| State | Description |
+|-------|-------------|
+| Idle | Unaware of player |
+| Patrol | Moving between waypoints |
+| Alerted | Heard/glimpsed player; searching |
+| Chasing | Actively pursuing |
+| Attacking | Melee engagement |
+| Fleeing | Below HP flee threshold; retreating |
+| Dead | Terminal state |
+
+Each enemy has an aggression factor, detection radius, and flee threshold. Archetype presets (Aggressive, Cautious, Berserker, Support) configure these automatically.
+
+---
+
+## World Map
+
+Room-based overworld graph with BFS pathfinding and bidirectional connections. Rooms have types (Dungeon, Town, Wilderness, Cave, Temple, Port) and track visited state. The starter world ships with 6 connected locations (Thornwall, Mirewood Forest, Gloomhaven Cave, The Sunken Gate, Crossroads Market, Saltbreak Port).
+
+---
+
+## Recipe Crafting
+
+Ingredient-based item creation distinct from the chaos-crafting (modify) system. Combine ingredients at crafting stations to produce items from scratch.
+
+| Station | Recipes |
+|---------|---------|
+| Anvil | Iron sword, arrow bundle |
+| Alchemist | Health potion |
+| Workbench | Lockpick |
+| Magic Forge | Magic staff |
+
+Crafters above level 10 produce bonus-quality results. The RecipeBook validates ingredient availability before attempting a craft.
+
+---
+
+## Save System
+
+Multi-slot saves using a plain key=value text format with `[SLOT N]` headers -- no external crates, no binary formats. Fields include player name, level, gold, floor, HP, attack, defense, XP, inventory list, and completed quest IDs. SaveManager supports list, load, and save across multiple slots.
 
 ---
 
