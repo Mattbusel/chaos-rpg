@@ -185,7 +185,7 @@ impl Floor {
 
     pub fn minimap(&self) -> String {
         let mut map = String::new();
-        for (i, room) in self.rooms.iter().enumerate() {
+        for (i, _room) in self.rooms.iter().enumerate() {
             if i < self.current_room {
                 map.push_str("▓");
             } else if i == self.current_room {

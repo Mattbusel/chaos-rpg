@@ -4,7 +4,7 @@
 //! Output is in the range [-1.0, 1.0] unless explicitly noted.
 //! Chain them together. Watch reality unravel.
 
-use std::f64::consts::{E, PI};
+use std::f64::consts::PI;
 
 // ─── 1. LORENZ ATTRACTOR ─────────────────────────────────────────────────────
 /// Simulates a mini Lorenz step. The butterfly effect in one function.
