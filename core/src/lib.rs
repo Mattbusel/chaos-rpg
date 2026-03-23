@@ -63,3 +63,4 @@ pub mod crafting_system;
 pub mod bestiary;
 pub mod quest_system;
 pub mod combat_system;
+pub mod character_creator;

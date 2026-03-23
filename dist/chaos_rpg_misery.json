@@ -34,5 +34,17 @@
     "cause_of_death": "Unknown",
     "misery_score": 7550,
     "timestamp": "2026-03-23 09:26Z"
+  },
+  {
+    "name": "Hero",
+    "class": "Paladin",
+    "misery_index": 1820.0,
+    "floor_reached": 4,
+    "power_tier": "TRANSCENDENT",
+    "spite_spent": 0.0,
+    "defiance_rolls": 0,
+    "cause_of_death": "Unknown",
+    "misery_score": 7280,
+    "timestamp": "2026-03-23 10:26Z"
   }
 ]

@@ -1260,6 +1260,7 @@ pub fn show_game_over(player: &Character) {
 // ─── SCOREBOARD ───────────────────────────────────────────────────────────────
 
 pub fn show_scoreboard(scores: &[chaos_rpg_core::scoreboard::ScoreEntry]) {
+    use chaos_rpg_core::scoreboard::load_misery_scores;
     clear_screen();
     let c = t_warning();
     println!();
@@ -1314,6 +1315,58 @@ pub fn show_scoreboard(scores: &[chaos_rpg_core::scoreboard::ScoreEntry]) {
         "  {}╚══════╩════════════════╩════════════╩═══════╩═══════╩═════╝{}",
         c, RESET
     );
+
+    // ── Hall of Misery ──
+    println!();
+    let m = t_magic();
+    println!(
+        "  {}╔══════════════════════════════════════════════════════════╗{}",
+        RED, RESET
+    );
+    println!(
+        "  {}║                   HALL OF MISERY                         ║{}",
+        RED, RESET
+    );
+    println!(
+        "  {}╠══════╦════════╦════════════════╦════════════╦═════╦══════╣{}",
+        RED, RESET
+    );
+    println!(
+        "  {}║ {:>4} ║ {:>6} ║ {:<14} ║ {:<10} ║ {:>3} ║ {:<4} ║{}",
+        RED, "#", "Misery", "Name", "Class", "Flr", "Tier", RESET
+    );
+    println!(
+        "  {}╠══════╬════════╬════════════════╬════════════╬═════╬══════╣{}",
+        RED, RESET
+    );
+    let mscores = load_misery_scores();
+    if mscores.is_empty() {
+        println!(
+            "  {}║  No misery recorded. Suffer more.                        ║{}",
+            DIM, RESET
+        );
+    } else {
+        for (i, ms) in mscores.iter().enumerate().take(10) {
+            let row_col = if i == 0 { RED } else if i < 3 { MAGENTA } else { DIM };
+            let tier_short: String = ms.power_tier.chars().take(4).collect();
+            println!(
+                "  {}║ {:>4} ║ {:>6.0} ║ {:<14} ║ {:<10} ║ {:>3} ║ {:<4} ║{}",
+                row_col,
+                i + 1,
+                ms.misery_index,
+                &ms.name[..ms.name.len().min(14)],
+                &ms.class[..ms.class.len().min(10)],
+                ms.floor_reached,
+                tier_short,
+                RESET
+            );
+        }
+    }
+    println!(
+        "  {}╚══════╩════════╩════════════════╩════════════╩═════╩══════╝{}",
+        RED, RESET
+    );
+    let _ = m;
     println!();
     press_enter(&format!("  {}[ENTER] to return...{}", DIM, RESET));
 }

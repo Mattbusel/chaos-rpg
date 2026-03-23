@@ -18,7 +18,7 @@ use chaos_rpg_core::{
     items::{Item, Rarity, StatModifier},
     nemesis::{clear_nemesis, load_nemesis, save_nemesis, NemesisRecord},
     npcs::shop_npc,
-    scoreboard::{load_scores, save_score, ScoreEntry},
+    scoreboard::{load_scores, load_misery_scores, save_score, ScoreEntry},
     skill_checks::{perform_skill_check, Difficulty as SkillDiff, SkillType},
     spells::Spell,
     world::{generate_floor, room_enemy, Floor, RoomType},
@@ -1149,6 +1149,35 @@ impl State {
             let line: String = l.chars().take(18).collect();
             ctx.print_color(59, 5 + i as i32, ac, bg, &line);
         }
+        // Class description (word-wrapped at 17 chars)
+        draw_separator(ctx, 58, 9, 19, &t);
+        let mut row = 10i32;
+        let mut line = String::new();
+        for w in class.description().split_whitespace() {
+            if line.len() + w.len() + 1 > 17 {
+                ctx.print_color(59, row, dim, bg, &line);
+                line = w.to_string(); row += 1;
+            } else {
+                if !line.is_empty() { line.push(' '); }
+                line.push_str(w);
+            }
+        }
+        if !line.is_empty() { ctx.print_color(59, row, dim, bg, &line); row += 1; }
+        // Passive ability
+        row += 1;
+        ctx.print_color(59, row, ac, bg, class.passive_name());
+        row += 1;
+        let mut pline = String::new();
+        for w in class.passive_desc().split_whitespace() {
+            if pline.len() + w.len() + 1 > 17 {
+                ctx.print_color(59, row, dim, bg, &pline);
+                pline = w.to_string(); row += 1;
+            } else {
+                if !pline.is_empty() { pline.push(' '); }
+                pline.push_str(w);
+            }
+        }
+        if !pline.is_empty() { ctx.print_color(59, row, dim, bg, &pline); }
 
         draw_separator(ctx, 2, 45, 75, &t);
         print_hint(ctx, 4, 46, "↑↓", " Class   ", &t);
@@ -1809,6 +1838,11 @@ impl State {
         } else { tier_rgb };
         let (plabel, pval) = p.power_display();
         stat_line(ctx, 3, 20, &format!("{}: ", plabel), &pval, tier_col, &t);
+        // Tier flavor text (truncated to fit inner width)
+        let flavor = tier.flavor();
+        let flavor_short: String = flavor.chars().take(21).collect();
+        let flavor_disp = if flavor.len() > 21 { format!("{}…", flavor_short) } else { flavor_short };
+        ctx.print_color(3, 21, RGB::from_u8(tier_col.0/2+10, tier_col.1/2+10, tier_col.2/2+10), bg, &flavor_disp);
 
         // ── Middle column: run info ──
         draw_subpanel(ctx, 27, 3, 25, 20, "RUN INFO", &t);
@@ -2062,31 +2096,55 @@ impl State {
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
         let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
         let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let wrn = RGB::from_u8(t.warn.0,   t.warn.1,   t.warn.2);
 
         ctx.cls_bg(bg);
         draw_panel(ctx, 0, 0, 79, 49, "SCOREBOARD", &t);
 
+        // ── Hall of Chaos (regular scores) ──
+        ctx.print_color(2, 2, hd, bg, "HALL OF CHAOS");
         let scores = load_scores();
         if scores.is_empty() {
-            print_center(ctx, 2, 22, 75, t.dim, &t, "No scores yet. Play and die bravely.");
+            ctx.print_color(4, 4, dim, bg, "No scores yet. Play and die bravely.");
         } else {
-            ctx.print_color(2, 4, dim, bg,
+            ctx.print_color(2, 3, dim, bg,
                 &format!("{:<4} {:<10} {:<16} {:<12} {:<5} {:<5}",
                     "Rank", "Score", "Name", "Class", "Flr", "Kills"));
-            draw_separator(ctx, 2, 5, 75, &t);
-            for (i, s) in scores.iter().enumerate().take(20) {
-                let row_col = match i {
-                    0 => gld,
-                    1 => hd,
-                    2 => ac,
-                    _ => dim,
-                };
+            draw_separator(ctx, 2, 4, 75, &t);
+            for (i, s) in scores.iter().enumerate().take(10) {
+                let row_col = match i { 0 => gld, 1 => hd, 2 => ac, _ => dim };
                 let medal = match i { 0 => "★ ", 1 => "◆ ", 2 => "● ", _ => "  " };
-                ctx.print_color(2, 6 + i as i32, row_col, bg,
+                ctx.print_color(2, 5 + i as i32, row_col, bg,
                     &format!("{}{:<3}  {:<10} {:<16} {:<12} {:<5} {}",
                         medal, i+1, s.score, &s.name.chars().take(16).collect::<String>(),
                         &s.class.chars().take(12).collect::<String>(),
                         s.floor_reached, s.enemies_defeated));
+            }
+        }
+
+        // ── Hall of Misery ──
+        let misery_y = 17i32;
+        draw_separator(ctx, 2, misery_y - 1, 75, &t);
+        ctx.print_color(2, misery_y, dng, bg, "HALL OF MISERY");
+        let mscores = load_misery_scores();
+        if mscores.is_empty() {
+            ctx.print_color(4, misery_y + 2, dim, bg, "No misery recorded. Suffer more.");
+        } else {
+            ctx.print_color(2, misery_y + 1, dim, bg,
+                &format!("{:<4} {:<8} {:<14} {:<12} {:<5} {:<18}",
+                    "Rank", "Misery", "Name", "Class", "Flr", "Cause of death"));
+            draw_separator(ctx, 2, misery_y + 2, 75, &t);
+            for (i, m) in mscores.iter().enumerate().take(10) {
+                let row_col = match i { 0 => dng, 1 => wrn, 2 => ac, _ => dim };
+                let medal = match i { 0 => "☠ ", 1 => "✦ ", 2 => "● ", _ => "  " };
+                let cause: String = m.cause_of_death.chars().take(18).collect();
+                ctx.print_color(2, misery_y + 3 + i as i32, row_col, bg,
+                    &format!("{}{:<3}  {:<8.0} {:<14} {:<12} {:<5} {}",
+                        medal, i+1, m.misery_index,
+                        &m.name.chars().take(14).collect::<String>(),
+                        &m.class.chars().take(12).collect::<String>(),
+                        m.floor_reached, cause));
             }
         }
 
