@@ -3,7 +3,7 @@
 > *Where Math Goes To Die*
 
 
-A roguelike where **every outcome** is produced by chaining real mathematical algorithms together. Character stats, enemy behavior, damage, healing, loot, skill checks, world generation — all of it flows through the same chaos pipeline. The same class can produce wildly different characters on every run. You can roll a deity or a corpse. Both are mathematically valid.
+A roguelike where **every outcome** is produced by chaining real mathematical algorithms together. Character stats, enemy behavior, damage, healing, loot, skill checks, world generation - all of it flows through the same chaos pipeline. The same class can produce wildly different characters on every run. You can roll a deity or a corpse. Both are mathematically valid.
 
 ---
 
@@ -12,39 +12,61 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 <table>
 <tr>
 <td><img src="docs/screenshots/character-creation.png" width="420" alt="Character Creation"/><br/><sub>8 classes · 4 backgrounds · 4 difficulties</sub></td>
-<td><img src="docs/screenshots/combat-chain.png" width="420" alt="Chaos Engine combat chain"/><br/><sub>The Chaos Engine — 8 linked math functions, live chain output</sub></td>
+<td><img src="docs/screenshots/combat-chain.png" width="420" alt="Chaos Engine combat chain"/><br/><sub>The Chaos Engine - 8 linked math functions, live chain output</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body chart with MATH.ABSENT"/><br/><sub>13-part body system — injuries cascade into MATH.ABSENT</sub></td>
-<td><img src="docs/screenshots/crafting.png" width="420" alt="Crafting bench"/><br/><sub>Crafting bench — Reforge, Augment, Corrupt, Mirror and more</sub></td>
+<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body chart with MATH.ABSENT"/><br/><sub>13-part body system - injuries cascade into MATH.ABSENT</sub></td>
+<td><img src="docs/screenshots/crafting.png" width="420" alt="Crafting bench"/><br/><sub>Crafting bench - Reforge, Augment, Corrupt, Mirror and more</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/tutorial.png" width="420" alt="Tutorial slide 1"/><br/><sub>Built-in 5-slide tutorial — press ? on the title screen</sub></td>
-<td><img src="docs/screenshots/scoreboard.png" width="420" alt="Hall of Chaos scoreboard"/><br/><sub>Hall of Chaos + Hall of Misery — two separate leaderboards</sub></td>
+<td><img src="docs/screenshots/tutorial.png" width="420" alt="Tutorial slide 1"/><br/><sub>Built-in 5-slide tutorial - press ? on the title screen</sub></td>
+<td><img src="docs/screenshots/scoreboard.png" width="420" alt="Hall of Chaos scoreboard"/><br/><sub>Hall of Chaos + Hall of Misery - two separate leaderboards</sub></td>
 </tr>
 <tr>
-<td colspan="2"><img src="docs/screenshots/game-over.png" width="420" alt="Run summary on death"/><br/><sub>Full run summary on death — damage dealt, best hit, D/T ratio, power tier</sub></td>
+<td colspan="2"><img src="docs/screenshots/game-over.png" width="420" alt="Run summary on death"/><br/><sub>Full run summary on death - damage dealt, best hit, D/T ratio, power tier</sub></td>
 </tr>
 </table>
 
 ---
 
-## Download (No Rust Required)
+## Download and Play
 
-Pre-built binaries are attached to every [GitHub Release](https://github.com/Mattbusel/chaos-rpg/releases).
+**No installation required. No Rust needed. Just download and run.**
 
-| Frontend | Platform | Binary |
-|----------|----------|--------|
-| **Terminal** (ratatui TUI) | Windows | `chaos-rpg-terminal-windows.exe` |
-| **Terminal** (ratatui TUI) | Linux | `chaos-rpg-terminal-linux` |
-| **Terminal** (ratatui TUI) | macOS | `chaos-rpg-terminal-macos` |
-| **Graphical** (OpenGL) | Windows | `chaos-rpg-graphical-windows.exe` |
-| **Graphical** (OpenGL) | Linux | `chaos-rpg-graphical-linux` |
-| **Graphical** (OpenGL) | macOS | `chaos-rpg-graphical-macos` |
+### Option A: itch.io (easiest)
 
-> **Windows:** Double-click the .exe. Use [Windows Terminal](https://aka.ms/terminal) for best color in the TUI version.
-> **macOS:** `xattr -d com.apple.quarantine ./chaos-rpg-terminal-macos` if blocked.
-> **Linux:** `chmod +x chaos-rpg-terminal-linux && ./chaos-rpg-terminal-linux`
+1. Go to the [itch.io page](https://mattbusel.itch.io/chaos-rpg)
+2. Click **Download**
+3. Extract the zip
+4. Run `chaos-rpg-graphical.exe` for the fullscreen graphical version
+5. Or run `chaos-rpg.exe` for the terminal version
+
+> If Windows Defender blocks the exe, click **More info** then **Run anyway**. The game is safe and the full source code is public here on GitHub.
+
+### Option B: GitHub Releases
+
+1. Go to the [Releases page](https://github.com/Mattbusel/chaos-rpg/releases)
+2. Expand **Assets** under the latest release
+3. Download the file for your platform:
+
+| Version | Platform | File |
+|---------|----------|------|
+| Graphical (OpenGL fullscreen) | Windows | `chaos-rpg-graphical-windows.exe` |
+| Terminal (TUI) | Windows | `chaos-rpg-terminal-windows.exe` |
+| Graphical | Linux | `chaos-rpg-graphical-linux` |
+| Terminal | Linux | `chaos-rpg-terminal-linux` |
+| Graphical | macOS | `chaos-rpg-graphical-macos` |
+| Terminal | macOS | `chaos-rpg-terminal-macos` |
+
+4. Run it:
+   - **Windows:** Double-click the `.exe`
+   - **Linux:** `chmod +x chaos-rpg-graphical-linux && ./chaos-rpg-graphical-linux`
+   - **macOS:** `xattr -d com.apple.quarantine ./chaos-rpg-graphical-macos && ./chaos-rpg-graphical-macos`
+
+### Which version should I run?
+
+- **chaos-rpg-graphical** - Fullscreen OpenGL window, animated UI, 5 color themes. Recommended.
+- **chaos-rpg** - Runs in any terminal. Works over SSH. No GPU required.
 
 ---
 
@@ -109,7 +131,7 @@ Every attack, heal, flee attempt, loot roll, enemy stat, and world event uses th
 
 **Ten Engines:** The pipeline selects one of 10 mathematical engines per roll: Linear, Lorenz, Zeta, Collatz, Mandelbrot, Fibonacci, Euler, SharpEdge, Orbit, Recursive. Each has different distribution properties (SharpEdge is extreme bimodal; Fibonacci is stable and convergent; Zeta has heavy tails). **EngineLock** crafting can lock an item to always use a specific engine.
 
-**Corruption:** Each kill adds 1 corruption stack. Every 50 stacks, the pipeline's core parameters shift permanently — σ drifts, Zeta's evaluation point moves. By stack 400+, you are running a completely different mathematical system than the one you started with.
+**Corruption:** Each kill adds 1 corruption stack. Every 50 stacks, the pipeline's core parameters shift permanently - σ drifts, Zeta's evaluation point moves. By stack 400+, you are running a completely different mathematical system than the one you started with.
 
 ---
 
@@ -173,7 +195,7 @@ Pick a **class**, **background**, and **difficulty**. Stats are rolled by chaini
 
 **Difficulties:** Normal → Hard → Chaos (exponential enemy scaling)
 
-Stats can be **negative**. A character with -40 force genuinely fights at a disadvantage — but the Misery System (below) compensates.
+Stats can be **negative**. A character with -40 force genuinely fights at a disadvantage - but the Misery System (below) compensates.
 
 ### The Boon System
 
@@ -192,12 +214,12 @@ After character creation, choose one of three randomly offered permanent bonuses
 
 | Key | Action |
 |-----|--------|
-| `A` | Attack — basic melee, scales with force |
-| `H` | Heavy Attack — more damage, lower accuracy |
-| `D` | Defend — reduce incoming damage this round |
-| `T` | Taunt — force enemy to attack you (some boss interactions require this) |
-| `F` | Flee — luck+cunning roll to escape |
-| `1–8` | Cast spell — costs mana, chaos-powered |
+| `A` | Attack - basic melee, scales with force |
+| `H` | Heavy Attack - more damage, lower accuracy |
+| `D` | Defend - reduce incoming damage this round |
+| `T` | Taunt - force enemy to attack you (some boss interactions require this) |
+| `F` | Flee - luck+cunning roll to escape |
+| `1–8` | Cast spell - costs mana, chaos-powered |
 | `Q–O` | Use item from inventory |
 
 ### Power Tiers
@@ -217,7 +239,7 @@ Suffering accumulates into the Misery Index. The worse things go, the more power
 
 **Underdog Multiplier:** Negative total stats give a logarithmic XP and score bonus. A character at -200 total stats earns roughly ×2.3 XP per kill.
 
-**Spite Actions:** Spend Spite points on revenge abilities — Spite Strike (+50% damage), Bitter Endurance (absorb one hit), Chaos Spite (invert an enemy roll).
+**Spite Actions:** Spend Spite points on revenge abilities - Spite Strike (+50% damage), Bitter Endurance (absorb one hit), Chaos Spite (invert an enemy roll).
 
 ### The Passive Skill Tree
 
@@ -238,18 +260,18 @@ Each boss targets a specific build archetype:
 
 | Boss | Floor | Counter |
 |------|-------|---------|
-| **The Mirror** | 5+ | Copies your exact stats — exploit your class passive |
-| **The Accountant** | 10+ | Sends you a bill based on lifetime damage dealt — defend repeatedly |
-| **The Fibonacci Hydra** | 15+ | Splits on death following Fibonacci sequence — burst damage or survive 10 splits |
-| **The Eigenstate** | 15+ | Superposition of 1 HP (instant kill) or 10,000 HP (no attack) — Taunt to reveal |
-| **The Taxman** | 20+ | Taxes your gold every round at escalating rates — kill it fast |
-| **The Null** | 25+ | Nullifies the chaos pipeline — base stats only, status effects still work |
-| **The Ouroboros** | 30+ | Heals from damage, remembers attack patterns — vary your attacks |
-| **The Collatz Titan** | 35+ | HP follows Collatz sequence — force it into powers of 2 |
-| **The Committee** | 40+ | 5 members vote on whether your attack resolves — majority rules |
-| **The Recursion** | 50+ | Deals damage equal to all damage dealt this fight — burst or die |
-| **The Paradox** | 75+ | Inverts defense stats — high Vitality becomes a liability |
-| **The Algorithm Reborn** | 100 | The dungeon itself, fully aware — adapts to your playstyle across 3 phases |
+| **The Mirror** | 5+ | Copies your exact stats - exploit your class passive |
+| **The Accountant** | 10+ | Sends you a bill based on lifetime damage dealt - defend repeatedly |
+| **The Fibonacci Hydra** | 15+ | Splits on death following Fibonacci sequence - burst damage or survive 10 splits |
+| **The Eigenstate** | 15+ | Superposition of 1 HP (instant kill) or 10,000 HP (no attack) - Taunt to reveal |
+| **The Taxman** | 20+ | Taxes your gold every round at escalating rates - kill it fast |
+| **The Null** | 25+ | Nullifies the chaos pipeline - base stats only, status effects still work |
+| **The Ouroboros** | 30+ | Heals from damage, remembers attack patterns - vary your attacks |
+| **The Collatz Titan** | 35+ | HP follows Collatz sequence - force it into powers of 2 |
+| **The Committee** | 40+ | 5 members vote on whether your attack resolves - majority rules |
+| **The Recursion** | 50+ | Deals damage equal to all damage dealt this fight - burst or die |
+| **The Paradox** | 75+ | Inverts defense stats - high Vitality becomes a liability |
+| **The Algorithm Reborn** | 100 | The dungeon itself, fully aware - adapts to your playstyle across 3 phases |
 
 Full boss strategies: [docs/BOSSES.md](docs/BOSSES.md)
 
@@ -262,7 +284,7 @@ At Crafting Bench rooms, six operations are available:
 | **Reforge** | Chaos-reroll all stat modifiers from scratch |
 | **Augment** | Add one new chaos-rolled modifier |
 | **Annul** | Remove one random modifier |
-| **Corrupt** | Unpredictable effect — can double values, flip them, add sockets, change item type |
+| **Corrupt** | Unpredictable effect - can double values, flip them, add sockets, change item type |
 | **Fuse** | Double all values and upgrade rarity tier |
 | **EngineLock** | Lock a chaos engine into the item (costs gold, scales with floor) |
 
@@ -272,11 +294,11 @@ The world spans multiple regions under faction control. Reputation with factions
 
 ### Party System
 
-Recruit NPCs as party members. Each has their own class, stats, and morale. Morale affects combat performance — lead poorly and they flee.
+Recruit NPCs as party members. Each has their own class, stats, and morale. Morale affects combat performance - lead poorly and they flee.
 
 ### Audio
 
-All sound is synthesized procedurally at startup — no audio files. Every SFX (attacks, spells, level-ups, death) and music loop (menu, exploration, combat, boss, cursed floor) is built from oscillators, ADSR envelopes, and filters seeded from the current floor. Audio degrades gracefully — if no audio device is found, the game runs silently.
+All sound is synthesized procedurally at startup - no audio files. Every SFX (attacks, spells, level-ups, death) and music loop (menu, exploration, combat, boss, cursed floor) is built from oscillators, ADSR envelopes, and filters seeded from the current floor. Audio degrades gracefully - if no audio device is found, the game runs silently.
 
 ### Saving, Scoring, and Legacy
 
@@ -301,7 +323,7 @@ score = kills × floor × difficulty_multiplier × chaos_bonus × underdog_multi
 | Icon | Room | What Happens |
 |------|------|-------------|
 | `[×]` | Combat | Enemy encounter. No free escape. |
-| `[★]` | Treasure | Free item — sometimes cursed. |
+| `[★]` | Treasure | Free item - sometimes cursed. |
 | `[$]` | Shop | Buy items, spells, healing with gold. |
 | `[~]` | Shrine | Stat bonuses or healing. |
 | `[!]` | Trap | Unavoidable damage or debuff. |
@@ -316,7 +338,7 @@ score = kills × floor × difficulty_multiplier × chaos_bonus × underdog_multi
 
 ```
 chaos-rpg/
-├── core/                      # chaos-rpg-core — all game logic (library crate)
+├── core/                      # chaos-rpg-core - all game logic (library crate)
 │   └── src/
 │       ├── character.rs           stat rolling, leveling, class passives
 │       ├── combat.rs              round resolution, action dispatch
@@ -338,13 +360,13 @@ chaos-rpg/
 │       ├── magic_system.rs        extended magic subsystem
 │       └── relationship_system.rs faction reputation, party morale
 │
-├── terminal/                  # chaos-rpg — terminal frontend (ratatui TUI)
+├── terminal/                  # chaos-rpg - terminal frontend (ratatui TUI)
 │   └── src/
 │       ├── main.rs                game loop, input, state machine
 │       ├── ui.rs                  panel rendering, color helpers
 │       └── ratatui_screens.rs     per-screen draw functions
 │
-├── graphical/                 # chaos-rpg-graphical — OpenGL frontend (bracket-lib)
+├── graphical/                 # chaos-rpg-graphical - OpenGL frontend (bracket-lib)
 │   └── src/
 │       ├── main.rs                game loop, all screen draw functions
 │       ├── renderer.rs            box drawing, bars, stat lines, minimap
@@ -352,7 +374,7 @@ chaos-rpg/
 │       ├── sprites.rs             ASCII art sprite library
 │       └── ui_overlay.rs          tooltip and banner helpers
 │
-├── audio/                     # chaos-rpg-audio — procedural audio (rodio)
+├── audio/                     # chaos-rpg-audio - procedural audio (rodio)
 │   └── src/
 │       ├── lib.rs                 AudioSystem, event dispatch
 │       ├── synth.rs               oscillators, ADSR, filters
@@ -370,12 +392,12 @@ chaos-rpg/
 
 Issues and pull requests welcome. For large changes, open an issue first.
 
-The chaos pipeline parameters (Lorenz σ/ρ/β, Mandelbrot max_iter, bifurcation r range) are intentionally tuned — changes there have cascading effects on all game balance. Test thoroughly.
+The chaos pipeline parameters (Lorenz σ/ρ/β, Mandelbrot max_iter, bifurcation r range) are intentionally tuned - changes there have cascading effects on all game balance. Test thoroughly.
 
 ---
 
 ## Further Reading
 
-- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — first run walkthrough, stat explanations, survival tips
-- [docs/MECHANICS.md](docs/MECHANICS.md) — full mathematical breakdown of every system
-- [docs/BOSSES.md](docs/BOSSES.md) — all 12 bosses, their mechanics, and how to beat them
+- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) - first run walkthrough, stat explanations, survival tips
+- [docs/MECHANICS.md](docs/MECHANICS.md) - full mathematical breakdown of every system
+- [docs/BOSSES.md](docs/BOSSES.md) - all 12 bosses, their mechanics, and how to beat them
