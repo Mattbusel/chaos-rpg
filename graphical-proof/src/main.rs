@@ -30,10 +30,12 @@ pub mod mod_system;
 pub mod replay_system;
 pub mod save_upgrade;
 pub mod debug_tools;
+pub mod gpu_chaos;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
 use debug_tools::DebugToolsManager;
+use gpu_chaos::ChaosComputeManager;
 
 // ── ProofGame implementation ─────────────────────────────────────────────────
 
@@ -42,6 +44,7 @@ struct ChaosRpgGame {
     music_bridge: music_bridge::MusicBridge,
     anim_bridge: anim_bridge::AnimBridge,
     debug_tools: DebugToolsManager,
+    chaos_compute: ChaosComputeManager,
 }
 
 impl ProofGame for ChaosRpgGame {
@@ -85,8 +88,13 @@ impl ProofGame for ChaosRpgGame {
         let anim_transforms = self.anim_bridge.update(dt, &self.state);
         let _ = &anim_transforms; // transforms are applied by screen-specific renderers
 
-        // Update chaos field (always running)
-        scenes::chaos_field::update(&self.state, engine, dt);
+        // Update GPU chaos field (replaces old CPU chaos field)
+        self.chaos_compute.set_floor_theme(
+            self.state.floor_num,
+            self.state.corruption_frac() * 500.0,
+        );
+        self.chaos_compute.update(dt);
+        self.chaos_compute.render(engine);
 
         // Screen-specific update + render
         match self.state.screen {
@@ -246,6 +254,7 @@ fn main() {
         music_bridge: music_bridge::MusicBridge::init(),
         anim_bridge: anim_bridge::AnimBridge::init(),
         debug_tools: DebugToolsManager::new(),
+        chaos_compute: ChaosComputeManager::init_auto(),
     };
     ProofEngine::run_game(game);
 }
