@@ -4,6 +4,7 @@ members = [
     "audio",
     "terminal",
     "graphical",
+    "graphical-proof",
     "web",
 ]
 resolver = "2"

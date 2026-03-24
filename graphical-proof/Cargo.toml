@@ -1,0 +1,17 @@
+[package]
+name = "chaos-rpg-proof"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CHAOS RPG — proof-engine graphical frontend"
+
+[[bin]]
+name = "chaos-rpg-proof"
+path = "src/main.rs"
+
+[dependencies]
+chaos-rpg-core = { path = "../core" }
+proof-engine = { path = "../../proof-engine" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rand = { workspace = true }
