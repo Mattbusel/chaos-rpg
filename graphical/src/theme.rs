@@ -169,9 +169,36 @@ pub const THEMES: [Theme; 5] = [
     THEME_GLACIAL,
 ];
 
+// ── 5-Tier Brightness System ──────────────────────────────────────────────────
+// Used to enforce visual hierarchy across all screens.
+// T1 = player-critical info, T5 = near-invisible background noise.
+//
+//   T1 CRITICAL   — selected, boss names, crit numbers, death, level-up
+//   T2 ACTIVE     — HP/MP values, current item, action labels, headings
+//   T3 SECONDARY  — room descriptions, modifiers list, inactive spells
+//   T4 MUTED      — labels ("HP", "Floor", "Kills"), borders, separators
+//   T5 GHOST      — chaos field, visited rooms, empty-slot placeholders
+//
+// In practice: use Theme fields directly but classify them by tier intent:
+//   T1 → selected, heading (when emphasis), accent on confirm
+//   T2 → heading, hp_high, hp_mid, mana, gold, success
+//   T3 → primary, dim
+//   T4 → muted, border
+//   T5 → chaos field brightness values (0.055–0.16)
+
 impl Theme {
     pub fn hp_color(&self, pct: f32) -> (u8, u8, u8) {
         if pct > 0.6 { self.hp_high } else if pct > 0.3 { self.hp_mid } else { self.hp_low }
+    }
+
+    /// Dim a color toward theme bg for T4/T5 usage.
+    pub fn dim_color(&self, col: (u8,u8,u8), factor: f32) -> (u8,u8,u8) {
+        let f = factor.clamp(0.0, 1.0);
+        (
+            ((col.0 as f32 * f + self.bg.0 as f32 * (1.0 - f)) as u8),
+            ((col.1 as f32 * f + self.bg.1 as f32 * (1.0 - f)) as u8),
+            ((col.2 as f32 * f + self.bg.2 as f32 * (1.0 - f)) as u8),
+        )
     }
 
     /// Lerp two colors for gradient effects.
