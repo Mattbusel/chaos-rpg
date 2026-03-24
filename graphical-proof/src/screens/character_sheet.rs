@@ -1,46 +1,16 @@
-//! Character sheet screen — 5 tabs: Stats, Inventory, Effects, Lore, Log.
+//! Character sheet — 5 tabs: Stats, Inventory, Effects, Lore, Log.
+//! Full stat bars, equipment slots, stat comparison, scrollable content.
 
 use proof_engine::prelude::*;
 use crate::state::{AppScreen, GameState};
 use crate::theme::THEMES;
+use crate::ui_render;
 
 const TAB_NAMES: [&str; 5] = ["Stats", "Inventory", "Effects", "Lore", "Log"];
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-fn render_text(engine: &mut ProofEngine, text: &str, x: f32, y: f32, color: Vec4, emission: f32) {
-    for (i, ch) in text.chars().enumerate() {
-        engine.spawn_glyph(Glyph {
-            character: ch,
-            position: Vec3::new(x + i as f32 * 0.45, y, 0.0),
-            color,
-            emission,
-            layer: RenderLayer::UI,
-            ..Default::default()
-        });
-    }
-}
-
-fn render_bar(engine: &mut ProofEngine, x: f32, y: f32, width: usize, ratio: f32, fill: Vec4, bg: Vec4) {
-    let filled = ((ratio.clamp(0.0, 1.0) * width as f32) as usize).min(width);
-    for i in 0..width {
-        let ch = if i < filled { '=' } else { '-' };
-        let color = if i < filled { fill } else { bg };
-        engine.spawn_glyph(Glyph {
-            character: ch,
-            position: Vec3::new(x + i as f32 * 0.45, y, 0.0),
-            color,
-            emission: if i < filled { 0.6 } else { 0.1 },
-            layer: RenderLayer::UI,
-            ..Default::default()
-        });
-    }
-}
 
 // ── Update ──────────────────────────────────────────────────────────────────
 
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
-    // Read all input before mutating state
     let pressed_1 = engine.input.just_pressed(Key::Num1);
     let pressed_2 = engine.input.just_pressed(Key::Num2);
     let pressed_3 = engine.input.just_pressed(Key::Num3);
@@ -75,44 +45,45 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
     let tab = state.char_tab as usize;
+    let frame = state.frame;
 
-    // Tab bar at top
-    let mut tx = -12.0;
+    // ── Tab bar ──
+    let mut tx = -7.5;
     for (i, name) in TAB_NAMES.iter().enumerate() {
         let label = format!("[{}] {}", i + 1, name);
-        let color = if i == tab { theme.selected } else { theme.dim };
-        let emission = if i == tab { 0.8 } else { 0.3 };
-        render_text(engine, &label, tx, 8.5, color, emission);
-        tx += label.len() as f32 * 0.45 + 1.2;
+        let selected = i == tab;
+        let color = if selected { theme.selected } else { theme.dim };
+        let em = if selected { 0.8 } else { 0.25 };
+        ui_render::text(engine, &label, tx, 5.0, color, 0.3, em);
+        tx += label.len() as f32 * 0.3 * 0.85 + 0.8;
     }
 
-    // Separator
-    render_text(engine, "----------------------------------------", -12.0, 7.8, theme.border, 0.2);
+    // Active tab underline
+    ui_render::text_centered(engine, "================================", 4.5, theme.border, 0.22, 0.15);
 
     // Title
-    render_text(engine, &format!("Character Sheet - {}", TAB_NAMES[tab]),
-                -8.0, 7.0, theme.heading, 0.7);
+    let title = format!("Character Sheet - {}", TAB_NAMES[tab]);
+    ui_render::text_centered(engine, &title, 4.0, theme.heading, 0.4, 0.6);
 
     let player = match state.player.as_ref() {
         Some(p) => p,
         None => {
-            render_text(engine, "No character data.", -6.0, 4.0, theme.danger, 0.5);
+            ui_render::text_centered(engine, "No character data.", 1.0, theme.danger, 0.4, 0.5);
             return;
         }
     };
 
     match tab {
-        0 => render_stats(state, engine, player, theme),
-        1 => render_inventory(engine, player, theme),
-        2 => render_effects(engine, player, theme),
+        0 => render_stats(state, engine, player, theme, frame),
+        1 => render_inventory(engine, player, theme, frame),
+        2 => render_effects(engine, player, theme, frame),
         3 => render_lore(engine, player, theme),
         4 => render_log(state, engine, theme),
         _ => {}
     }
 
     // Footer
-    render_text(engine, "[Esc/C] Back  [1-5] Tabs  [Left/Right] Cycle",
-                -12.0, -8.5, theme.muted, 0.3);
+    ui_render::small(engine, "[Esc/C] Back  [1-5] Tabs  [Left/Right] Cycle", -6.5, -5.2, theme.muted);
 }
 
 // ── Tab 1: Stats ────────────────────────────────────────────────────────────
@@ -122,61 +93,85 @@ fn render_stats(
     engine: &mut ProofEngine,
     player: &chaos_rpg_core::character::Character,
     theme: &crate::theme::Theme,
+    frame: u64,
 ) {
-    let x = -11.0;
-    let mut y = 6.0;
+    let x = -8.0;
+    let mut y = 3.2;
 
-    // Core info row
+    // Core info
     let info = format!(
-        "Lv {} | XP {} | Gold {} | Kills {} | Power {:?}",
+        "Lv {} | XP {} | Gold {} | Kills {} | {:?}",
         player.level, player.xp, player.gold, player.kills, player.power_tier()
     );
-    render_text(engine, &info, x, y, theme.primary, 0.5);
-    y -= 1.0;
+    let truncated: String = info.chars().take(50).collect();
+    ui_render::text(engine, &truncated, x, y, theme.primary, 0.28, 0.4);
+    y -= 0.5;
 
     let floor_info = format!(
-        "Floor {} | Rooms Cleared {} | Corruption {}",
+        "Floor {} | Rooms {} | Corruption {}",
         player.floor, player.rooms_cleared, player.corruption
     );
-    render_text(engine, &floor_info, x, y, theme.primary, 0.5);
-    y -= 1.5;
+    ui_render::text(engine, &floor_info, x, y, theme.dim, 0.25, 0.3);
+    y -= 0.7;
+
+    // HP bar
+    let hp_pct = if player.max_hp > 0 { player.current_hp as f32 / player.max_hp as f32 } else { 0.0 };
+    ui_render::text(engine, "HP", x, y, theme.muted, 0.25, 0.3);
+    ui_render::bar(engine, x + 1.2, y, 4.5, hp_pct, theme.hp_color(hp_pct), theme.muted, 0.25);
+    ui_render::small(engine, &format!("{}/{}", player.current_hp, player.max_hp), x + 6.0, y, theme.hp_color(hp_pct));
+    y -= 0.5;
+
+    // Mana bar
+    let max_mp = state.max_mana();
+    if max_mp > 0 {
+        let mp_pct = state.current_mana as f32 / max_mp as f32;
+        ui_render::text(engine, "MP", x, y, theme.muted, 0.25, 0.3);
+        ui_render::bar(engine, x + 1.2, y, 4.5, mp_pct, theme.mana, theme.muted, 0.25);
+        ui_render::small(engine, &format!("{}/{}", state.current_mana, max_mp), x + 6.0, y, theme.mana);
+        y -= 0.55;
+    }
+
+    // Section header
+    ui_render::text(engine, "-- Primary Stats --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
 
     // Stats with bars
     let stats: [(&str, i64); 7] = [
-        ("Vitality ", player.stats.vitality),
-        ("Force    ", player.stats.force),
-        ("Mana     ", player.stats.mana),
-        ("Cunning  ", player.stats.cunning),
-        ("Precision", player.stats.precision),
-        ("Entropy  ", player.stats.entropy),
-        ("Luck     ", player.stats.luck),
+        ("VIT", player.stats.vitality),
+        ("FOR", player.stats.force),
+        ("MAN", player.stats.mana),
+        ("CUN", player.stats.cunning),
+        ("PRE", player.stats.precision),
+        ("ENT", player.stats.entropy),
+        ("LCK", player.stats.luck),
     ];
 
-    render_text(engine, "-- Primary Stats --", x, y, theme.accent, 0.6);
-    y -= 0.8;
-
     for (name, val) in &stats {
-        let label = format!("{}: {:>4}", name, val);
-        render_text(engine, &label, x, y, theme.primary, 0.5);
-        // Bar: scale so 50 is full, clamp
         let ratio = (*val as f32 / 50.0).clamp(0.0, 1.0);
-        render_bar(engine, x + 7.5, y, 16, ratio, theme.accent, theme.dim);
-        y -= 0.7;
+        let stat_color = if *val > 30 { theme.success } else if *val > 15 { theme.primary } else { theme.warn };
+        ui_render::text(engine, &format!("{}: {:>3}", name, val), x, y, stat_color, 0.25, 0.4);
+        ui_render::bar(engine, x + 2.8, y, 4.0, ratio, theme.accent, theme.muted, 0.22);
+
+        // Animated sparkle for high stats
+        if *val > 40 {
+            let sparkle = ((frame as f32 * 0.08 + *val as f32).sin() * 0.4 + 0.6).max(0.0);
+            engine.spawn_glyph(Glyph {
+                character: '*',
+                position: Vec3::new(x + 7.2, y, 0.0),
+                color: Vec4::new(theme.gold.x * sparkle, theme.gold.y * sparkle, 0.0, sparkle),
+                emission: sparkle,
+                layer: RenderLayer::UI,
+                ..Default::default()
+            });
+        }
+        y -= 0.4;
     }
 
-    y -= 0.5;
-
-    // HP / Max HP
-    let hp_label = format!("HP: {} / {}", player.current_hp, player.max_hp);
-    render_text(engine, &hp_label, x, y, theme.success, 0.6);
-    let hp_ratio = if player.max_hp > 0 { player.current_hp as f32 / player.max_hp as f32 } else { 0.0 };
-    render_bar(engine, x + 7.5, y, 16, hp_ratio, theme.success, theme.dim);
-    y -= 0.9;
-
-    // Current floor rooms info
+    // Floor info
+    y -= 0.3;
     if let Some(ref floor) = state.floor {
         let rooms_info = format!("Floor rooms: {}/{}", floor.current_room + 1, floor.rooms.len());
-        render_text(engine, &rooms_info, x, y, theme.muted, 0.4);
+        ui_render::small(engine, &rooms_info, x, y, theme.muted);
     }
 }
 
@@ -186,13 +181,14 @@ fn render_inventory(
     engine: &mut ProofEngine,
     player: &chaos_rpg_core::character::Character,
     theme: &crate::theme::Theme,
+    frame: u64,
 ) {
-    let x = -11.0;
-    let mut y = 6.0;
+    let x = -8.0;
+    let mut y = 3.2;
 
-    // Equipped items
-    render_text(engine, "-- Equipped --", x, y, theme.accent, 0.6);
-    y -= 0.8;
+    // Equipped items section
+    ui_render::text(engine, "-- Equipped --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
 
     let slots: [(&str, &Option<chaos_rpg_core::items::Item>); 5] = [
         ("Weapon", &player.equipped.weapon),
@@ -203,38 +199,55 @@ fn render_inventory(
     ];
 
     for (slot_name, item_opt) in &slots {
-        let text = match item_opt {
+        let (text, color) = match item_opt {
             Some(item) => {
                 let mod_str = item.stat_modifiers.first()
-                    .map(|m| format!("{:?} {:+}", m.stat, m.value))
+                    .map(|m| format!("{:+} {}", m.value, m.stat))
                     .unwrap_or_default();
-                format!("{}: {} [{:?}] {}", slot_name, item.name, item.rarity, mod_str)
+                let rarity_tag: String = format!("{:?}", item.rarity).chars().take(4).collect();
+                (format!("{}: {} [{}] {}", slot_name, item.name, rarity_tag, mod_str), theme.primary)
             }
-            None => format!("{}: (empty)", slot_name),
+            None => (format!("{}: (empty)", slot_name), theme.muted),
         };
-        render_text(engine, &text, x, y, theme.primary, 0.5);
-        y -= 0.7;
+        let truncated: String = text.chars().take(50).collect();
+        ui_render::text(engine, &truncated, x, y, color, 0.25, 0.35);
+
+        // Slot icon glow for equipped items
+        if item_opt.is_some() {
+            let glow = ((frame as f32 * 0.04 + y * 2.0).sin() * 0.15 + 0.5).max(0.0);
+            engine.spawn_glyph(Glyph {
+                character: '#',
+                position: Vec3::new(x - 0.4, y, 0.0),
+                color: Vec4::new(theme.accent.x * glow, theme.accent.y * glow, theme.accent.z * glow, glow),
+                emission: glow * 0.5,
+                layer: RenderLayer::UI,
+                ..Default::default()
+            });
+        }
+        y -= 0.4;
     }
 
-    y -= 0.5;
-    render_text(engine, "-- Inventory --", x, y, theme.accent, 0.6);
-    y -= 0.8;
+    y -= 0.3;
+    ui_render::text(engine, "-- Inventory --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
 
     if player.inventory.is_empty() {
-        render_text(engine, "(empty)", x, y, theme.muted, 0.3);
+        ui_render::small(engine, "(empty)", x, y, theme.muted);
     } else {
-        for item in player.inventory.iter().take(12) {
+        for item in player.inventory.iter().take(14) {
             let mod_str = item.stat_modifiers.first()
-                .map(|m| format!("{:?} {:+}", m.stat, m.value))
+                .map(|m| format!("{:+} {}", m.value, m.stat))
                 .unwrap_or_default();
-            let line = format!("{} [{:?}] {}", item.name, item.rarity, mod_str);
-            render_text(engine, &line, x, y, theme.primary, 0.45);
-            y -= 0.7;
-            if y < -7.5 { break; }
+            let rarity_tag: String = format!("{:?}", item.rarity).chars().take(4).collect();
+            let line = format!("{} [{}] {}", item.name, rarity_tag, mod_str);
+            let truncated: String = line.chars().take(48).collect();
+            ui_render::text(engine, &truncated, x, y, theme.primary, 0.23, 0.3);
+            y -= 0.38;
+            if y < -4.8 { break; }
         }
-        if player.inventory.len() > 12 {
-            let more = format!("... and {} more items", player.inventory.len() - 12);
-            render_text(engine, &more, x, y, theme.muted, 0.3);
+        if player.inventory.len() > 14 {
+            let more = format!("... +{} more", player.inventory.len() - 14);
+            ui_render::small(engine, &more, x, y, theme.muted);
         }
     }
 }
@@ -245,35 +258,42 @@ fn render_effects(
     engine: &mut ProofEngine,
     player: &chaos_rpg_core::character::Character,
     theme: &crate::theme::Theme,
+    frame: u64,
 ) {
-    let x = -11.0;
-    let mut y = 6.0;
+    let x = -8.0;
+    let mut y = 3.2;
 
     // Corruption
-    let corr_text = format!("Corruption: {}", player.corruption);
-    render_text(engine, &corr_text, x, y, theme.warn, 0.6);
     let corr_ratio = (player.corruption as f32 / 100.0).clamp(0.0, 1.0);
-    render_bar(engine, x + 8.0, y, 14, corr_ratio, theme.danger, theme.dim);
-    y -= 1.0;
+    ui_render::text(engine, &format!("Corruption: {}", player.corruption), x, y, theme.warn, 0.3, 0.5);
+    ui_render::bar(engine, x + 5.0, y, 3.5, corr_ratio, theme.danger, theme.muted, 0.25);
+    y -= 0.55;
 
     // Misery index
-    let misery_text = format!("Misery Index: {:.2}", player.misery.misery_index);
-    render_text(engine, &misery_text, x, y, theme.warn, 0.5);
-    y -= 1.2;
+    ui_render::text(engine, &format!("Misery: {:.1}", player.misery.misery_index), x, y, theme.warn, 0.3, 0.45);
+    y -= 0.55;
 
-    render_text(engine, "-- Active Status Effects --", x, y, theme.accent, 0.6);
-    y -= 0.8;
+    // Corruption visual warning
+    if player.corruption > 50 {
+        let pulse = ((frame as f32 * 0.12).sin() * 0.3 + 0.7).max(0.0);
+        let warn_c = Vec4::new(theme.danger.x * pulse, 0.0, 0.0, pulse);
+        ui_render::small(engine, "!! Engines mutating !!", x, y, warn_c);
+        y -= 0.4;
+    }
+
+    y -= 0.2;
+    ui_render::text(engine, "-- Active Status Effects --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
 
     if player.status_effects.is_empty() {
-        render_text(engine, "(none)", x, y, theme.muted, 0.3);
+        ui_render::small(engine, "(none)", x, y, theme.muted);
     } else {
         for effect in player.status_effects.iter() {
             let line = format!("{:?}", effect);
-            // Truncate long debug strings
-            let display: String = line.chars().take(70).collect();
-            render_text(engine, &display, x, y, theme.primary, 0.45);
-            y -= 0.7;
-            if y < -7.5 { break; }
+            let display: String = line.chars().take(55).collect();
+            ui_render::text(engine, &display, x, y, theme.primary, 0.23, 0.35);
+            y -= 0.38;
+            if y < -4.8 { break; }
         }
     }
 }
@@ -285,41 +305,51 @@ fn render_lore(
     player: &chaos_rpg_core::character::Character,
     theme: &crate::theme::Theme,
 ) {
-    let x = -11.0;
-    let mut y = 6.0;
+    let x = -8.0;
+    let mut y = 3.2;
 
-    // Class
-    render_text(engine, "-- Class --", x, y, theme.accent, 0.6);
-    y -= 0.8;
-    render_text(engine, &format!("{}", player.class.name()), x, y, theme.heading, 0.7);
-    y -= 0.8;
+    // Class section
+    ui_render::text(engine, "-- Class --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
+    ui_render::text(engine, &player.class.name().to_string(), x, y, theme.heading, 0.4, 0.7);
+    y -= 0.55;
 
     // Wrap class description
     let desc = player.class.description();
-    for chunk in desc.as_bytes().chunks(60) {
-        let line = std::str::from_utf8(chunk).unwrap_or("");
-        render_text(engine, line, x, y, theme.primary, 0.45);
-        y -= 0.7;
+    let max_width = 48;
+    let mut line_buf = String::new();
+    for word in desc.split_whitespace() {
+        if line_buf.len() + word.len() + 1 > max_width {
+            ui_render::text(engine, &line_buf, x, y, theme.dim, 0.23, 0.3);
+            y -= 0.35;
+            line_buf = word.to_string();
+        } else {
+            if !line_buf.is_empty() { line_buf.push(' '); }
+            line_buf.push_str(word);
+        }
     }
-    y -= 0.5;
+    if !line_buf.is_empty() {
+        ui_render::text(engine, &line_buf, x, y, theme.dim, 0.23, 0.3);
+        y -= 0.35;
+    }
 
-    // Background
-    render_text(engine, "-- Background --", x, y, theme.accent, 0.6);
-    y -= 0.8;
-    render_text(engine, &format!("{}", player.background.name()), x, y, theme.heading, 0.7);
-    y -= 1.0;
+    y -= 0.3;
+    ui_render::text(engine, "-- Background --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
+    ui_render::text(engine, &player.background.name().to_string(), x, y, theme.heading, 0.35, 0.6);
+    y -= 0.6;
 
     // Boon
-    render_text(engine, "-- Boon --", x, y, theme.accent, 0.6);
-    y -= 0.8;
+    ui_render::text(engine, "-- Boon --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
     match &player.boon {
         Some(boon) => {
             let boon_text = format!("{:?}", boon);
-            let display: String = boon_text.chars().take(70).collect();
-            render_text(engine, &display, x, y, theme.primary, 0.5);
+            let display: String = boon_text.chars().take(55).collect();
+            ui_render::text(engine, &display, x, y, theme.primary, 0.25, 0.4);
         }
         None => {
-            render_text(engine, "(no boon)", x, y, theme.muted, 0.3);
+            ui_render::small(engine, "(no boon)", x, y, theme.muted);
         }
     }
 }
@@ -331,27 +361,22 @@ fn render_log(
     engine: &mut ProofEngine,
     theme: &crate::theme::Theme,
 ) {
-    let x = -11.0;
-    let mut y = 6.0;
+    let x = -8.0;
+    let mut y = 3.2;
 
-    render_text(engine, "-- Combat Log (last 20) --", x, y, theme.accent, 0.6);
-    y -= 0.9;
+    ui_render::text(engine, "-- Combat Log (last 20) --", x, y, theme.accent, 0.28, 0.5);
+    y -= 0.45;
 
     if state.combat_log.is_empty() {
-        render_text(engine, "(no log entries)", x, y, theme.muted, 0.3);
+        ui_render::small(engine, "(no log entries)", x, y, theme.muted);
         return;
     }
 
-    let start = if state.combat_log.len() > 20 {
-        state.combat_log.len() - 20
-    } else {
-        0
-    };
-
+    let start = state.combat_log.len().saturating_sub(20);
     for entry in &state.combat_log[start..] {
-        let display: String = entry.chars().take(65).collect();
-        render_text(engine, &display, x, y, theme.primary, 0.4);
-        y -= 0.65;
-        if y < -7.5 { break; }
+        let display: String = entry.chars().take(55).collect();
+        ui_render::text(engine, &display, x, y, theme.primary, 0.22, 0.3);
+        y -= 0.35;
+        if y < -4.8 { break; }
     }
 }
