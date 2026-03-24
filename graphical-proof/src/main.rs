@@ -13,6 +13,7 @@ mod entities;
 mod effects;
 mod scenes;
 mod audio_bridge;
+pub mod lighting;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
