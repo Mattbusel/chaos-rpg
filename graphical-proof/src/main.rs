@@ -13,9 +13,14 @@ mod entities;
 mod effects;
 mod scenes;
 mod audio_bridge;
+mod music_bridge;
+mod anim_bridge;
 pub mod lighting;
 pub mod shader_presets;
 pub mod cinematics;
+pub mod physics_bridge;
+pub mod dungeon_bridge;
+pub mod boss_bridge;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
@@ -24,6 +29,8 @@ use theme::THEMES;
 
 struct ChaosRpgGame {
     state: GameState,
+    music_bridge: music_bridge::MusicBridge,
+    anim_bridge: anim_bridge::AnimBridge,
 }
 
 impl ProofGame for ChaosRpgGame {
@@ -52,6 +59,14 @@ impl ProofGame for ChaosRpgGame {
 
         // Update music vibe based on current screen
         audio_bridge::update_music_vibe(&self.state, engine);
+
+        // Update music bridge (procedural music director)
+        let music_effects = self.music_bridge.update(dt, &self.state);
+        music_bridge::apply_effects_to_engine(&music_effects, engine);
+
+        // Update animation bridge (entity animation state machines)
+        let anim_transforms = self.anim_bridge.update(dt, &self.state);
+        let _ = &anim_transforms; // transforms are applied by screen-specific renderers
 
         // Update chaos field (always running)
         scenes::chaos_field::update(&self.state, engine, dt);
@@ -208,6 +223,8 @@ fn render_fallback_screen(state: &GameState, engine: &mut ProofEngine) {
 fn main() {
     let game = ChaosRpgGame {
         state: GameState::new(),
+        music_bridge: music_bridge::MusicBridge::init(),
+        anim_bridge: anim_bridge::AnimBridge::init(),
     };
     ProofEngine::run_game(game);
 }

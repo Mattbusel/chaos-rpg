@@ -6,6 +6,7 @@
 use proof_engine::prelude::*;
 use crate::state::{AppScreen, GameState};
 use crate::theme::THEMES;
+use crate::boss_bridge::{BossPlayerAction, BossGameEvent};
 
 use chaos_rpg_core::combat::{resolve_action, CombatAction, CombatOutcome};
 
@@ -67,6 +68,66 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
                     state.screen = AppScreen::FloorNav;
                 }
             }
+        }
+    }
+
+    // ── Boss bridge integration ──
+    // If this is a boss fight and the boss bridge is active, feed actions
+    // and process boss-specific events each tick.
+    if state.is_boss_fight && state.boss_bridge.is_active() {
+        // Map the last player action to a boss bridge action.
+        let boss_action = if key_a {
+            Some(BossPlayerAction::Attack)
+        } else if key_h {
+            Some(BossPlayerAction::HeavyAttack)
+        } else if key_d {
+            Some(BossPlayerAction::Defend)
+        } else if key_f {
+            Some(BossPlayerAction::Flee)
+        } else if key_t {
+            Some(BossPlayerAction::Taunt)
+        } else {
+            None
+        };
+
+        if let Some(action) = boss_action {
+            state.boss_bridge.queue_action(action);
+        }
+
+        let boss_events = state.boss_bridge.update(_dt);
+        for event in &boss_events {
+            match event {
+                BossGameEvent::PhaseChanged { phase, .. } => {
+                    state.combat_log.push(format!("Boss enters phase {}!", phase));
+                    engine.add_trauma(0.4);
+                }
+                BossGameEvent::Dialogue(text) => {
+                    state.combat_log.push(format!("Boss: {}", text));
+                }
+                BossGameEvent::SpecialAbility { description } => {
+                    state.combat_log.push(format!("Boss ability: {}", description));
+                }
+                BossGameEvent::BossDied { loot, xp } => {
+                    state.combat_log.push(format!("Boss defeated! +{} XP", xp));
+                    for drop in loot {
+                        state.combat_log.push(format!("  Loot: {} x{}", drop.name, drop.quantity));
+                    }
+                    state.boss_bridge.end_encounter();
+                }
+                BossGameEvent::CombatLog(msg) => {
+                    state.combat_log.push(msg.clone());
+                }
+                BossGameEvent::RulesChanged(desc) => {
+                    state.combat_log.push(format!("Rules changed: {}", desc));
+                }
+                _ => {}
+            }
+        }
+
+        // Sync boss visual ID back to state for boss_visuals.rs overlay.
+        if let Some(snap) = state.boss_bridge.get_boss_state() {
+            state.boss_id = Some(snap.visual_id);
+            state.boss_turn = snap.turn;
         }
     }
 
@@ -148,6 +209,24 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
             let truncated: String = msg.chars().take(60).collect();
             render_text(engine, &truncated, -18.0, -8.0 - i as f32 * 0.8, theme.dim, 0.25);
         }
+    }
+
+    // ── Boss bridge phase/mechanic display ──
+    if let Some(snap) = state.boss_bridge.get_boss_state() {
+        let phase_text = format!("Phase {}/{}", snap.phase, snap.phase_count);
+        render_text(engine, &phase_text, 4.0, 4.5, theme.accent, 0.5);
+
+        if snap.is_transitioning {
+            let t = snap.transition_progress;
+            let transition_color = Vec4::new(1.0, 0.9, 0.3, t);
+            render_text(engine, "PHASE TRANSITION", 4.0, 3.5, transition_color, t * 0.8);
+        }
+
+        // Boss HP bar (from bridge, more accurate for multi-phase bosses)
+        let boss_hp = snap.hp_fraction;
+        let boss_hp_color = theme.hp_color(boss_hp);
+        render_text(engine, "BOSS", 4.0, 5.5, theme.danger, 0.6);
+        render_bar(engine, 7.0, 5.5, 10.0, boss_hp, boss_hp_color);
     }
 
     // ── Boss-specific visual overlay ──

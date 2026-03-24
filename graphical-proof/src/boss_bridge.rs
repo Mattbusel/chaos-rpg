@@ -9,7 +9,7 @@ use proof_engine::game::bosses::{
     BossType, CommitteeAction, EraseTarget, MusicType, PhaseTransition,
     PlayerActionType, QuantumForm, RecordedAction, SpecialAbility,
 };
-use proof_engine::combat::CombatStats;
+use proof_engine::combat::{CombatStats, Element as PeElement};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Game-facing event types
@@ -147,11 +147,11 @@ impl BossPlayerAction {
     fn to_pe(self) -> PlayerActionType {
         match self {
             BossPlayerAction::Attack => PlayerActionType::Attack,
-            BossPlayerAction::HeavyAttack => PlayerActionType::HeavyAttack,
+            BossPlayerAction::HeavyAttack => PlayerActionType::Attack, // mapped to Attack (heavy is a chaos-rpg concept)
             BossPlayerAction::Defend => PlayerActionType::Defend,
-            BossPlayerAction::Flee => PlayerActionType::Flee,
-            BossPlayerAction::Taunt => PlayerActionType::Taunt,
-            BossPlayerAction::Spell => PlayerActionType::Spell,
+            BossPlayerAction::Flee => PlayerActionType::Move,          // mapped to Move
+            BossPlayerAction::Taunt => PlayerActionType::Wait,         // mapped to Wait
+            BossPlayerAction::Spell => PlayerActionType::UseAbility(0),
             BossPlayerAction::UseItem => PlayerActionType::UseItem,
         }
     }
@@ -415,7 +415,7 @@ impl BossBridge {
             action_type: action.to_pe(),
             turn: self.turn,
             damage_dealt: 0.0,
-            was_critical: false,
+            element: None,
         });
     }
 

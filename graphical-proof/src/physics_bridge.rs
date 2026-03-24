@@ -5,15 +5,15 @@
 //! translates game-logic happenings (enemy death, spell cast, weapon swing)
 //! into concrete physics spawns and simulations.
 
-use glam::{Vec2, Vec3};
+use proof_engine::prelude::{Vec2, Vec3};
 
 use proof_engine::game::debris::{
-    ArenaCollider, DebrisPool, DebrisRenderer, DebrisSimulator, DebrisSpawner, DebrisType,
+    DebrisPool, DebrisRenderer, DebrisSimulator, DebrisSpawner, DebrisType,
     EntityDeathEvent,
 };
 use proof_engine::game::fluids::{FluidManager, FluidSpriteData};
 use proof_engine::game::cloth_rope::{
-    BossCape, ClothId, ClothRopeManager, ClothStrip, HydraTendril, RopeChain, RopeId,
+    BossCape, ClothId, ClothRopeManager, RopeChain, RopeId,
     SoftBodyId,
 };
 use proof_engine::game::arena_physics::{
@@ -488,7 +488,7 @@ impl PhysicsBridge {
         );
 
         // Spawn impact debris (small glyph fragments)
-        let debris_count = if is_crit { 8 } else { 4 };
+        let _debris_count = if is_crit { 8 } else { 4 };
         let debris_type = match profile.element {
             Some(Element::Fire) => DebrisType::Fire,
             Some(Element::Ice) => DebrisType::Ice,
@@ -571,7 +571,7 @@ impl PhysicsBridge {
 
     /// Set up trap room physics: pendulums, spike pits, flame jets.
     fn setup_trap_room(&mut self, room_id: u32) {
-        let mut traps = TrapSystem::new();
+        let traps = TrapSystem::new();
         // Trap details are configured by the arena_physics module;
         // we register an empty system that the arena manager will step.
         // In a full implementation, traps would be procedurally generated
@@ -682,7 +682,7 @@ impl PhysicsBridge {
                 }
                 BossArchetype::Tentacled => {
                     // Update tendril start points to follow boss
-                    for (i, rope_id) in boss.tendril_rope_ids.iter().enumerate() {
+                    for (_i, rope_id) in boss.tendril_rope_ids.iter().enumerate() {
                         if let Some(rope) =
                             self.cloth_rope_manager.get_rope_mut(*rope_id)
                         {
@@ -691,12 +691,16 @@ impl PhysicsBridge {
                     }
                 }
                 BossArchetype::Amorphous => {
-                    // Soft body follows boss via center position nudge
+                    // Soft body follows boss via gentle force toward new position
                     if let Some(blob_id) = boss.blob_id {
                         if let Some(blob) =
                             self.cloth_rope_manager.get_soft_body_mut(blob_id)
                         {
-                            blob.nudge_center(new_pos);
+                            let current = blob.center_position();
+                            let delta = new_pos - current;
+                            if delta.length_squared() > 0.01 {
+                                blob.apply_hit(delta.normalize(), delta.length() * 5.0);
+                            }
                         }
                     }
                 }

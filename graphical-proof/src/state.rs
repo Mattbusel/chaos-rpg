@@ -5,6 +5,10 @@
 
 use proof_engine::prelude::{Vec4};
 
+use crate::physics_bridge::PhysicsBridge;
+use crate::dungeon_bridge::DungeonBridge;
+use crate::boss_bridge::BossBridge;
+
 use chaos_rpg_core::{
     achievements::AchievementStore,
     character::{Boon, Character, CharacterClass, Difficulty},
@@ -142,6 +146,9 @@ pub fn delete_save() {
 pub struct GameState {
     // ── Current screen ──
     pub screen: AppScreen,
+
+    // ── Physics bridge (proof-engine game physics) ──
+    pub physics: PhysicsBridge,
 
     // ── Core game objects ──
     pub player: Option<Character>,
@@ -316,6 +323,12 @@ pub struct GameState {
     // ── Screen dimensions ──
     pub screen_width: u32,
     pub screen_height: u32,
+
+    // ── Proof-engine dungeon bridge ──
+    pub dungeon_bridge: Option<DungeonBridge>,
+
+    // ── Proof-engine boss bridge ──
+    pub boss_bridge: BossBridge,
 }
 
 impl GameState {
@@ -328,6 +341,7 @@ impl GameState {
 
         GameState {
             screen: AppScreen::Title,
+            physics: PhysicsBridge::init(),
             player: None,
             floor: None,
             enemy: None,
@@ -463,12 +477,18 @@ impl GameState {
 
             screen_width: 1280,
             screen_height: 800,
+
+            dungeon_bridge: None,
+            boss_bridge: BossBridge::new(),
         }
     }
 
     /// Tick visual timers (seconds-based instead of frame-based).
     pub fn tick_timers(&mut self, dt: f32) {
         self.frame += 1;
+
+        // Step all proof-engine physics systems
+        self.physics.update(dt);
 
         if self.player_flash > 0.0 {
             self.player_flash = (self.player_flash - dt).max(0.0);

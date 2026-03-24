@@ -11,8 +11,6 @@ use proof_engine::game::music::{
     BossMusic, EnemyTier, GameVibe, GameVisuals, MusicDirector,
     RoomType as MusicRoomType,
 };
-use proof_engine::prelude::Vec3;
-
 use crate::state::{AppScreen, GameState};
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -125,14 +123,14 @@ fn screen_to_vibe(screen: &AppScreen, is_boss: bool) -> GameVibe {
 // Enemy tier mapping
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-/// Map a chaos-rpg enemy tier (from the Enemy struct's `tier` field) to a
-/// proof-engine `EnemyTier`.
-fn map_enemy_tier(tier: u32) -> EnemyTier {
+/// Map a chaos-rpg `EnemyTier` to a proof-engine `EnemyTier`.
+fn map_enemy_tier(tier: &chaos_rpg_core::enemy::EnemyTier) -> EnemyTier {
+    use chaos_rpg_core::enemy::EnemyTier as CoreTier;
     match tier {
-        0 => EnemyTier::Fodder,
-        1 => EnemyTier::Standard,
-        2..=3 => EnemyTier::Elite,
-        _ => EnemyTier::MiniBoss,
+        CoreTier::Minion => EnemyTier::Fodder,
+        CoreTier::Elite => EnemyTier::Standard,
+        CoreTier::Champion => EnemyTier::Elite,
+        CoreTier::Boss | CoreTier::Abomination => EnemyTier::MiniBoss,
     }
 }
 
@@ -282,9 +280,8 @@ impl MusicBridge {
         self.prev_screen = screen.clone();
     }
 
-    /// Called when combat starts. `enemy_tier` is the chaos-rpg numeric tier
-    /// (0 = fodder, 1 = standard, 2-3 = elite, 4+ = mini-boss).
-    pub fn on_combat_start(&mut self, enemy_tier: u32) {
+    /// Called when combat starts. `enemy_tier` is the chaos-rpg `EnemyTier`.
+    pub fn on_combat_start(&mut self, enemy_tier: &chaos_rpg_core::enemy::EnemyTier) {
         let tier = map_enemy_tier(enemy_tier);
         self.director.on_combat_start(tier);
         self.prev_in_combat = true;
@@ -325,7 +322,7 @@ impl MusicBridge {
         // vibe (the director doesn't have an "un-low-hp" event, so we
         // re-trigger combat start to restore the combat vibe).
         if !is_low && self.prev_low_hp && self.prev_in_combat {
-            self.director.on_combat_start(EnemyTier::Standard);
+            self.director.on_combat_start(EnemyTier::Fodder);
         }
         self.prev_low_hp = is_low;
     }
@@ -353,11 +350,12 @@ impl MusicBridge {
         // Combat detection (screen-based)
         let in_combat = state.screen == AppScreen::Combat;
         if in_combat && !self.prev_in_combat {
+            let default_tier = chaos_rpg_core::enemy::EnemyTier::Minion;
             let tier = state
                 .enemy
                 .as_ref()
-                .map(|e| e.tier)
-                .unwrap_or(1);
+                .map(|e| &e.tier)
+                .unwrap_or(&default_tier);
             self.on_combat_start(tier);
         }
         if !in_combat && self.prev_in_combat {
@@ -645,14 +643,6 @@ pub fn apply_effects_to_engine(
     effects: &AudioVisualEffects,
     engine: &mut proof_engine::ProofEngine,
 ) {
-    // FOV pulse — adjust camera FOV offset
-    if effects.camera_fov_offset.abs() > 0.001 {
-        engine.camera_mut().fov_offset = effects.camera_fov_offset;
-    }
-
-    // Vignette intensity
-    engine.set_vignette(effects.vignette_intensity);
-
     // Beat-driven screen shake (subtle)
     if effects.beat_detected {
         engine.add_trauma(0.02);

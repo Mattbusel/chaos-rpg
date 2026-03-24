@@ -249,7 +249,7 @@ fn tile_to_bridge(tile: Tile) -> TileBridge {
 fn visibility_to_bridge(vis: Visibility) -> TileVisibility {
     match vis {
         Visibility::Unseen => TileVisibility::Unseen,
-        Visibility::Explored => TileVisibility::Explored,
+        Visibility::Seen => TileVisibility::Explored,
         Visibility::Visible => TileVisibility::Visible,
     }
 }
@@ -264,7 +264,7 @@ fn pe_room_to_core(pe: &PeRoomType) -> CoreRoomType {
         PeRoomType::Trap => CoreRoomType::Trap,
         PeRoomType::Puzzle => CoreRoomType::Shrine,
         PeRoomType::MiniBoss => CoreRoomType::Combat,
-        PeRoomType::Boss => CoreRoomType::BossArena,
+        PeRoomType::Boss => CoreRoomType::Boss,
         PeRoomType::ChaosRift => CoreRoomType::Combat,
         PeRoomType::Rest => CoreRoomType::Shrine,
         PeRoomType::Secret => CoreRoomType::Treasure,
@@ -309,7 +309,7 @@ fn enemy_spawn_to_bridge(e: &EnemySpawn) -> BridgeEnemy {
     BridgeEnemy {
         name: e.name.clone(),
         hp: e.stats.hp,
-        attack: e.stats.attack,
+        attack: e.stats.damage,
         is_elite: e.is_elite,
         abilities: e.abilities.clone(),
         pos: (e.pos.x, e.pos.y),
