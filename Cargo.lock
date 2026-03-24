@@ -578,6 +578,7 @@ name = "chaos-rpg-proof"
 version = "0.1.0"
 dependencies = [
  "chaos-rpg-core",
+ "glam 0.25.0",
  "proof-engine",
  "rand",
  "serde",
