@@ -6,3 +6,4 @@
 pub mod combat_fx;
 pub mod spell_fx;
 pub mod status_fx;
+pub mod boss_visuals;

@@ -12,6 +12,7 @@ mod screens;
 mod entities;
 mod effects;
 mod scenes;
+mod audio_bridge;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
@@ -45,6 +46,9 @@ impl ProofGame for ChaosRpgGame {
     fn update(&mut self, engine: &mut ProofEngine, dt: f32) {
         // Tick visual timers
         self.state.tick_timers(dt);
+
+        // Update music vibe based on current screen
+        audio_bridge::update_music_vibe(&self.state, engine);
 
         // Update chaos field (always running)
         scenes::chaos_field::update(&self.state, engine, dt);

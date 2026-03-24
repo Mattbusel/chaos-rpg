@@ -149,6 +149,9 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
             render_text(engine, &truncated, -18.0, -8.0 - i as f32 * 0.8, theme.dim, 0.25);
         }
     }
+
+    // ── Boss-specific visual overlay ──
+    crate::effects::boss_visuals::render_boss_overlay(state, engine);
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
