@@ -1,24 +1,29 @@
 //! UI rendering with correct screen-space positioning.
 //!
-//! Camera: z=10, look_at_rh toward origin, FOV=60°.
-//! With look_at_rh, +X world = LEFT on screen. So we negate X to render
-//! text left-to-right. Visible area at z=0: roughly ±8.7 x, ±5.4 y.
+//! Camera is at (0, 0, -10) looking at origin with look_at_rh.
+//! This gives: +X = screen right, +Y = screen up.
+//! Visible area at z=0: roughly ±8.7 x, ±5.4 y (at 16:10 aspect).
+//!
+//! Scale guide:
+//!   0.25 = tiny (debug text, ~70 chars per line)
+//!   0.3  = small (hints, labels, ~58 chars)
+//!   0.4  = body text (~43 chars)
+//!   0.45 = large body (~38 chars)
+//!   0.7  = heading (~25 chars)
+//!   1.3  = title (~13 chars)
 
 use proof_engine::prelude::*;
 
 fn spacing(scale: f32) -> f32 { scale * 0.85 }
 
-/// Core text renderer. Negates X so text reads left-to-right on screen.
+/// Core text renderer. +X = screen right (camera at -Z fixes the mirror).
 pub fn text(engine: &mut ProofEngine, s: &str, x: f32, y: f32, color: Vec4, scale: f32, emission: f32) {
     let sp = spacing(scale);
-    // Negate X: in RH look_at from +Z, world +X = screen LEFT.
-    // We want character 0 on the left (screen), so it needs the most positive world X,
-    // and character N on the right (screen) needs the most negative world X.
     for (i, ch) in s.chars().enumerate() {
         if ch == ' ' { continue; }
         engine.spawn_glyph(Glyph {
             character: ch,
-            position: Vec3::new(-(x + i as f32 * sp), y, 0.0),
+            position: Vec3::new(x + i as f32 * sp, y, 0.0),
             scale: Vec2::splat(scale),
             color, emission,
             layer: RenderLayer::UI,
@@ -30,7 +35,6 @@ pub fn text(engine: &mut ProofEngine, s: &str, x: f32, y: f32, color: Vec4, scal
 /// Render text centered horizontally.
 pub fn text_centered(engine: &mut ProofEngine, s: &str, y: f32, color: Vec4, scale: f32, emission: f32) {
     let w = s.len() as f32 * spacing(scale);
-    // Center: start at +w/2 in world (screen-left), end at -w/2 (screen-right)
     text(engine, s, -w * 0.5, y, color, scale, emission);
 }
 
@@ -58,7 +62,7 @@ pub fn bar(engine: &mut ProofEngine, x: f32, y: f32, width: f32, ratio: f32, fil
         let (ch, c, em) = if i < filled { ('\u{2588}', fill, 0.5) } else { ('\u{2591}', empty, 0.1) };
         engine.spawn_glyph(Glyph {
             character: ch,
-            position: Vec3::new(-(x + i as f32 * sp), y, 0.0),
+            position: Vec3::new(x + i as f32 * sp, y, 0.0),
             scale: Vec2::splat(scale), color: c, emission: em,
             layer: RenderLayer::UI, ..Default::default()
         });

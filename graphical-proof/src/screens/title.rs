@@ -6,17 +6,40 @@ use crate::theme::THEMES;
 use crate::ui_render;
 
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
+    // Read all input into locals
     let up = engine.input.just_pressed(Key::Up) || engine.input.just_pressed(Key::W);
     let down = engine.input.just_pressed(Key::Down) || engine.input.just_pressed(Key::S);
-    let enter = engine.input.just_pressed(Key::Enter);
+    let enter = engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Space);
     let theme_key = engine.input.just_pressed(Key::T);
     let quit = engine.input.just_pressed(Key::Escape) || engine.input.just_pressed(Key::Q);
+    // Number keys for direct menu selection
+    let num1 = engine.input.just_pressed(Key::Num1);
+    let num2 = engine.input.just_pressed(Key::Num2);
+    let num3 = engine.input.just_pressed(Key::Num3);
+    let num4 = engine.input.just_pressed(Key::Num4);
+    let num5 = engine.input.just_pressed(Key::Num5);
+    let num6 = engine.input.just_pressed(Key::Num6);
+    let num7 = engine.input.just_pressed(Key::Num7);
+    let num8 = engine.input.just_pressed(Key::Num8);
 
     if up && state.selected_menu > 0 { state.selected_menu -= 1; }
     if down && state.selected_menu < 7 { state.selected_menu += 1; }
     if theme_key { state.theme_idx = (state.theme_idx + 1) % THEMES.len(); }
 
-    if enter {
+    // Direct number key selection
+    if num1 { state.selected_menu = 0; }
+    if num2 { state.selected_menu = 1; }
+    if num3 { state.selected_menu = 2; }
+    if num4 { state.selected_menu = 3; }
+    if num5 { state.selected_menu = 4; }
+    if num6 { state.selected_menu = 5; }
+    if num7 { state.selected_menu = 6; }
+    if num8 { state.selected_menu = 7; }
+
+    // Activate menu item on Enter, Space, or number key
+    let activate = enter || num1 || num2 || num3 || num4 || num5 || num6 || num7 || num8;
+
+    if activate {
         match state.selected_menu {
             0 => {
                 if state.save_exists {
@@ -50,17 +73,16 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
-    // ── Logo (large, centered, pulsing) ──
+    // Logo
     ui_render::title(engine, "CHAOS RPG", 3.5, theme.heading);
 
-    // ── Tagline (small, centered below logo) ──
-    ui_render::text_centered(engine, theme.tagline, 1.8, theme.dim, 0.3, 0.3);
+    // Tagline
+    ui_render::text_centered(engine, theme.tagline, 1.8, theme.dim, 0.25, 0.25);
 
-    // ── Menu items ──
+    // Menu items with number keys
     let items = [
-        if state.save_exists { "Continue" } else { "Continue (no save)" },
-        "New Run", "Tutorial", "Achievements",
-        "Run History", "Daily Leaderboard", "Settings", "Quit",
+        "[1] Continue", "[2] New Run", "[3] Tutorial", "[4] Achievements",
+        "[5] Run History", "[6] Daily Board", "[7] Settings", "[8] Quit",
     ];
 
     for (idx, label) in items.iter().enumerate() {
@@ -69,11 +91,25 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
         let emission = if selected { 0.8 } else { 0.3 };
         let prefix = if selected { "> " } else { "  " };
         let line = format!("{}{}", prefix, label);
-        let y = 0.0 - idx as f32 * 0.65;
-        ui_render::text(engine, &line, -3.5, y, color, 0.45, emission);
+        let y = 0.0 - idx as f32 * 0.55;
+        ui_render::text(engine, &line, -3.0, y, color, 0.4, emission);
     }
 
-    // ── Theme indicator (bottom) ──
-    let theme_line = format!("[T] Theme: {}", theme.name);
-    ui_render::small(engine, &theme_line, -4.0, -5.0, theme.muted);
+    // Theme indicator
+    ui_render::small(engine, &format!("[T] Theme: {}", theme.name), -3.5, -5.0, theme.muted);
+
+    // Input hint
+    ui_render::small(engine, "Arrow keys + Enter/Space to select", -4.0, -5.4, theme.muted);
+
+    // Debug: show last pressed keys
+    let pressed_keys: Vec<&str> = [
+        (engine.input.is_pressed(Key::Enter), "ENTER"),
+        (engine.input.is_pressed(Key::Space), "SPACE"),
+        (engine.input.is_pressed(Key::Up), "UP"),
+        (engine.input.is_pressed(Key::Down), "DOWN"),
+    ].iter().filter(|(p, _)| *p).map(|(_, n)| *n).collect();
+    if !pressed_keys.is_empty() {
+        let debug_text = format!("Keys: {}", pressed_keys.join(" "));
+        ui_render::small(engine, &debug_text, -3.0, 5.0, theme.accent);
+    }
 }

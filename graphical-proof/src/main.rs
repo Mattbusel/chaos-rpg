@@ -64,6 +64,17 @@ impl ProofGame for ChaosRpgGame {
     }
 
     fn on_start(&mut self, engine: &mut ProofEngine) {
+        // Fix horizontal mirror: move camera to -Z looking at origin.
+        // With look_at_rh from (0,0,+10), the right vector is -X which
+        // mirrors everything horizontally. From (0,0,-10) the right vector
+        // is +X which is correct (world +X = screen right).
+        engine.camera.position.x.teleport(0.0);
+        engine.camera.position.y.teleport(0.0);
+        engine.camera.position.z.teleport(-10.0);  // was +10, now -10 to fix X mirror
+        engine.camera.target.x.teleport(0.0);
+        engine.camera.target.y.teleport(0.0);
+        engine.camera.target.z.teleport(0.0);
+
         // Initialize the chaos field background
         scenes::chaos_field::init(&self.state, engine);
     }
