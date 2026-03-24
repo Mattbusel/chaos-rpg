@@ -40,6 +40,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout proof-engine (needed by workspace)
+        uses: actions/checkout@v4
+        with:
+          repository: Mattbusel/proof-engine
+          path: proof-engine-checkout
+      - name: Place proof-engine
+        shell: bash
+        run: |
+          mkdir -p "$(pwd)/../proof-engine"
+          cp -r proof-engine-checkout/* "$(pwd)/../proof-engine/"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build
@@ -55,6 +65,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout proof-engine (needed by workspace)
+        uses: actions/checkout@v4
+        with:
+          repository: Mattbusel/proof-engine
+          path: proof-engine-checkout
+      - name: Place proof-engine
+        shell: bash
+        run: |
+          mkdir -p "$(pwd)/../proof-engine"
+          cp -r proof-engine-checkout/* "$(pwd)/../proof-engine/"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build
