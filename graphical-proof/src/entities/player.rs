@@ -364,3 +364,397 @@ fn render_chronomancer(e: &mut ProofEngine, pos: Vec3, hp: f32, t: f32) {
             Vec3::new(0.5,0.7,1.0), 0.5);
     }
 }
+
+// ════════════════════════════════════════════════════════════════════════════════
+// PART 2: Status effects, equipment, poses, AmorphousEntity builder, visual state
+// ════════════════════════════════════════════════════════════════════════════════
+
+/// Active status effects that modify glyph colors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusEffect { None, Burning, Frozen, Poisoned, Blessed }
+
+/// Equipment tier affecting glyph density and armor chars.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EquipmentTier { Bare, Light, Medium, Heavy }
+
+/// Map any CharacterClass to one of six visual archetypes.
+pub fn class_archetype(class: CharacterClass) -> ClassArchetype {
+    match class {
+        CharacterClass::Berserker    => ClassArchetype::Berserker,
+        CharacterClass::Mage         => ClassArchetype::Mage,
+        CharacterClass::Thief        => ClassArchetype::Rogue,
+        CharacterClass::Paladin      => ClassArchetype::Cleric,
+        CharacterClass::Necromancer  => ClassArchetype::Necromancer,
+        CharacterClass::Ranger       => ClassArchetype::Rogue,
+        CharacterClass::Alchemist    => ClassArchetype::Mage,
+        CharacterClass::VoidWalker   => ClassArchetype::Necromancer,
+        CharacterClass::Warlord      => ClassArchetype::Warrior,
+        CharacterClass::Trickster    => ClassArchetype::Rogue,
+        CharacterClass::Runesmith    => ClassArchetype::Warrior,
+        CharacterClass::Chronomancer => ClassArchetype::Mage,
+    }
+}
+
+fn arch_base_color(a: ClassArchetype) -> Vec4 {
+    match a {
+        ClassArchetype::Warrior     => Vec4::new(0.7,0.65,0.55,1.0),
+        ClassArchetype::Mage        => Vec4::new(0.35,0.25,0.9,1.0),
+        ClassArchetype::Rogue       => Vec4::new(0.45,0.45,0.5,1.0),
+        ClassArchetype::Cleric      => Vec4::new(0.95,0.9,0.5,1.0),
+        ClassArchetype::Necromancer => Vec4::new(0.3,0.65,0.3,1.0),
+        ClassArchetype::Berserker   => Vec4::new(0.9,0.25,0.15,1.0),
+    }
+}
+
+fn arch_accent_color(a: ClassArchetype) -> Vec4 {
+    match a {
+        ClassArchetype::Warrior     => Vec4::new(0.9,0.85,0.6,1.0),
+        ClassArchetype::Mage        => Vec4::new(0.6,0.4,1.0,1.0),
+        ClassArchetype::Rogue       => Vec4::new(0.2,0.2,0.25,1.0),
+        ClassArchetype::Cleric      => Vec4::new(1.0,1.0,0.85,1.0),
+        ClassArchetype::Necromancer => Vec4::new(0.5,0.1,0.6,1.0),
+        ClassArchetype::Berserker   => Vec4::new(1.0,0.6,0.1,1.0),
+    }
+}
+
+fn arch_glow(a: ClassArchetype) -> Vec3 {
+    match a {
+        ClassArchetype::Warrior     => Vec3::new(0.8,0.7,0.4),
+        ClassArchetype::Mage        => Vec3::new(0.4,0.2,1.0),
+        ClassArchetype::Rogue       => Vec3::new(0.2,0.2,0.3),
+        ClassArchetype::Cleric      => Vec3::new(1.0,0.95,0.6),
+        ClassArchetype::Necromancer => Vec3::new(0.3,0.7,0.4),
+        ClassArchetype::Berserker   => Vec3::new(1.0,0.3,0.1),
+    }
+}
+
+fn arch_emission(a: ClassArchetype) -> f32 {
+    match a {
+        ClassArchetype::Warrior => 0.4, ClassArchetype::Mage => 1.2,
+        ClassArchetype::Rogue => 0.15, ClassArchetype::Cleric => 0.9,
+        ClassArchetype::Necromancer => 0.7, ClassArchetype::Berserker => 0.8,
+    }
+}
+
+fn arch_body(a: ClassArchetype) -> &'static [char] {
+    match a {
+        ClassArchetype::Warrior     => &['|','-','+','=','#','/','\\'],
+        ClassArchetype::Mage        => &['*','~','`','\'','.',':',';'],
+        ClassArchetype::Rogue       => &['.','`','\'',',',':',';','-'],
+        ClassArchetype::Cleric      => &['+','|','-','*','.',':','\''],
+        ClassArchetype::Necromancer => &['#','X','x','+','-','|','%'],
+        ClassArchetype::Berserker   => &['>','<','!','#','|','/','\\'],
+    }
+}
+
+fn arch_weapon(a: ClassArchetype) -> &'static [char] {
+    match a {
+        ClassArchetype::Warrior     => &['|','/','\\','>','<','#'],
+        ClassArchetype::Mage        => &['|','*','+','=','^'],
+        ClassArchetype::Rogue       => &['/','\\','|','<','>'],
+        ClassArchetype::Cleric      => &['+','*','#','!','^'],
+        ClassArchetype::Necromancer => &['#','X','+','|','-'],
+        ClassArchetype::Berserker   => &['/','\\','|','>','<','X'],
+    }
+}
+
+fn arch_armor(a: ClassArchetype, tier: EquipmentTier) -> &'static [char] {
+    match tier {
+        EquipmentTier::Bare  => &['.',' ','`'],
+        EquipmentTier::Light => match a {
+            ClassArchetype::Warrior|ClassArchetype::Berserker => &['.','-','~'],
+            ClassArchetype::Mage|ClassArchetype::Cleric       => &['~','`','\''],
+            _ => &['.','`','\''],
+        },
+        EquipmentTier::Medium => &['=','-','#'],
+        EquipmentTier::Heavy  => &['#','=','+','|','-'],
+    }
+}
+
+/// Full player visual state tracked across frames.
+#[derive(Clone)]
+pub struct PlayerVisualState {
+    pub class: CharacterClass,
+    pub archetype: ClassArchetype,
+    pub anim_state: PlayerAnimState,
+    pub prev_anim_state: PlayerAnimState,
+    pub transition_t: f32,
+    pub status_effect: StatusEffect,
+    pub equipment_tier: EquipmentTier,
+    pub weapon_glyph_override: Option<char>,
+    pub hp_frac: f32,
+    pub level: u32,
+    pub hit_reaction_t: f32,
+    pub death_t: f32,
+    pub level_up_t: f32,
+    pub velocity: Vec3,
+    pub time: f32,
+}
+
+impl PlayerVisualState {
+    pub fn new(class: CharacterClass) -> Self {
+        Self {
+            archetype: class_archetype(class), class,
+            anim_state: PlayerAnimState::Idle, prev_anim_state: PlayerAnimState::Idle,
+            transition_t: 1.0, status_effect: StatusEffect::None,
+            equipment_tier: EquipmentTier::Light, weapon_glyph_override: None,
+            hp_frac: 1.0, level: 1, hit_reaction_t: 1.0, death_t: 0.0,
+            level_up_t: 1.0, velocity: Vec3::ZERO, time: 0.0,
+        }
+    }
+    pub fn tick(&mut self, dt: f32) {
+        self.time += dt;
+        if self.transition_t < 1.0 { self.transition_t = (self.transition_t + dt*3.0).min(1.0); }
+        if self.hit_reaction_t < 1.0 { self.hit_reaction_t = (self.hit_reaction_t + dt*4.0).min(1.0); }
+        if self.anim_state == PlayerAnimState::Death && self.death_t < 1.0 {
+            self.death_t = (self.death_t + dt*0.5).min(1.0);
+        }
+        if self.level_up_t < 1.0 { self.level_up_t = (self.level_up_t + dt*1.5).min(1.0); }
+    }
+    pub fn set_anim_state(&mut self, state: PlayerAnimState) {
+        if state != self.anim_state {
+            self.prev_anim_state = self.anim_state;
+            self.anim_state = state;
+            self.transition_t = 0.0;
+        }
+    }
+    pub fn trigger_hit(&mut self) { self.hit_reaction_t = 0.0; self.set_anim_state(PlayerAnimState::Hurt); }
+    pub fn trigger_death(&mut self) { self.death_t = 0.0; self.set_anim_state(PlayerAnimState::Death); }
+    pub fn trigger_level_up(&mut self) { self.level_up_t = 0.0; self.level += 1; }
+}
+
+/// Render the player with full visual state.
+pub fn render_player_full(engine: &mut ProofEngine, state: &PlayerVisualState, position: Vec3, _frame: u64) {
+    let arch = state.archetype;
+    let count = arch.base_glyph_count() + (state.level as usize / 3);
+    let scale = arch.formation_scale();
+    let time = state.time;
+
+    let cur_shape = arch.formation_for_state(state.anim_state);
+    let prev_shape = arch.formation_for_state(state.prev_anim_state);
+    let cur_pos = cur_shape.generate_positions(count, scale);
+    let prev_pos = prev_shape.generate_positions(count, scale);
+
+    let st = { let t = state.transition_t.clamp(0.0,1.0); t*t*(3.0 - 2.0*t) };
+    let mut positions = formations::interpolate_formations(&prev_pos, &cur_pos, st);
+    positions = class_idle(&positions, arch, time);
+    positions = formations::apply_hp_drift(&positions, state.hp_frac, time);
+    if state.hit_reaction_t < 1.0 {
+        positions = formations::apply_hit_reaction(&positions, state.hit_reaction_t, 0.5);
+    }
+    positions = formations::apply_movement_lean(&positions, state.velocity, 0.3);
+    if state.anim_state == PlayerAnimState::Death {
+        let (dp, _) = formations::death_dissolution(&positions, state.death_t, 42);
+        positions = dp;
+    }
+    if state.level_up_t < 1.0 {
+        let (lp, _) = formations::level_up_formation(&positions, state.level_up_t,
+            Vec3::new(0.0, scale*1.5, 0.0));
+        positions = lp;
+    }
+
+    let body = arch_body(arch);
+    let weapon = arch_weapon(arch);
+    let armor = arch_armor(arch, state.equipment_tier);
+    let base_c = arch_base_color(arch);
+    let accent_c = arch_accent_color(arch);
+    let glow = arch_glow(arch);
+    let em = arch_emission(arch);
+
+    let death_alpha = if state.anim_state == PlayerAnimState::Death {
+        (1.0 - state.death_t).max(0.0)
+    } else { 1.0 };
+    let lu_glow = if state.level_up_t < 1.0 {
+        if state.level_up_t < 0.5 { state.level_up_t / 0.5 } else { 1.0 - (state.level_up_t - 0.5) / 0.5 }
+    } else { 0.0 };
+
+    for (i, p) in positions.iter().enumerate() {
+        let wp = position + *p;
+        let ch = if i == 0 { state.weapon_glyph_override.unwrap_or(weapon[0]) }
+                 else if i < 3 { weapon[i % weapon.len()] }
+                 else if p.length() > scale * 0.8 { armor[i % armor.len()] }
+                 else { body[i % body.len()] };
+        let dist = p.length();
+        let t = (dist / (scale * 1.2)).clamp(0.0, 1.0);
+        let mut color = lc(accent_c, base_c, t);
+        color = status_color(color, state.status_effect, time, i);
+        if lu_glow > 0.0 {
+            color.x = (color.x + lu_glow*0.4).min(1.0);
+            color.y = (color.y + lu_glow*0.4).min(1.0);
+            color.z = (color.z + lu_glow*0.2).min(1.0);
+        }
+        color.w *= death_alpha;
+        spg(engine, ch, wp, color, em + lu_glow*0.8, 0.85, glow, if lu_glow > 0.0 { 0.8 } else { 0.4 });
+    }
+}
+
+fn status_color(base: Vec4, fx: StatusEffect, time: f32, i: usize) -> Vec4 {
+    match fx {
+        StatusEffect::None => base,
+        StatusEffect::Burning  => formations::color_burning(base, time, i),
+        StatusEffect::Frozen   => formations::color_frozen(base, time, i),
+        StatusEffect::Poisoned => formations::color_poisoned(base, time, i),
+        StatusEffect::Blessed  => formations::color_blessed(base, time, i),
+    }
+}
+
+fn class_idle(positions: &[Vec3], arch: ClassArchetype, time: f32) -> Vec<Vec3> {
+    let rate = arch.pulse_rate();
+    let depth = arch.pulse_depth();
+    match arch {
+        ClassArchetype::Warrior => formations::apply_breathing(positions, time, rate, depth),
+        ClassArchetype::Mage => {
+            let base = formations::apply_breathing(positions, time, rate, depth);
+            base.iter().map(|p| {
+                let d = p.length();
+                if d > 0.8 {
+                    let a = time * 0.2 * (d - 0.8);
+                    let (s, c) = a.sin_cos();
+                    Vec3::new(p.x*c - p.y*s, p.x*s + p.y*c, p.z)
+                } else { *p }
+            }).collect()
+        }
+        ClassArchetype::Rogue => positions.iter().enumerate().map(|(i, p)| {
+            let ph = time * rate * TAU + i as f32 * 0.5;
+            Vec3::new(p.x * (1.0 + ph.sin()*depth*0.7), p.y * (1.0 + (ph+PI*0.5).sin()*depth), p.z)
+        }).collect(),
+        ClassArchetype::Cleric => positions.iter().map(|p| {
+            let w = (time * rate * TAU - p.length() * 2.0).sin() * depth;
+            *p * (1.0 + w)
+        }).collect(),
+        ClassArchetype::Necromancer => {
+            let beat = (time * rate * TAU).sin();
+            let d = if beat > 0.7 { depth*1.5 } else if beat > 0.3 { depth*0.3 } else { -depth*0.5 };
+            positions.iter().map(|p| *p * (1.0 + d)).collect()
+        }
+        ClassArchetype::Berserker => {
+            let rage = (time * rate * TAU).sin().abs() * depth * 1.5;
+            positions.iter().enumerate().map(|(i, p)| {
+                let j = ((time*12.0 + i as f32*3.7).sin() * rage * 0.3).abs();
+                *p * (1.0 + rage + j)
+            }).collect()
+        }
+    }
+}
+
+/// Build an AmorphousEntity for the player (formation-backed).
+pub fn build_player_entity(class: CharacterClass, position: Vec3) -> AmorphousEntity {
+    let arch = class_archetype(class);
+    let count = arch.base_glyph_count();
+    let scale = arch.formation_scale();
+    let shape = arch.idle_formation();
+    let positions = shape.generate_positions(count, scale);
+    let body = arch_body(arch);
+    let weapon = arch_weapon(arch);
+    let base_c = arch_base_color(arch);
+    let accent_c = arch_accent_color(arch);
+
+    let mut chars = Vec::with_capacity(count);
+    let mut colors = Vec::with_capacity(count);
+    for (i, p) in positions.iter().enumerate() {
+        if i < 3 { chars.push(weapon[i % weapon.len()]); colors.push(accent_c); }
+        else {
+            chars.push(body[i % body.len()]);
+            let t = (p.length() / (scale*1.2)).clamp(0.0, 1.0);
+            colors.push(lc(accent_c, base_c, t));
+        }
+    }
+    let mut entity = AmorphousEntity::new(format!("player_{:?}", class), position);
+    entity.entity_mass = 50.0;
+    entity.pulse_rate = arch.pulse_rate();
+    entity.pulse_depth = arch.pulse_depth();
+    entity.formation = positions;
+    entity.formation_chars = chars;
+    entity.formation_colors = colors;
+    entity
+}
+
+/// Update an existing AmorphousEntity from a PlayerVisualState.
+pub fn update_player_entity(entity: &mut AmorphousEntity, state: &PlayerVisualState) {
+    let arch = state.archetype;
+    let count = arch.base_glyph_count() + (state.level as usize / 3);
+    let scale = arch.formation_scale();
+
+    let cur = arch.formation_for_state(state.anim_state).generate_positions(count, scale);
+    let prev = arch.formation_for_state(state.prev_anim_state).generate_positions(count, scale);
+    let st = { let t = state.transition_t.clamp(0.0,1.0); t*t*(3.0 - 2.0*t) };
+    let mut positions = formations::interpolate_formations(&prev, &cur, st);
+    positions = class_idle(&positions, arch, state.time);
+    positions = formations::apply_hp_drift(&positions, state.hp_frac, state.time);
+    if state.hit_reaction_t < 1.0 { positions = formations::apply_hit_reaction(&positions, state.hit_reaction_t, 0.5); }
+    positions = formations::apply_movement_lean(&positions, state.velocity, 0.3);
+    if state.anim_state == PlayerAnimState::Death {
+        let (dp, _) = formations::death_dissolution(&positions, state.death_t, 42); positions = dp;
+    }
+    if state.level_up_t < 1.0 {
+        let (lp, _) = formations::level_up_formation(&positions, state.level_up_t, Vec3::new(0.0, scale*1.5, 0.0));
+        positions = lp;
+    }
+
+    let body = arch_body(arch);
+    let weapon = arch_weapon(arch);
+    let armor = arch_armor(arch, state.equipment_tier);
+    let base_c = arch_base_color(arch);
+    let accent_c = arch_accent_color(arch);
+    let death_alpha = if state.anim_state == PlayerAnimState::Death { (1.0 - state.death_t).max(0.0) } else { 1.0 };
+    let lu_glow = if state.level_up_t < 1.0 {
+        if state.level_up_t < 0.5 { state.level_up_t / 0.5 } else { 1.0 - (state.level_up_t - 0.5) / 0.5 }
+    } else { 0.0 };
+
+    let len = positions.len();
+    let mut chars = Vec::with_capacity(len);
+    let mut colors = Vec::with_capacity(len);
+    for (i, p) in positions.iter().enumerate() {
+        let ch = if i == 0 { state.weapon_glyph_override.unwrap_or(weapon[0]) }
+                 else if i < 3 { weapon[i % weapon.len()] }
+                 else if p.length() > scale * 0.8 { armor[i % armor.len()] }
+                 else { body[i % body.len()] };
+        chars.push(ch);
+        let t = (p.length() / (scale*1.2)).clamp(0.0, 1.0);
+        let mut color = lc(accent_c, base_c, t);
+        color = status_color(color, state.status_effect, state.time, i);
+        if lu_glow > 0.0 {
+            color.x = (color.x + lu_glow*0.4).min(1.0);
+            color.y = (color.y + lu_glow*0.4).min(1.0);
+            color.z = (color.z + lu_glow*0.2).min(1.0);
+        }
+        color.w *= death_alpha;
+        colors.push(color);
+    }
+    entity.formation = positions;
+    entity.formation_chars = chars;
+    entity.formation_colors = colors;
+    entity.hp = state.hp_frac * entity.max_hp;
+    entity.update_cohesion();
+}
+
+/// Map a weapon name to a representative glyph.
+pub fn weapon_name_to_glyph(name: &str) -> char {
+    let l = name.to_lowercase();
+    if l.contains("sword") || l.contains("blade") { '/' }
+    else if l.contains("axe") { 'X' }
+    else if l.contains("mace") || l.contains("hammer") { '#' }
+    else if l.contains("staff") || l.contains("wand") { '|' }
+    else if l.contains("dagger") { '\\' }
+    else if l.contains("bow") { ')' }
+    else if l.contains("spear") { '!' }
+    else { '+' }
+}
+
+/// Map armor value to tier.
+pub fn armor_value_to_tier(armor: u32) -> EquipmentTier {
+    match armor { 0 => EquipmentTier::Bare, 1..=10 => EquipmentTier::Light,
+                  11..=25 => EquipmentTier::Medium, _ => EquipmentTier::Heavy }
+}
+
+fn lc(a: Vec4, b: Vec4, t: f32) -> Vec4 { a + (b - a) * t.clamp(0.0, 1.0) }
+
+/// Return base + accent colors for a class.
+pub fn get_class_colors(class: CharacterClass) -> (Vec4, Vec4) {
+    let a = class_archetype(class); (arch_base_color(a), arch_accent_color(a))
+}
+
+/// Return glyph count for a player at the given level.
+pub fn player_glyph_count(class: CharacterClass, level: u32) -> usize {
+    class_archetype(class).base_glyph_count() + (level as usize / 3)
+}
