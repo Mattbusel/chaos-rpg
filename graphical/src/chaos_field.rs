@@ -185,8 +185,8 @@ impl ChaosField {
         Self {
             // Far layer: 40 evenly-spaced columns of large symbols
             far:  ParallaxLayer::new(40,  0.3,  0.65, LayerCharSet::Far,  0),
-            // Mid layer: 160 columns (original density)
-            mid:  ParallaxLayer::new(160, 1.0,  1.0,  LayerCharSet::Mid,  1000),
+            // Mid layer: disabled — was causing distracting character rain
+            mid:  ParallaxLayer::new(0,   1.0,  0.0,  LayerCharSet::Mid,  1000),
             // Near layer: 80 columns of debris at 1.5× speed
             near: ParallaxLayer::new(80,  1.55, 0.5,  LayerCharSet::Near, 5000),
             pulse_x:      -1.0,

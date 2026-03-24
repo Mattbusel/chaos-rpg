@@ -812,11 +812,11 @@ impl State {
         }
         // Game over / death
         if self.screen == AppScreen::GameOver {
-            // During the cinematic, keep color so red/orange shows; full desaturate only after
             if self.death_cinematic_done || !self.death_seq.active {
-                self.color_grade.set_death();
+                self.color_grade.set_death(); // grayscale after cinematic
+            } else {
+                self.color_grade.set_normal(); // full color during cinematic so red/orange shows
             }
-            // else: let current grade linger so death colors are vivid
             return;
         }
         // Victory
