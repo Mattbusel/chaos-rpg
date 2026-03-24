@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables, unused_imports, unused_mut, unused_parens, named_arguments_used_positionally)]
+
 //! CHAOS RPG Core — all game logic, zero rendering.
 //!
 //! Every system lives here: math engines, combat, characters, items, spells,
