@@ -1,11 +1,28 @@
 //! Enemy entity rendering — tier-scaled formations.
 //!
 //! Five enemy tiers with escalating glyph counts, formation complexity, and
-//! visual intensity. Enemy name characters are used as glyph symbols. All
-//! rendering goes through `engine.spawn_glyph()`.
+//! visual intensity. Enemy name characters are used as glyph symbols.
+//!
+//! ## Rendering modes
+//!
+//! * **Immediate-mode** — `render_enemy()` / `render_enemy_full()` spawn glyphs
+//!   every frame via `engine.spawn_glyph()`.
+//! * **Formation-backed** — `build_enemy_entity()` returns an `AmorphousEntity`.
+//!
+//! ## Visual features
+//!
+//! * 5 enemy tiers (Minion / Elite / Champion / Boss / Abomination).
+//! * 7 element themes (Fire / Ice / Lightning / Poison / Shadow / Holy / Neutral).
+//! * 10 unique boss visual profiles matching proof-engine BossType.
+//! * Spawn animation (glyphs expand from center outward).
+//! * Death animation with element-specific dissolution.
 
 use proof_engine::prelude::*;
-use std::f32::consts::TAU;
+use std::f32::consts::{PI, TAU};
+
+use super::formations::{
+    self, FormationShape, ElementalDeathStyle,
+};
 
 // ── Tier constants ───────────────────────────────────────────────────────────
 

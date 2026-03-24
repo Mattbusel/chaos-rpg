@@ -11,6 +11,7 @@ mod theme;
 mod screens;
 mod entities;
 mod effects;
+pub mod magic;
 mod scenes;
 mod audio_bridge;
 mod music_bridge;
