@@ -25,6 +25,10 @@ pub mod enemy_ai;
 pub mod weather_system;
 pub mod terrain_map;
 pub mod game_economy;
+pub mod dialogue_system;
+pub mod mod_system;
+pub mod replay_system;
+pub mod save_upgrade;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
