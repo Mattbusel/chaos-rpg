@@ -751,7 +751,7 @@ impl State {
     /// Returns a color-graded clone of the current theme.
     /// All draw functions should use this instead of self.theme_graded().
     fn theme_graded(&self) -> theme::Theme {
-        let mut t = self.theme_graded();
+        let mut t = self.theme().clone();
         self.color_grade.apply_to_theme(&mut t);
         // Breathing borders via tile_effects
         let bb = self.tile_effects.border_brightness();
@@ -2936,8 +2936,11 @@ impl GameState for State {
         self.tile_effects.clear_lights();
         if let Some(ref p) = self.player {
             let php = p.current_hp as f32 / p.max_hp.max(1) as f32;
-            // Low HP edge effect
-            let lhp_target = if php < 0.25 {
+            // Low HP edge effect — suppress on GameOver so it doesn't bleed into death cinematic
+            let lhp_target = if php < 0.25
+                && self.screen != AppScreen::GameOver
+                && self.screen != AppScreen::Victory
+            {
                 ((0.25 - php) / 0.25) * 0.85
             } else { 0.0 };
             self.tile_effects.set_low_hp(lhp_target);
