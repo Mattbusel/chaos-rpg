@@ -106,10 +106,9 @@ impl ProofGame for ChaosRpgGame {
     }
 
     fn update(&mut self, engine: &mut ProofEngine, dt: f32) {
-        // CRITICAL: Clear all glyphs from previous frame.
-        // We do immediate-mode rendering — every glyph is spawned fresh each frame.
-        // Without this, glyphs accumulate and FPS drops to zero within seconds.
-        engine.scene.glyphs = proof_engine::glyph::GlyphPool::new(8192);
+        // CRITICAL: Clear ALL scene objects from previous frame.
+        // We do immediate-mode rendering — everything is spawned fresh each frame.
+        engine.scene.clear();
 
         // Handle debug tool input BEFORE game input (F-keys, console, etc.)
         let _debug_consumed = self.debug_tools.handle_input(engine);
@@ -131,13 +130,15 @@ impl ProofGame for ChaosRpgGame {
         let anim_transforms = self.anim_bridge.update(dt, &self.state);
         let _ = &anim_transforms; // transforms are applied by screen-specific renderers
 
-        // Update GPU chaos field (replaces old CPU chaos field)
-        self.chaos_compute.set_floor_theme(
-            self.state.floor_num,
-            self.state.corruption_frac() * 500.0,
-        );
-        self.chaos_compute.update(dt);
-        self.chaos_compute.render(engine);
+        // Only render chaos field on the title screen — it's too distracting elsewhere
+        if self.state.screen == AppScreen::Title {
+            self.chaos_compute.set_floor_theme(
+                self.state.floor_num,
+                self.state.corruption_frac() * 500.0,
+            );
+            self.chaos_compute.update(dt);
+            self.chaos_compute.render(engine);
+        }
 
         // Screen-specific update + render
         match self.state.screen {
