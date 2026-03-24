@@ -48,18 +48,19 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         let wobble = (frame as f32 * 0.02 + i as f32 * 0.17).sin() * 0.3;
 
         let ch = FAR_CHARS[i % FAR_CHARS.len()];
-        let alpha = brightness * 0.7;
+        let alpha = brightness * 0.3; // reduced from 0.7
 
         engine.spawn_glyph(Glyph {
             character: ch,
             position: Vec3::new(base_x + wobble, y, -5.0),
+            scale: Vec2::splat(0.6),
             color: Vec4::new(
                 theme.muted.x * alpha,
                 theme.muted.y * alpha,
                 theme.muted.z * alpha,
-                0.4,
+                0.15, // reduced from 0.4
             ),
-            emission: alpha * 0.5,
+            emission: alpha * 0.1, // reduced from 0.5
             layer: RenderLayer::Background,
             ..Default::default()
         });
@@ -76,31 +77,31 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         let y = ((frame as f32 * speed * 1.55 * floor_mult + y_phase) % 34.0) - 17.0;
 
         let ch = NEAR_CHARS[i % NEAR_CHARS.len()];
-        let alpha = brightness * 0.55;
+        let alpha = brightness * 0.2; // reduced from 0.55
 
-        // Corruption tint
         let tint = if corruption > 0.25 {
             let t = ((corruption - 0.25) * 1.33).clamp(0.0, 1.0);
             Vec4::new(
-                theme.muted.x * alpha + theme.accent.x * alpha * t * 0.4,
-                theme.muted.y * alpha * (1.0 - t * 0.2),
-                theme.muted.z * alpha + theme.accent.z * alpha * t * 0.4,
-                0.3,
+                theme.muted.x * alpha + theme.accent.x * alpha * t * 0.2,
+                theme.muted.y * alpha * (1.0 - t * 0.1),
+                theme.muted.z * alpha + theme.accent.z * alpha * t * 0.2,
+                0.1,
             )
         } else {
             Vec4::new(
                 theme.muted.x * alpha,
                 theme.muted.y * alpha,
                 theme.muted.z * alpha,
-                0.3,
+                0.1,
             )
         };
 
         engine.spawn_glyph(Glyph {
             character: ch,
             position: Vec3::new(base_x, y, -3.0),
+            scale: Vec2::splat(0.3),
             color: tint,
-            emission: alpha * 0.3,
+            emission: alpha * 0.05,
             layer: RenderLayer::Background,
             ..Default::default()
         });

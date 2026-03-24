@@ -30,6 +30,7 @@ pub mod mod_system;
 pub mod replay_system;
 pub mod save_upgrade;
 pub mod debug_tools;
+pub mod ui_render;
 pub mod gpu_chaos;
 
 use state::{AppScreen, GameState};
