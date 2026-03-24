@@ -6,23 +6,25 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/gameplay.gif" alt="CHAOS RPG gameplay" width="100%"/>
+</p>
+
+---
+
 ## Screenshots
 
 <table>
 <tr>
-<td><img src="docs/screenshots/character-creation.png" width="420" alt="Character Creation"/><br/><sub>12 classes · 8 backgrounds · 4 difficulties · name entry</sub></td>
-<td><img src="docs/screenshots/combat-chain.png" width="420" alt="Chaos Engine combat chain"/><br/><sub>The Chaos Engine - 8 linked math functions, live chain output</sub></td>
+<td><img src="docs/screenshots/title-void.png" width="420" alt="Title screen — VOID PROTOCOL theme"/><br/><sub>Title screen · VOID PROTOCOL theme · grouped Play / Progress / Settings menu</sub></td>
+<td><img src="docs/screenshots/title-emerald.png" width="420" alt="Title screen — EMERALD ENGINE theme"/><br/><sub>Title screen · EMERALD ENGINE theme · chaos field background</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body chart with MATH.ABSENT"/><br/><sub>13-part body system - injuries cascade into MATH.ABSENT</sub></td>
-<td><img src="docs/screenshots/crafting.png" width="420" alt="Crafting bench"/><br/><sub>Crafting bench - Reforge, Augment, Corrupt, Fuse and more</sub></td>
+<td><img src="docs/screenshots/character-sheet.png" width="420" alt="Character sheet — Stats tab"/><br/><sub>Character sheet · Stats tab · animated stat bars, run info, faction standings</sub></td>
+<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body condition — 13-part injury system"/><br/><sub>Body condition · 13-part system · injuries cascade into MATH.ABSENT</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/tutorial.png" width="420" alt="Tutorial slide 1"/><br/><sub>Built-in 5-slide tutorial - press ? on the title screen</sub></td>
-<td><img src="docs/screenshots/scoreboard.png" width="420" alt="Hall of Chaos scoreboard"/><br/><sub>Hall of Chaos + Hall of Misery - two separate leaderboards</sub></td>
-</tr>
-<tr>
-<td colspan="2"><img src="docs/screenshots/game-over.png" width="420" alt="Run summary on death"/><br/><sub>Full run summary on death - damage dealt, best hit, D/T ratio, power tier</sub></td>
+<td colspan="2"><img src="docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death — dual-panel layout · damage dealt, final events, full combat log</sub></td>
 </tr>
 </table>
 
