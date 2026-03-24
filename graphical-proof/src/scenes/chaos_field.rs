@@ -378,8 +378,69 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // CORRUPTION GLITCH OVERLAY
+    // At high corruption, spawn a handful of bright glitch symbols that
+    // flash in random positions for single frames, creating visual static.
+    // ════════════════════════════════════════════════════════════════════════
+
+    if corruption > 0.6 {
+        let glitch_count = ((corruption - 0.6) * 25.0) as usize; // 0-10 glitches
+        for i in 0..glitch_count {
+            let seed = h(state.frame.wrapping_mul(7).wrapping_add(i as u64));
+            // Only show ~40% of the time for a flickering effect
+            if hf(seed + 99) > 0.4 { continue; }
+            let gx = hs(seed + 1) * VIEW_X * 0.8;
+            let gy = hs(seed + 2) * VIEW_Y * 0.8;
+            let ga = 0.06 + hf(seed + 3) * 0.08;
+            engine.spawn_glyph(Glyph {
+                character: glitch_char(seed),
+                position: Vec3::new(gx, gy, 2.5),
+                scale: Vec2::splat(0.2 + hf(seed + 4) * 0.3),
+                color: Vec4::new(
+                    accent.x * ga * 1.5,
+                    accent.y * ga * 0.3,
+                    accent.z * ga * 1.8,
+                    ga,
+                ),
+                emission: ga * 2.0,
+                glow_color: Vec3::new(accent.x, 0.1, accent.z),
+                glow_radius: 0.5,
+                blend_mode: BlendMode::Additive,
+                layer: RenderLayer::Background,
+                ..Default::default()
+            });
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // CHAOS RIFT: VORTEX CENTER GLYPH
+    // When in a ChaosRift room, spawn a bright swirling symbol at center
+    // that all nearby glyphs appear to orbit around.
+    // ════════════════════════════════════════════════════════════════════════
+
+    if rift {
+        let vortex_spin = t * 2.0;
+        let vortex_pulse = 0.5 + 0.5 * (t * 1.2).sin();
+        let va = 0.12 * vortex_pulse;
+        engine.spawn_glyph(Glyph {
+            character: '\u{2609}', // Sun symbol as vortex center
+            position: Vec3::new(0.0, 0.0, 2.0),
+            scale: Vec2::splat(0.8 + vortex_pulse * 0.3),
+            color: Vec4::new(accent.x * va, accent.y * va, accent.z * va, va),
+            emission: va * 3.0,
+            glow_color: Vec3::new(accent.x, accent.y, accent.z),
+            glow_radius: 3.0,
+            rotation: vortex_spin,
+            blend_mode: BlendMode::Additive,
+            layer: RenderLayer::Background,
+            ..Default::default()
+        });
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // NULL BOSS: FROZEN GLYPH CORPSES
-    // Glyphs that have "died" — frozen, grey, slowly fading.
+    // Glyphs that have "died" — frozen, grey, slowly fading to nothing.
+    // The field DIES. Every glyph stops. One by one. Terrifying.
     // ════════════════════════════════════════════════════════════════════════
 
     if is_null_fight(state) && null_alive < 0.95 {
@@ -387,6 +448,14 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         let ga = 0.02 * null_alive;
         for i in 0..dead.min(50) {
             let seed = h(i as u64 + 50000);
+            // Each dead glyph has a unique "time of death" based on its index
+            // relative to the boss turn progression — they don't all die at once
+            let death_turn = (i as f32 / 50.0 * 20.0) as u32;
+            let time_dead = state.boss_turn.saturating_sub(death_turn) as f32;
+            let fade = (1.0 - time_dead * 0.1).clamp(0.0, 1.0);
+            let final_a = ga * fade;
+            if final_a < 0.001 { continue; }
+
             let ch = if i < FAR_COUNT { FAR_CHARS[i % FAR_CHARS.len()] }
                      else if i < FAR_COUNT + MID_COUNT { MID_CHARS[i % MID_CHARS.len()] }
                      else { NEAR_CHARS[i % NEAR_CHARS.len()] };
@@ -394,7 +463,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
                 character: ch,
                 position: Vec3::new(hs(seed + 1) * VIEW_X, hs(seed + 2) * VIEW_Y, 3.0),
                 scale: Vec2::splat(0.2),
-                color: Vec4::new(ga, ga, ga, ga),
+                color: Vec4::new(final_a, final_a, final_a, final_a),
                 layer: RenderLayer::Background,
                 ..Default::default()
             });

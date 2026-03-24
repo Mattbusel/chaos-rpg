@@ -1,5 +1,4 @@
-//! Tutorial — 5 step-by-step panels explaining the chaos math,
-//! progress dots, animated examples, themed presentation.
+//! Tutorial — 5 slides explaining the chaos math.
 
 use proof_engine::prelude::*;
 use crate::state::{AppScreen, GameState};
@@ -23,12 +22,12 @@ const SLIDES: &[(&str, &[&str])] = &[
         "  Linear    - proportional scaling (stable)",
         "  Lorenz    - chaotic attractor (wild swings)",
         "  Mandelbrot - fractal boundary (crit or bust)",
-        "  Zeta      - Riemann zeta (oscillating extremes)",
+        "  Zeta      - Riemann zeta (oscillating)",
         "  Collatz   - 3n+1 conjecture (up then down)",
         "  Fibonacci - golden ratio (moderate, reliable)",
         "  SharpEdge - step function (all or nothing)",
         "  Orbit     - elliptical (periodic outcomes)",
-        "  Recursive - self-referencing (amplifies trends)",
+        "  Recursive - self-referencing (amplifies)",
         "  Euler     - exponential growth/decay",
     ]),
     ("COMBAT", &[
@@ -40,7 +39,7 @@ const SLIDES: &[(&str, &[&str])] = &[
         "[1-8] Cast spells (costs mana)",
         "[Q/W/E/R/Y/U/I/O] Use inventory items",
         "",
-        "Crits happen when pipeline output > 0.8",
+        "Crits happen when the pipeline output > 0.8",
         "Catastrophes happen when output < -0.8",
     ]),
     ("CORRUPTION & HUNGER", &[
@@ -69,118 +68,60 @@ const SLIDES: &[(&str, &[&str])] = &[
     ]),
 ];
 
-// ── Update ──────────────────────────────────────────────────────────────────
-
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     let left = engine.input.just_pressed(Key::Left);
-    let right = engine.input.just_pressed(Key::Right) || engine.input.just_pressed(Key::Space) || engine.input.just_pressed(Key::Enter);
+    let right = engine.input.just_pressed(Key::Right);
+    let enter = engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Space);
     let esc = engine.input.just_pressed(Key::Escape);
 
-    if right && state.tutorial_slide < SLIDES.len() - 1 { state.tutorial_slide += 1; }
-    if left && state.tutorial_slide > 0 { state.tutorial_slide -= 1; }
-    if esc { state.tutorial_slide = 0; state.screen = AppScreen::Title; }
+    if (right || enter) && state.tutorial_slide < SLIDES.len() - 1 {
+        state.tutorial_slide += 1;
+    } else if enter && state.tutorial_slide == SLIDES.len() - 1 {
+        // On last slide, Enter/Space exits
+        state.tutorial_slide = 0;
+        state.screen = AppScreen::Title;
+    }
+    if left && state.tutorial_slide > 0 {
+        state.tutorial_slide -= 1;
+    }
+    if esc {
+        state.tutorial_slide = 0;
+        state.screen = AppScreen::Title;
+    }
 }
-
-// ── Render ──────────────────────────────────────────────────────────────────
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
-    let frame = state.frame;
     let slide_idx = state.tutorial_slide.min(SLIDES.len() - 1);
-    let (title, lines) = SLIDES[slide_idx];
+    let (slide_title, lines) = SLIDES[slide_idx];
 
-    // ── Header ──
-    let header = format!("TUTORIAL - {}/{}", slide_idx + 1, SLIDES.len());
-    ui_render::heading_centered(engine, &header, 4.8, theme.heading);
+    // Slide counter
+    ui_render::heading_centered(engine, &format!("TUTORIAL {}/{}", slide_idx + 1, SLIDES.len()), 5.0, theme.heading);
 
-    // ── Progress dots ──
-    let dot_start_x = -(SLIDES.len() as f32 * 0.4 * 0.5);
+    // Progress dots
+    let mut dots = String::new();
     for i in 0..SLIDES.len() {
-        let active = i == slide_idx;
-        let c = if active { theme.selected } else { theme.muted };
-        let em = if active { 0.8 } else { 0.15 };
-        let ch = if active { '#' } else { 'o' };
-
-        let pulse = if active { ((frame as f32 * 0.08).sin() * 0.15 + 0.85).max(0.0) } else { 1.0 };
-        engine.spawn_glyph(Glyph {
-            character: ch,
-            position: Vec3::new(dot_start_x + i as f32 * 0.5, 3.9, 0.0),
-            color: Vec4::new(c.x * pulse, c.y * pulse, c.z * pulse, c.w),
-            emission: em * pulse,
-            layer: RenderLayer::UI,
-            ..Default::default()
-        });
+        dots.push(if i == slide_idx { '#' } else { 'o' });
+        dots.push(' ');
     }
+    ui_render::text_centered(engine, &dots, 4.2, theme.accent, 0.3, 0.5);
 
-    // ── Slide title ──
-    let title_trunc: String = title.chars().take(35).collect();
-    ui_render::text_centered(engine, &title_trunc, 3.2, theme.selected, 0.4, 0.7);
+    // Title
+    ui_render::body(engine, slide_title, -7.5, 3.3, theme.selected);
 
-    ui_render::text_centered(engine, "================================", 2.7, theme.border, 0.22, 0.12);
-
-    // ── Content lines with staggered fade-in ──
+    // Content lines
     for (i, line) in lines.iter().enumerate() {
-        let y = 2.2 - i as f32 * 0.48;
-        if y < -3.5 { break; }
-
-        // Staggered appearance based on frame count (animated entry)
-        let line_delay = i as f32 * 3.0;
-        let visible_frames = frame as f32 - line_delay;
-        let alpha = (visible_frames * 0.1).clamp(0.0, 1.0);
-
-        if line.is_empty() { continue; }
-
-        let color = if line.starts_with("  ") {
-            // Indented items (pipeline names, keybinds)
-            Vec4::new(theme.accent.x * alpha, theme.accent.y * alpha, theme.accent.z * alpha, alpha)
-        } else if line.starts_with('[') {
-            // Keybind lines
-            Vec4::new(theme.primary.x * alpha, theme.primary.y * alpha, theme.primary.z * alpha, alpha)
-        } else {
-            Vec4::new(theme.dim.x * alpha, theme.dim.y * alpha, theme.dim.z * alpha, alpha)
-        };
-
-        let truncated: String = line.chars().take(48).collect();
-        ui_render::text(engine, &truncated, -7.5, y, color, 0.25, 0.35 * alpha);
+        let truncated: String = line.chars().take(50).collect();
+        ui_render::small(engine, &truncated, -7.5, 2.4 - i as f32 * 0.42, theme.primary);
     }
 
-    // ── Animated example visualization (slide-specific) ──
-    match slide_idx {
-        1 => {
-            // Pipeline visualization: animated chain
-            let chain_y = -2.5;
-            let engines = ["LN", "LZ", "MB", "ZT", "CZ", "FB", "SE", "OR", "RC", "EU"];
-            for (i, name) in engines.iter().enumerate() {
-                let x = -6.0 + i as f32 * 1.5;
-                let active = ((frame / 20) % engines.len() as u64) == i as u64;
-                let c = if active { theme.selected } else { theme.dim };
-                let em = if active { 0.7 } else { 0.15 };
-                ui_render::text(engine, name, x, chain_y, c, 0.22, em);
-                // Connection arrow
-                if i < engines.len() - 1 {
-                    ui_render::text(engine, ">", x + 0.6, chain_y, theme.muted, 0.18, 0.1);
-                }
-            }
-        }
-        2 => {
-            // Combat animation: oscillating damage number
-            let dmg_val = ((frame as f32 * 0.08).sin() * 50.0 + 50.0) as i32;
-            let dmg_text = format!("{}", dmg_val);
-            let dmg_alpha = ((frame as f32 * 0.06).sin() * 0.3 + 0.7).max(0.0);
-            ui_render::text_centered(engine, &dmg_text, -3.0,
-                Vec4::new(theme.danger.x * dmg_alpha, theme.danger.y * dmg_alpha, 0.0, dmg_alpha),
-                0.4, dmg_alpha * 0.6);
-        }
-        _ => {}
-    }
-
-    // ── Navigation hints ──
+    // Navigation hints
     let nav = if slide_idx == 0 {
-        "[Right/Space/Enter] Next  [Esc] Back"
+        "[Right/Enter/Space] Next  [Esc] Back"
     } else if slide_idx == SLIDES.len() - 1 {
-        "[Left] Previous  [Esc] Done"
+        "[Left] Previous  [Enter/Space/Esc] Done"
     } else {
-        "[Left/Right/Space/Enter] Navigate  [Esc] Back"
+        "[Left] Prev  [Right/Enter/Space] Next  [Esc] Back"
     };
-    ui_render::small(engine, nav, -6.0, -5.2, theme.muted);
+    ui_render::small(engine, nav, -7.5, -5.2, theme.muted);
 }
