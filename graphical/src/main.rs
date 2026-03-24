@@ -265,6 +265,214 @@ fn emit_loot_sparkle(particles: &mut Vec<Particle>, cx: f32, cy: f32, col: (u8,u
     }
 }
 
+// ── Status-effect ambient emitters ───────────────────────────────────────────
+
+fn emit_status_ambient(particles: &mut Vec<Particle>, cx: f32, cy: f32, frame: u64,
+    effect_flags: u32)  // bitmask: 1=burn 2=freeze 4=poison 8=bleed 16=stun 32=regen
+{
+    if particles.len() > 1900 { return; }
+    // Only emit on certain frames to cap particle rate
+    if frame % 4 != 0 { return; }
+
+    let jitter = (frame ^ (cx as u64 * 31)) % 3;
+
+    if effect_flags & 1 != 0 {  // Burn: orange sparks float up
+        let col = (255u8, 110u8, 20u8);
+        particles.push(Particle::burst(
+            cx + jitter as f32 - 1.0, cy + 1.0,
+            (jitter as f32 - 1.0) * 0.04, -0.12, "·", col, 18));
+        if frame % 8 == 0 {
+            particles.push(Particle::spark(cx + jitter as f32 - 1.0, cy,
+                (jitter as f32 - 1.0) * 0.06, -0.15, "▪", (255, 180, 40)));
+        }
+    }
+    if effect_flags & 2 != 0 {  // Freeze: blue flakes drift down
+        let col = (80u8, 160u8, 255u8);
+        particles.push(Particle {
+            x: cx + jitter as f32 * 2.0 - 2.0, y: cy - 2.0,
+            vx: (jitter as f32 - 1.0) * 0.02, vy: 0.07,
+            friction: 0.97, gravity: 0.001,
+            text: if frame % 16 < 8 { "❄".to_string() } else { "·".to_string() },
+            col, age: 0, lifetime: 20,
+        });
+    }
+    if effect_flags & 4 != 0 {  // Poison: green bubbles float up
+        let col = (40u8, 210u8, 70u8);
+        particles.push(Particle::burst(
+            cx + jitter as f32 - 1.0, cy + 2.0,
+            (jitter as f32 - 1.0) * 0.03, -0.09, "o", col, 24));
+    }
+    if effect_flags & 8 != 0 {  // Bleed: red drips fall
+        let col = (200u8, 20u8, 20u8);
+        particles.push(Particle {
+            x: cx + jitter as f32 * 2.0 - 2.0, y: cy,
+            vx: 0.0, vy: 0.08, friction: 0.99, gravity: 0.004,
+            text: "▪".to_string(), col, age: 0, lifetime: 16,
+        });
+    }
+    if effect_flags & 32 != 0 {  // Regen: small green upward cross
+        let col = (50u8, 240u8, 100u8);
+        particles.push(Particle::burst(
+            cx + jitter as f32 - 1.0, cy,
+            0.0, -0.10, "+", col, 20));
+    }
+}
+
+fn emit_stun_orbit(particles: &mut Vec<Particle>, cx: f32, cy: f32, frame: u64) {
+    if particles.len() > 1900 { return; }
+    if frame % 3 != 0 { return; }
+    use std::f32::consts::TAU;
+    let col = (255u8, 215u8, 0u8);
+    let angle = (frame as f32 * 0.18) % TAU;
+    let r = 2.5f32;
+    particles.push(Particle {
+        x: cx + angle.cos() * r,
+        y: cy + angle.sin() * r * 0.5,
+        vx: 0.0, vy: 0.0, friction: 1.0, gravity: 0.0,
+        text: "★".to_string(), col, age: 0, lifetime: 6,
+    });
+    // second star offset by pi
+    let a2 = angle + std::f32::consts::PI;
+    particles.push(Particle {
+        x: cx + a2.cos() * r, y: cy + a2.sin() * r * 0.5,
+        vx: 0.0, vy: 0.0, friction: 1.0, gravity: 0.0,
+        text: "✦".to_string(), col, age: 0, lifetime: 6,
+    });
+}
+
+fn emit_room_ambient(particles: &mut Vec<Particle>, frame: u64, room_seed: u64,
+    room_type_id: u8) // 1=combat 2=treasure 3=shrine 4=chaos_rift 5=boss
+{
+    if particles.len() > 1800 { return; }
+    if frame % 8 != 0 { return; }
+    let xs = (frame.wrapping_add(room_seed)) % 140 + 10;
+    let x = xs as f32;
+    match room_type_id {
+        1 => {  // Combat: faint red haze rising
+            let col = (80u8, 10u8, 10u8);
+            particles.push(Particle::burst(x, 72.0, 0.0, -0.06, "·", col, 40));
+        }
+        2 => {  // Treasure: gold sparkles from centre
+            if frame % 16 == 0 {
+                let col = (255u8, 200u8, 30u8);
+                use std::f32::consts::TAU;
+                let angle = (frame as f32 * 0.3) % TAU;
+                particles.push(Particle::spark(80.0, 35.0,
+                    angle.cos() * 0.15, angle.sin() * 0.1, "✦", col));
+            }
+        }
+        3 => {  // Shrine: blue upward particles
+            let col = (60u8, 100u8, 255u8);
+            let sx = 60.0 + (frame % 60) as f32;
+            particles.push(Particle::burst(sx, 60.0, 0.0, -0.10, "·", col, 35));
+            if frame % 24 == 0 {
+                particles.push(Particle::burst(80.0, 50.0, 0.0, -0.12, "✦", (100, 150, 255), 30));
+            }
+        }
+        4 => {  // Chaos Rift: glitching character explosions
+            let col = (
+                ((frame * 73) % 200 + 55) as u8,
+                ((frame * 37) % 200 + 55) as u8,
+                ((frame * 53) % 200 + 55) as u8,
+            );
+            let glitch = ["?","!","∞","∑","λ","░","▒","#","@","*"];
+            let ch = glitch[frame as usize % glitch.len()];
+            use std::f32::consts::TAU;
+            let angle = (frame as f32 * 0.4) % TAU;
+            particles.push(Particle::burst(80.0, 35.0,
+                angle.cos() * 0.2, angle.sin() * 0.15, ch, col, 25));
+        }
+        5 => {  // Boss room: pulsing purple/red particles
+            let pulse = (frame / 8) % 2 == 0;
+            let col = if pulse { (200u8, 20u8, 20u8) } else { (140u8, 20u8, 180u8) };
+            let bx = (frame % 140 + 10) as f32;
+            particles.push(Particle::burst(bx, 70.0, 0.0, -0.08, "▪", col, 45));
+        }
+        _ => {}
+    }
+}
+
+fn emit_boss_entrance_burst(particles: &mut Vec<Particle>, boss_id: u8, frame: u64) {
+    if particles.len() > 1700 { return; }
+    use std::f32::consts::TAU;
+    let cx = 80.0f32; let cy = 30.0f32;
+    match boss_id {
+        1 => {  // Mirror: symmetric split left and right
+            if frame % 3 == 0 {
+                let angle = (frame as f32 * 0.2) % TAU;
+                let col = (200u8, 200u8, 255u8);
+                particles.push(Particle::burst(cx - 20.0, cy, -0.2, 0.0, "◈", col, 20));
+                particles.push(Particle::burst(cx + 20.0, cy,  0.2, 0.0, "◈", col, 20));
+            }
+        }
+        3 => {  // Fibonacci Hydra: golden spiral
+            if frame % 2 == 0 {
+                let fib_angle = frame as f32 * 2.399; // golden angle
+                let r = (frame as f32 * 0.15).min(30.0);
+                let col = (255u8, 200u8, 30u8);
+                let ch = ["·","✦","*"][frame as usize % 3];
+                particles.push(Particle::burst(
+                    cx + fib_angle.cos() * r, cy + fib_angle.sin() * r * 0.5,
+                    fib_angle.cos() * 0.1, fib_angle.sin() * 0.07, ch, col, 15));
+            }
+        }
+        9 => {  // Committee: 5 clusters converging
+            if frame % 4 == 0 {
+                let col = (180u8, 80u8, 220u8);
+                for i in 0..5usize {
+                    let angle = i as f32 * TAU / 5.0;
+                    let r = 30.0 - frame as f32 * 0.4;
+                    if r < 2.0 { continue; }
+                    particles.push(Particle::burst(
+                        cx + angle.cos() * r, cy + angle.sin() * r * 0.5,
+                        -angle.cos() * 0.15, -angle.sin() * 0.1, "◆", col, 12));
+                }
+            }
+        }
+        12 => {  // Algorithm Reborn: full screen ring explosion
+            if frame % 2 == 0 {
+                let col = (
+                    ((frame * 60 + 80) % 200 + 55) as u8,
+                    ((frame * 40 + 120) % 180 + 55) as u8,
+                    ((frame * 80 + 60) % 200 + 55) as u8,
+                );
+                let angle = frame as f32 * TAU / 20.0;
+                let r = frame as f32 * 0.6;
+                if r < 70.0 {
+                    particles.push(Particle::burst(
+                        cx + angle.cos() * r, cy + angle.sin() * r * 0.5,
+                        angle.cos() * 0.25, angle.sin() * 0.15,
+                        ["*","#","@","!"][frame as usize % 4], col, 18));
+                }
+            }
+        }
+        _ => {  // Generic boss entrance: radial burst
+            if frame % 3 == 0 {
+                let col = (220u8, 40u8, 40u8);
+                let angle = (frame as f32 * 0.3) % TAU;
+                particles.push(Particle::burst(
+                    cx + angle.cos() * 15.0, cy + angle.sin() * 10.0,
+                    angle.cos() * 0.2, angle.sin() * 0.15, "☠", col, 20));
+            }
+        }
+    }
+}
+
+fn floor_transition_flavor(floor: u32) -> &'static str {
+    match floor {
+        1..=5   => "The Proof begins.",
+        6..=10  => "The cascade deepens.",
+        11..=20 => "Mathematics grows hostile.",
+        21..=30 => "Reality distorts at the edges.",
+        31..=50 => "The numbers are watching.",
+        51..=75 => "You are inside the recursion.",
+        76..=99 => "The Proof computes faster than thought.",
+        100..=149 => "Beyond mortal comprehension.",
+        150..=199 => "The engines are alive.",
+        _       => "There is no bottom to this proof.",
+    }
+}
+
 // ─── STATE ────────────────────────────────────────────────────────────────────
 
 struct State {
@@ -378,6 +586,21 @@ struct State {
     boss_turn: u32,        // turn counter within boss fight
     boss_extra: i64,       // multi-purpose state (meaning varies per boss)
     boss_extra2: i64,      // second multi-purpose state
+    // ── Smooth HP/MP display (lerped 0.0-1.0 fractions) ──
+    display_player_hp: f32,
+    display_enemy_hp: f32,
+    display_mp: f32,
+    // ── Floor transition overlay ──
+    floor_transition_timer: u32,
+    floor_transition_floor: u32,
+    // ── Boss entrance animation ──
+    boss_entrance_timer: u32,
+    boss_entrance_name: String,
+    // ── Craft operation animation ──
+    craft_anim_timer: u32,
+    craft_anim_type: u8,   // 0=none 1=reforge 2=corrupt 3=shatter 4=imbue
+    // ── Title logo particle assembly ──
+    title_logo_timer: u32, // counts down from 90 on first load; 0 = done
 }
 
 impl State {
@@ -451,6 +674,11 @@ impl State {
             daily_status: String::new(),
             daily_submitted: false,
             boss_id: None, boss_turn: 0, boss_extra: 0, boss_extra2: 0,
+            display_player_hp: 1.0, display_enemy_hp: 1.0, display_mp: 1.0,
+            floor_transition_timer: 0, floor_transition_floor: 1,
+            boss_entrance_timer: 0, boss_entrance_name: String::new(),
+            craft_anim_timer: 0, craft_anim_type: 0,
+            title_logo_timer: 90,
         }
     }
 
@@ -489,6 +717,29 @@ impl State {
             self.chaos_field.update(self.frame, self.floor_num, corruption);
             self.chaos_field.draw(ctx, bg_tuple, t.muted, t.accent,
                                   self.floor_num, corruption, self.frame);
+        }
+    }
+
+    /// Lerp display HP/MP fractions toward actual values (call once per frame from tick).
+    fn update_display_fractions(&mut self) {
+        const SPEED: f32 = 0.08;
+        const SPEED_FAST: f32 = 0.14;
+        if let Some(ref p) = self.player {
+            let target_php = p.current_hp as f32 / p.max_hp.max(1) as f32;
+            let target_mp  = self.current_mana as f32 / self.max_mana() as f32;
+            let php_diff = target_php - self.display_player_hp;
+            let mp_diff  = target_mp  - self.display_mp;
+            // Heal faster than damage (damage shows ghost bar; heal shows smooth fill)
+            let php_speed = if php_diff > 0.0 { SPEED_FAST } else { SPEED };
+            let mp_speed  = if mp_diff  > 0.0 { SPEED_FAST } else { SPEED };
+            self.display_player_hp = (self.display_player_hp + php_diff * php_speed).clamp(0.0, 1.0);
+            self.display_mp        = (self.display_mp        + mp_diff  * mp_speed ).clamp(0.0, 1.0);
+        }
+        if let Some(ref e) = self.enemy {
+            let target = e.hp as f32 / e.max_hp.max(1) as f32;
+            let diff = target - self.display_enemy_hp;
+            let speed = if diff > 0.0 { SPEED_FAST } else { SPEED };
+            self.display_enemy_hp = (self.display_enemy_hp + diff * speed).clamp(0.0, 1.0);
         }
     }
 
@@ -670,6 +921,9 @@ impl State {
                 return;
             }
             self.floor_num += 1;
+            // Trigger floor transition overlay (2.5s: 0.5s fade-in, 1.5s hold, 0.5s fade-out)
+            self.floor_transition_floor = self.floor_num;
+            self.floor_transition_timer = 150;
             self.generate_floor_for_current();
         } else {
             self.floor.as_mut().map(|f| f.advance());
@@ -1171,6 +1425,9 @@ impl State {
             cs.is_cursed = self.is_cursed_floor;
         }
         self.emit_audio(AudioEvent::BossEncounterStart { boss_tier: 3 });
+        // Trigger boss entrance animation overlay (3s)
+        self.boss_entrance_timer = 180;
+        self.boss_entrance_name = boss_name(boss_id).to_string();
         self.screen = AppScreen::Combat;
     }
 
@@ -2369,6 +2626,7 @@ impl GameState for State {
     fn tick(&mut self, ctx: &mut BTerm) {
         ctx.cls();
         self.frame += 1;
+        self.update_display_fractions();
 
         if self.auto_mode {
             self.tick_auto_play(ctx);
@@ -2440,6 +2698,129 @@ impl GameState for State {
             }
         }
 
+        // ── Floor transition overlay ──────────────────────────────────────────
+        if self.floor_transition_timer > 0 {
+            self.floor_transition_timer -= 1;
+            let t = self.theme().clone();
+            let bg = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
+            // Fade: 0..30 = fade-in, 30..120 = hold, 120..150 = fade-out
+            let elapsed = 150 - self.floor_transition_timer;
+            let alpha = if elapsed < 30 {
+                elapsed as f32 / 30.0
+            } else if self.floor_transition_timer < 30 {
+                self.floor_transition_timer as f32 / 30.0
+            } else {
+                1.0f32
+            };
+            let floor_str = format!("  FLOOR {}  ", self.floor_transition_floor);
+            let flavor = floor_transition_flavor(self.floor_transition_floor);
+            let bw = (floor_str.len().max(flavor.len() + 4) + 2) as i32;
+            let bx = (160 - bw) / 2;
+            let by = 32i32;
+            let hd_col = RGB::from_u8(
+                (t.heading.0 as f32 * alpha) as u8,
+                (t.heading.1 as f32 * alpha) as u8,
+                (t.heading.2 as f32 * alpha) as u8,
+            );
+            let ac_col = RGB::from_u8(
+                (t.accent.0 as f32 * alpha) as u8,
+                (t.accent.1 as f32 * alpha) as u8,
+                (t.accent.2 as f32 * alpha) as u8,
+            );
+            let dim_col = RGB::from_u8(
+                (t.dim.0 as f32 * alpha) as u8,
+                (t.dim.1 as f32 * alpha) as u8,
+                (t.dim.2 as f32 * alpha) as u8,
+            );
+            ctx.draw_box(bx, by, bw, 7, hd_col, bg);
+            let fx = (160 - floor_str.len() as i32) / 2;
+            ctx.print_color(fx, by + 2, hd_col, bg, &floor_str);
+            let ffx = (160 - flavor.len() as i32) / 2;
+            ctx.print_color(ffx, by + 4, ac_col, bg, flavor);
+            // Particle burst at box corners during fade-in
+            if elapsed < 30 && elapsed % 5 == 0 {
+                let ex = bx as f32; let ey = by as f32;
+                let bw2 = bw as f32;
+                for &(px, py, vx, vy) in &[
+                    (ex, ey, -0.15f32, -0.1f32), (ex + bw2, ey, 0.15, -0.1),
+                    (ex, ey + 7.0, -0.15, 0.1), (ex + bw2, ey + 7.0, 0.15, 0.1),
+                ] {
+                    self.particles.push(Particle::burst(px, py, vx, vy, "✦",
+                        (t.accent.0, t.accent.1, t.accent.2), 25));
+                }
+            }
+        }
+
+        // ── Boss entrance animation overlay ───────────────────────────────────
+        if self.boss_entrance_timer > 0 {
+            self.boss_entrance_timer -= 1;
+            let t = self.theme().clone();
+            let bg = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
+            let total = 180u32;
+            let elapsed = total - self.boss_entrance_timer;
+            // Phase 1 (0..60): blackout grows, name materializes char by char
+            // Phase 2 (60..120): hold with particle burst
+            // Phase 3 (120..180): fade out
+            let alpha = if elapsed < 30 {
+                elapsed as f32 / 30.0
+            } else if self.boss_entrance_timer < 60 {
+                (self.boss_entrance_timer as f32 / 60.0).powi(2)
+            } else {
+                1.0f32
+            };
+            let dng_col = RGB::from_u8(
+                (t.danger.0 as f32 * alpha) as u8,
+                (t.danger.1 as f32 * alpha) as u8,
+                (t.danger.2 as f32 * alpha) as u8,
+            );
+            let hd_col = RGB::from_u8(
+                (t.heading.0 as f32 * alpha) as u8,
+                (t.heading.1 as f32 * alpha) as u8,
+                (t.heading.2 as f32 * alpha) as u8,
+            );
+            // Dark vignette: overlay on top two rows and bottom two rows
+            for x in 0..160i32 {
+                ctx.set(x, 0, dng_col, bg, 219u16);
+                ctx.set(x, 79, dng_col, bg, 219u16);
+            }
+
+            // Central boss announcement box
+            let bname = &self.boss_entrance_name.clone();
+            let star_str = format!("  ★  {}  ★  ", bname);
+            let bw = (star_str.len() + 4) as i32;
+            let bx = (160 - bw) / 2;
+            let by = 29i32;
+            ctx.draw_box(bx, by, bw, 5, dng_col, bg);
+            ctx.print_color(bx + 2, by, hd_col, bg, "  BOSS ENCOUNTER  ");
+
+            // Name materializes char-by-char during phase 1
+            let chars_to_show = if elapsed < 60 {
+                (elapsed as usize * star_str.len() / 60).min(star_str.len())
+            } else {
+                star_str.len()
+            };
+            let partial: String = star_str.chars().take(chars_to_show).collect();
+            let nx = (160 - star_str.len() as i32) / 2;
+            ctx.print_color(nx, by + 2, dng_col, bg, &partial);
+
+            // Particle burst during hold phase
+            let bid = self.boss_id.unwrap_or(0);
+            emit_boss_entrance_burst(&mut self.particles, bid, elapsed as u64);
+
+            // Chaos chars around the announcement during phase 2
+            if elapsed >= 60 && elapsed < 120 {
+                let chaos_chars = ["∞","∑","λ","∂","Ω","π"];
+                for i in 0..8i32 {
+                    let cx2 = bx - 2 + i * (bw / 7 + 1);
+                    let cy_top = by - 1;
+                    let cy_bot = by + 6;
+                    let ch = chaos_chars[(elapsed as usize / 4 + i as usize) % chaos_chars.len()];
+                    ctx.print_color(cx2.max(0).min(158), cy_top, dng_col, bg, ch);
+                    ctx.print_color(cx2.max(0).min(158), cy_bot, dng_col, bg, ch);
+                }
+            }
+        }
+
         self.handle_input(ctx);
     }
 }
@@ -2502,6 +2883,50 @@ impl State {
             let gc = (t.muted.1 as f32 * (1.0 - fade) + t.dim.1 as f32 * fade * 0.4) as u8;
             let bc = (t.muted.2 as f32 * (1.0 - fade) + t.dim.2 as f32 * fade * 0.4) as u8;
             ctx.print_color(x, y, RGB::from_u8(rc, gc, bc), bg, math_chars[sym_i]);
+        }
+
+        // ── First-load title logo particle convergence ────────────────────
+        // On very first frames, particles converge from edges to form the logo
+        if self.title_logo_timer > 0 {
+            self.title_logo_timer -= 1;
+            let elapsed = 90 - self.title_logo_timer;
+            // Emit convergence particles streaming toward logo center (x=80,y=7)
+            if elapsed < 60 {
+                use std::f32::consts::TAU;
+                let num = (elapsed as usize / 3 + 1).min(8);
+                for i in 0..num {
+                    let angle = (i as f32 * TAU / num as f32) + elapsed as f32 * 0.1;
+                    let r = 50.0 - elapsed as f32 * 0.6;
+                    let r = r.max(2.0);
+                    let spd = 0.5 + i as f32 * 0.05;
+                    let chaos_str = ["C","H","A","O","S","R","P","G"];
+                    let col_pal = [
+                        (t.heading.0, t.heading.1, t.heading.2),
+                        (t.accent.0, t.accent.1, t.accent.2),
+                        (t.gold.0, t.gold.1, t.gold.2),
+                    ];
+                    let col = col_pal[i % col_pal.len()];
+                    self.particles.push(Particle::burst(
+                        80.0 + angle.cos() * r, 7.0 + angle.sin() * r * 0.4,
+                        -angle.cos() * spd * 0.08, -angle.sin() * spd * 0.05,
+                        chaos_str[i % chaos_str.len()], col, 30));
+                }
+            }
+            // Flash explosion burst when particles arrive
+            if elapsed == 60 {
+                use std::f32::consts::TAU;
+                for i in 0..32usize {
+                    let angle = i as f32 * TAU / 32.0;
+                    let col = if i % 3 == 0 {
+                        (t.heading.0, t.heading.1, t.heading.2)
+                    } else {
+                        (t.accent.0, t.accent.1, t.accent.2)
+                    };
+                    self.particles.push(Particle::spark(80.0, 7.0,
+                        angle.cos() * 0.3, angle.sin() * 0.15,
+                        ["✦","★","·","*"][i % 4], col));
+                }
+            }
         }
 
         // ── Animated banner pulse — centered in 160-col screen ────────────
@@ -2569,6 +2994,18 @@ impl State {
         let tname = format!(" {} [T] ", t.name);
         ctx.print_color(158 - tname.len() as i32, 76, muted, bg, &tname);
         ctx.print_color(4, 76, muted, bg, &format!("\"{}\"", t.tagline));
+
+        // ── Title screen particle render ───────────────────────────────────
+        for p in &mut self.particles { p.step(); }
+        self.particles.retain(|p| p.alive());
+        if self.config.visuals.enable_particles {
+            for p in &self.particles {
+                let rc = p.render_col();
+                let px = p.x as i32; let py = p.y as i32;
+                if py < 2 || py > 78 || px < 1 || px > 158 { continue; }
+                ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
+            }
+        }
     }
 
     // ── MODE SELECT ───────────────────────────────────────────────────────────
@@ -3125,6 +3562,19 @@ impl State {
                              else if i < floor.current_room { MinimapState::Visited }
                              else { MinimapState::Ahead };
                 draw_minimap_cell(ctx, rx, ry, mstate, rc, sym, &t);
+                // Current room: pulsing bright border highlight
+                if i == floor.current_room {
+                    let pulse = ((self.frame as f32 * 0.06).sin() * 0.4 + 0.6) as f32;
+                    let pr = (rc.0 as f32 * pulse).min(255.0) as u8;
+                    let pg = (rc.1 as f32 * pulse).min(255.0) as u8;
+                    let pb = (rc.2 as f32 * pulse).min(255.0) as u8;
+                    ctx.print_color(rx - 1, ry, RGB::from_u8(pr, pg, pb), bg, "▶");
+                }
+                // Next room(s): subtle path glow
+                if i == floor.current_room + 1 && i < floor.rooms.len() {
+                    let path_col = RGB::from_u8(t.dim.0.saturating_add(30), t.dim.1.saturating_add(30), t.dim.2.saturating_add(30));
+                    ctx.print_color(rx - 1, ry, path_col, bg, "·");
+                }
             }
             let current = floor.current();
             let rc = room_col(&current.room_type, &t);
@@ -3134,6 +3584,32 @@ impl State {
                     current.room_type.icon().trim_matches(|c| c == '[' || c == ']'),
                     current.room_type.name(),
                     &current.description.chars().take(120).collect::<String>()));
+
+            // Room-type ambient particles for current room
+            let rt_id: u8 = match current.room_type {
+                RoomType::Shrine        => 3,
+                RoomType::ChaosRift     => 4,
+                RoomType::Treasure      => 2,
+                RoomType::Boss          => 5,
+                RoomType::Combat        => 1,
+                _                       => 0,
+            };
+            if rt_id > 0 {
+                emit_room_ambient(&mut self.particles, self.frame,
+                    self.floor_seed.wrapping_add(self.floor_num as u64 * 31), rt_id);
+            }
+        }
+
+        // ── Particle render pass ──────────────────────────────────────────────
+        for p in &mut self.particles { p.step(); }
+        self.particles.retain(|p| p.alive());
+        if self.config.visuals.enable_particles {
+            for p in &self.particles {
+                let rc = p.render_col();
+                let px = p.x as i32; let py = p.y as i32;
+                if py < 3 || py > 78 || px < 1 || px > 158 { continue; }
+                ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
+            }
         }
 
         // ── Chaos / Misery alert row ──────────────────────────────────────────
@@ -3255,6 +3731,32 @@ impl State {
         if !has_item && !has_spell && !is_portal {
             print_hint(ctx, 8, ay, "[Enter]", " Continue", &t);
         }
+
+        // Room-type ambient particle effects
+        let rt_id: u8 = {
+            let title = &self.room_event.title;
+            if title.contains("Shrine")   { 3 }
+            else if title.contains("Rift") || title.contains("Chaos") { 4 }
+            else if title.contains("Treasure") || title.contains("Chest") || title.contains("LOOT") { 2 }
+            else if title.contains("Portal") { 3 }
+            else { 0 }
+        };
+        if rt_id > 0 {
+            emit_room_ambient(&mut self.particles, self.frame,
+                self.floor_seed.wrapping_add(self.floor_num as u64 * 137), rt_id);
+        }
+        // Render particles (room view shares same particle system)
+        let bg_rgb = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
+        for p in &mut self.particles { p.step(); }
+        self.particles.retain(|p| p.alive());
+        if self.config.visuals.enable_particles {
+            for p in &self.particles {
+                let rc = p.render_col();
+                let px = p.x as i32; let py = p.y as i32;
+                if py < 3 || py > 67 || px < 3 || px > 156 { continue; }
+                ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg_rgb, &p.text);
+            }
+        }
     }
 
     // ── COMBAT ────────────────────────────────────────────────────────────────
@@ -3305,13 +3807,15 @@ impl State {
         if self.config.visuals.enable_hp_ghost && self.ghost_enemy_timer > 0 {
             self.ghost_enemy_timer = self.ghost_enemy_timer.saturating_sub(1);
             let ghost_fill = (self.ghost_enemy_hp * 74.0) as i32;
-            let cur_fill = (ep * 74.0) as i32;
+            let disp_fill = (self.display_enemy_hp * 74.0) as i32;
             let ghost_col = RGB::from_u8(t.danger.0 / 3, t.danger.1 / 3, t.danger.2 / 3);
-            for gx in cur_fill..ghost_fill {
+            for gx in disp_fill..ghost_fill {
                 ctx.set(3 + gx, 6, ghost_col, RGB::from_u8(t.bg.0, t.bg.1, t.bg.2), 177u16);
             }
         }
-        draw_bar_gradient(ctx, 3, 6, 74, ehp, emhp, ec, t.muted, &t);
+        // Use smooth display fraction for bar (lerped toward actual HP)
+        let disp_ehp = (self.display_enemy_hp * emhp as f32) as i64;
+        draw_bar_gradient(ctx, 3, 6, 74, disp_ehp, emhp, ec, t.muted, &t);
 
         // Sprite — now 20 lines tall
         for (i, line) in esprite.lines().enumerate().take(20) {
@@ -3327,19 +3831,24 @@ impl State {
         let pp = php as f32 / pmhp.max(1) as f32;
         let pc = t.hp_color(pp);
         stat_line(ctx, 83, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
-        // Player ghost bar
+        // Player ghost bar (overhang showing recent damage taken)
         if self.config.visuals.enable_hp_ghost && self.ghost_player_timer > 0 {
             self.ghost_player_timer = self.ghost_player_timer.saturating_sub(1);
             let ghost_fill = (self.ghost_player_hp * 73.0) as i32;
-            let cur_fill = (pp * 73.0) as i32;
+            let disp_fill = (self.display_player_hp * 73.0) as i32;
             let ghost_col = RGB::from_u8(t.danger.0 / 3, t.danger.1 / 3, t.danger.2 / 3);
-            for gx in cur_fill..ghost_fill {
+            for gx in disp_fill..ghost_fill {
                 ctx.set(83 + gx, 6, ghost_col, RGB::from_u8(t.bg.0, t.bg.1, t.bg.2), 177u16);
             }
         }
-        draw_bar_gradient(ctx, 83, 6, 73, php, pmhp, pc, t.muted, &t);
-        stat_line(ctx, 83, 7, "MP ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
-        draw_bar_solid(ctx, 83, 8, 73, self.current_mana, self.max_mana(), t.mana, &t);
+        // Smooth display HP bar
+        let disp_php = (self.display_player_hp * pmhp as f32) as i64;
+        draw_bar_gradient(ctx, 83, 6, 73, disp_php, pmhp, pc, t.muted, &t);
+        // Smooth display MP bar
+        let max_mp = self.max_mana();
+        let disp_mp = (self.display_mp * max_mp as f32) as i64;
+        stat_line(ctx, 83, 7, "MP ", &format!("{}/{}", self.current_mana, max_mp), t.mana, &t);
+        draw_bar_solid(ctx, 83, 8, 73, disp_mp, max_mp, t.mana, &t);
         // ── Status effect icons with per-effect flicker ──────────────────────
         if let Some(ref p) = self.player {
             use chaos_rpg_core::character::StatusEffect;
@@ -3375,6 +3884,57 @@ impl State {
         }
         if self.is_cursed_floor {
             ctx.print_color(83, 11, dng, bg, "☠ CURSED FLOOR — all engines inverted");
+        }
+
+        // ── Status-effect ambient particles ───────────────────────────────────
+        // Player status effects → right panel (x≈120, y≈18)
+        if let Some(ref p) = self.player.clone() {
+            use chaos_rpg_core::character::StatusEffect;
+            let mut flags = 0u32;
+            let mut has_stun = false;
+            for effect in &p.status_effects {
+                match effect {
+                    StatusEffect::Burning(_)       => flags |= 1,
+                    StatusEffect::Frozen(_)        => flags |= 2,
+                    StatusEffect::Poisoned(_)      => flags |= 4,
+                    StatusEffect::DimensionalBleed(_) => flags |= 8,
+                    StatusEffect::Stunned(_)       => has_stun = true,
+                    StatusEffect::Regenerating(_)  => flags |= 32,
+                    _ => {}
+                }
+            }
+            if flags != 0 {
+                emit_status_ambient(&mut self.particles, 120.0, 18.0, self.frame, flags);
+            }
+            if has_stun {
+                emit_stun_orbit(&mut self.particles, 120.0, 18.0, self.frame);
+            }
+        }
+        // Enemy ambient: emit floor_ability-based particles in enemy panel
+        if let Some(ref e) = self.enemy {
+            use chaos_rpg_core::enemy::FloorAbility;
+            let eff_col = match e.floor_ability {
+                FloorAbility::EngineTheft  => Some((180u8, 60u8, 255u8)),
+                FloorAbility::NullifyAura  => Some((60u8, 60u8, 60u8)),
+                FloorAbility::StatMirror   => Some((160u8, 160u8, 255u8)),
+                FloorAbility::None         => None,
+            };
+            if let Some(col) = eff_col {
+                let frame = self.frame;
+                if frame % 6 == 0 {
+                    self.particles.push(Particle::burst(
+                        40.0 + (frame % 5) as f32 - 2.0, 12.0,
+                        0.0, -0.07, "·", col, 20));
+                }
+            }
+        }
+        // Room-type ambient particles
+        {
+            let rt_id: u8 = if self.is_boss_fight { 5 }
+                else if self.gauntlet_stage > 0 { 5 }
+                else { 1 }; // normal combat
+            emit_room_ambient(&mut self.particles, self.frame,
+                self.floor_seed.wrapping_add(self.floor_num as u64), rt_id);
         }
 
         // Spells — now shows all 8 with full names
@@ -3598,7 +4158,7 @@ impl State {
             if self.chaos_viz_open { "[V] Close Engine Viz" } else { "[V] Engine Viz" });
     }
 
-    fn draw_boss_visual_overlay(&self, ctx: &mut BTerm, bg: RGB) {
+    fn draw_boss_visual_overlay(&mut self, ctx: &mut BTerm, bg: RGB) {
         let Some(bid) = self.boss_id else { return; };
         let t = self.theme().clone();
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -3609,6 +4169,133 @@ impl State {
         let muted = RGB::from_u8(t.muted.0, t.muted.1,   t.muted.2);
 
         match bid {
+            // Boss 1 — THE MIRROR: symmetry indicator + reflected stat bars
+            1 => {
+                // Draw a vertical split-line at center with "mirror" label
+                let pulse = (self.frame / 10) % 2 == 0;
+                let mirror_col = if pulse { RGB::from_u8(200, 200, 255) } else { RGB::from_u8(100, 100, 180) };
+                ctx.print_color(78, 3, mirror_col, bg, "◈ MIRROR ◈");
+                ctx.print_color(78, 4, muted, bg, "Reflect");
+                for y in 5..37i32 {
+                    let ch = if y % 3 == 0 { "║" } else { "│" };
+                    ctx.print_color(79, y, mirror_col, bg, ch);
+                }
+                // "Same HP as you" — warn bar
+                let flip = (self.frame / 20) % 2 == 0;
+                if flip {
+                    ctx.print_color(3, 37, RGB::from_u8(160, 160, 255), bg,
+                        "[ MIRROR: reflects your own power — find the asymmetry ]");
+                }
+            }
+
+            // Boss 2 — THE ACCOUNTANT: live ledger HUD
+            2 => {
+                let lifetime_dmg = self.player.as_ref().map(|p| p.total_damage_dealt).unwrap_or(0);
+                let fight_dmg = self.boss_extra;
+                let defends = self.boss_extra2;
+                let reduction = (defends * 20).min(80);
+                let bill_est = ((lifetime_dmg + fight_dmg) as f64 * (1.0 - reduction as f64 / 100.0)) as i64;
+                ctx.print_color(3, 37, gld, bg, &format!(
+                    "LEDGER: fight={} lifetime={} defends={}×20%={reduction}% off → BILL≈{}",
+                    fight_dmg, lifetime_dmg, defends, bill_est).chars().take(155).collect::<String>());
+                // Turns remaining bar
+                let turns_left = 5i32 - self.boss_turn as i32;
+                let tl = turns_left.max(0);
+                for i in 0..5i32 {
+                    let col = if i < tl { gld } else { dng };
+                    ctx.print_color(3 + i * 15, 38, col, bg,
+                        if i < tl { "[TURN]" } else { "[BILL!]" });
+                }
+            }
+
+            // Boss 3 — FIBONACCI HYDRA: split counter + sequence display
+            3 => {
+                let splits = self.boss_extra as usize;
+                let fib_seq = [1u64, 1, 2, 3, 5, 8, 13];
+                let current_hp_mult = fib_seq.get(splits).copied().unwrap_or(1);
+                ctx.print_color(3, 37, gld, bg, &format!(
+                    "HYDRA SPLITS: {}/10  Next split adds {} heads  (Fib: 1,1,2,3,5,8,13…)",
+                    splits, current_hp_mult));
+                // Growing sequence bar
+                for i in 0..splits.min(10) {
+                    let col = if i < 5 { gld } else { dng };
+                    ctx.print_color(3 + i as i32 * 7, 38, col, bg, &format!("[×{}]",
+                        fib_seq.get(i).copied().unwrap_or(1)));
+                }
+                // Flash on split (every other frame when splits > 0)
+                if splits > 0 && (self.frame / 8) % 2 == 0 {
+                    ctx.print_color(58, 37, RGB::from_u8(255, 200, 30), bg, "⟶ SPLIT ⟶");
+                }
+            }
+
+            // Boss 5 — THE TAXMAN: tax bracket + HP drain indicator
+            5 => {
+                let ehp = self.enemy.as_ref().map(|e| e.hp).unwrap_or(0);
+                let tax = ((ehp as f64 * 0.01) as i64).max(1);
+                let pulse = (self.frame / 6) % 2 == 0;
+                let tax_col = if pulse { gld } else { RGB::from_u8(200, 180, 20) };
+                ctx.print_color(3, 37, tax_col, bg, &format!(
+                    "TAXMAN: 1% HP drain/turn = {} dmg  (Turn {}) — [D] Defend halves it",
+                    tax, self.boss_turn));
+                // Gold drain particle: stream left-to-right on row 38
+                let stream_x = ((self.frame * 3) % 150) as i32 + 3;
+                let stream_col = RGB::from_u8(220, 180, 30);
+                ctx.print_color(stream_x, 38, stream_col, bg, "¢");
+                ctx.print_color((stream_x + 20).min(155), 38, stream_col, bg, "¢");
+                ctx.print_color((stream_x + 40).min(155), 38, stream_col, bg, "¢");
+            }
+
+            // Boss 7 — OUROBOROS: circular ring phase indicator
+            7 => {
+                let boss_hp = self.enemy.as_ref().map(|e| e.hp).unwrap_or(0);
+                let max_hp  = self.boss_extra;
+                let cycle_turn = self.boss_turn % 3;
+                let turns_to_reset = 3 - cycle_turn;
+                ctx.print_color(3, 37, RGB::from_u8(100, 220, 100), bg, &format!(
+                    "OUROBOROS: Heals to full every 3 turns — {}/3 until reset  HP: {}",
+                    cycle_turn, boss_hp));
+                // Serpent ring visual: circular arc fills as turn approaches
+                use std::f32::consts::TAU;
+                let cx = 72i32; let cy = 38i32;
+                let r = 4;
+                let filled_angle = cycle_turn as f32 / 3.0 * TAU;
+                for seg in 0..24usize {
+                    let angle = seg as f32 * TAU / 24.0;
+                    let on = angle <= filled_angle;
+                    let col = if on { RGB::from_u8(80, 200, 80) } else { muted };
+                    let sx = cx + (angle.cos() * r as f32 * 2.0) as i32;
+                    let sy = cy + (angle.sin() * r as f32) as i32;
+                    if sx >= 0 && sx < 160 && sy >= 0 && sy < 79 {
+                        ctx.print_color(sx, sy, col, bg, if on { "●" } else { "○" });
+                    }
+                }
+            }
+
+            // Boss 8 — COLLATZ TITAN: sequence display + next value
+            8 => {
+                let n = self.boss_extra;
+                let next = if n % 2 == 0 { n / 2 } else { n * 3 + 1 };
+                let next2 = if next % 2 == 0 { next / 2 } else { next * 3 + 1 };
+                let at_min = n <= 4;
+                let seq_col = if at_min { dng } else if n < 20 { gld } else { muted };
+                ctx.print_color(3, 37, seq_col, bg, &format!(
+                    "COLLATZ: HP={n}  → {next}  → {next2}   {}",
+                    if at_min { "★ ATTACK NOW — at minimum!" }
+                    else if n % 2 == 0 { "(even: halving next)" }
+                    else { "(odd: tripling next!)" }));
+                // Countdown bar: flashes at 1/2/4
+                let bar_n = (n as f32 / 100.0).clamp(0.0, 1.0);
+                let bar_filled = (bar_n * 74.0) as i32;
+                for x in 0..74i32 {
+                    let c = if x < bar_filled { seq_col } else { muted };
+                    ctx.set(3 + x, 38, c, bg, if x < bar_filled { 219u16 } else { 176u16 });
+                }
+                // Flash warning on odd turns (about to triple)
+                if n % 2 != 0 && (self.frame / 8) % 2 == 0 {
+                    ctx.print_color(78, 37, dng, bg, "  ▲ TRIPLE ▲");
+                }
+            }
+
             // Boss 4 — THE EIGENSTATE: flicker between 1HP and 10000HP visual
             4 if self.config.visuals.enable_eigenstate_flicker => {
                 let flicker = (self.frame / 3) % 2 == 0;
@@ -3695,14 +4382,83 @@ impl State {
                     _ => dng,
                 };
                 ctx.print_color(40, 3, phase_col, bg, phase_str);
-                // Chaos field forms "I SEE YOU" in phase 3 (spelled out in combat log hint)
-                if phase == 3 && (self.frame / 60) % 8 == 0 {
-                    let flash = RGB::from_u8(
-                        t.danger.0 / 2,
-                        t.danger.1 / 2,
-                        t.danger.2 / 2,
-                    );
-                    ctx.print_color(60, 37, flash, bg, "I  S E E  Y O U");
+
+                // Phase 1: chaos field "spells" the player's name letter by letter
+                if phase == 1 {
+                    let pname = self.player.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+                    let name_chars: Vec<char> = pname.chars().collect();
+                    let reveal = ((self.frame / 15) as usize).min(name_chars.len());
+                    if !name_chars.is_empty() {
+                        let partial: String = name_chars[..reveal].iter().collect();
+                        let nx = 80 - (name_chars.len() as i32) / 2;
+                        ctx.print_color(nx, 37, RGB::from_u8(60, 60, 80), bg,
+                            &format!("{}_", partial));
+                        // After full reveal: flash it
+                        if reveal == name_chars.len() && (self.frame / 20) % 2 == 0 {
+                            ctx.print_color(nx - 2, 37, ac, bg,
+                                &format!("[ {} ]", pname));
+                        }
+                    }
+                }
+
+                // Phase 2: pulsing border adaptation overlay
+                if phase == 2 {
+                    let adapt_chars = ["∇","∂","∑","∫","∏","λ"];
+                    for i in 0..8i32 {
+                        let ch = adapt_chars[((self.frame / 4 + i as u64) as usize) % adapt_chars.len()];
+                        let ax = 2 + i * 19;
+                        ctx.print_color(ax, 37, gld, bg, ch);
+                    }
+                    ctx.print_color(3, 38, muted, bg, "The Algorithm is adapting to your strategy…");
+                }
+
+                // Phase 3: "I SEE YOU" escalating overlay — particle formation + border pulse
+                if phase == 3 {
+                    // Multi-layer "I SEE YOU" at different brightness/positions
+                    let isy = [
+                        (3i32,   37i32, (t.danger.0,     t.danger.1,     t.danger.2)),
+                        (55,     25,    (t.danger.0/2,   t.danger.1/2,   t.danger.2/2)),
+                        (100,    45,    (t.danger.0/3,   t.danger.1/3,   t.danger.2/3)),
+                        (20,     55,    (t.danger.0/4,   t.danger.1/4,   t.danger.2/4)),
+                    ];
+                    for &(x, y, col) in &isy {
+                        let show = (self.frame / 8 + x as u64) % 4 < 3;
+                        if show {
+                            ctx.print_color(x, y, RGB::from_u8(col.0, col.1, col.2), bg,
+                                "I  S E E  Y O U");
+                        }
+                    }
+                    // Borders pulse in danger color cycle
+                    let border_phase = (self.frame / 4) % 3;
+                    let bpulse_col = match border_phase {
+                        0 => RGB::from_u8(t.danger.0, 0, 0),
+                        1 => RGB::from_u8(t.danger.0/2, 0, t.danger.2/2),
+                        _ => RGB::from_u8(0, 0, t.danger.2),
+                    };
+                    ctx.draw_box(1, 2, 78, 36, bpulse_col, bg);
+                    ctx.draw_box(81, 2, 77, 36, bpulse_col, bg);
+                    // Glitch text on enemy name row
+                    let glitch_chars = ["#","@","!","?","∞","*","λ","∂"];
+                    for gx in 3..35i32 {
+                        if ((gx as u64 + self.frame * 7) % 23) < 3 {
+                            let gc = glitch_chars[(gx as u64 + self.frame) as usize % glitch_chars.len()];
+                            ctx.print_color(gx, 4, dng, bg, gc);
+                        }
+                    }
+                    // Particle formation: particles converge toward "I SEE YOU" positions
+                    if self.frame % 6 == 0 && self.particles.len() < 1800 {
+                        use std::f32::consts::TAU;
+                        let angle = (self.frame as f32 * 0.5) % TAU;
+                        let r = 40.0f32;
+                        let col = (t.danger.0, t.danger.1, t.danger.2);
+                        let targets = [(11.0f32, 37.0f32), (55.0, 25.0), (100.0, 45.0)];
+                        let target = targets[((self.frame / 30) as usize) % 3];
+                        let px = target.0 + angle.cos() * r;
+                        let py = target.1 + angle.sin() * r * 0.5;
+                        let vx = (target.0 - px) * 0.04;
+                        let vy = (target.1 - py) * 0.04;
+                        self.particles.push(Particle::burst(px, py, vx, vy, "·", col, 25));
+                    }
                 }
             }
 
@@ -4051,6 +4807,77 @@ impl State {
                 print_hint(ctx, 43, 75, "Esc", " Back", &t);
             }
         }
+
+        // ── Craft animation overlay ────────────────────────────────────────
+        if self.craft_anim_timer > 0 {
+            self.craft_anim_timer -= 1;
+            let elapsed = 40 - self.craft_anim_timer;
+            let alpha = if elapsed < 10 {
+                elapsed as f32 / 10.0
+            } else if self.craft_anim_timer < 10 {
+                self.craft_anim_timer as f32 / 10.0
+            } else { 1.0 };
+            let bg_rgb = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
+            match self.craft_anim_type {
+                1 => {  // Reforge: item text dissolves into particles then reassembles
+                    let pulse = (elapsed % 4) < 2;
+                    let col = RGB::from_u8(
+                        (t.accent.0 as f32 * alpha) as u8,
+                        (t.accent.1 as f32 * alpha) as u8,
+                        (t.accent.2 as f32 * alpha) as u8,
+                    );
+                    let dissolve_chars = ["░","▒","▓","█","▓","▒","░"];
+                    for i in 0..8i32 {
+                        let dc = dissolve_chars[(elapsed as usize + i as usize) % dissolve_chars.len()];
+                        ctx.print_color(82 + i * 2, 5, col, bg_rgb, dc);
+                    }
+                    if elapsed >= 20 {
+                        let reassemble_chars = ["*","+","·","✦","★"];
+                        for i in 0..5i32 {
+                            if (elapsed as usize - 20) >= i as usize * 4 {
+                                ctx.print_color(82 + i * 3, 5, col, bg_rgb,
+                                    reassemble_chars[i as usize % reassemble_chars.len()]);
+                            }
+                        }
+                    }
+                    // Spray particles during middle of animation
+                    if elapsed > 5 && elapsed < 30 && self.frame % 3 == 0 {
+                        let col_t = (t.accent.0, t.accent.1, t.accent.2);
+                        for i in 0..4usize {
+                            use std::f32::consts::TAU;
+                            let angle = (i as f32 * TAU / 4.0) + elapsed as f32 * 0.3;
+                            self.particles.push(Particle::spark(
+                                90.0, 5.0, angle.cos() * 0.2, angle.sin() * 0.12,
+                                ["·","*","+"][i % 3], col_t));
+                        }
+                    }
+                }
+                2 => {  // Corrupt: screen shake + glitch text overlay
+                    let glitch_chars = ["?","!","#","@","∞","∑","λ"];
+                    for i in 0..12i32 {
+                        let gx = 82 + (i * 13 + elapsed as i32 * 7) % 70;
+                        let gy = 5 + (i * 7 + elapsed as i32 * 3) % 8;
+                        let gc = glitch_chars[(elapsed as usize + i as usize * 3) % glitch_chars.len()];
+                        let gc_col = RGB::from_u8(
+                            ((t.danger.0 as f32) * alpha) as u8,
+                            ((t.danger.1 as f32) * alpha * 0.3) as u8,
+                            ((t.danger.2 as f32) * alpha * 0.8) as u8,
+                        );
+                        ctx.print_color(gx.clamp(82, 155), gy.clamp(3, 68), gc_col, bg_rgb, gc);
+                    }
+                }
+                3 => {  // Shatter: characters explode outward
+                    let col_t = (t.danger.0, t.danger.1, t.danger.2);
+                    if elapsed < 5 && self.frame % 2 == 0 {
+                        emit_death_explosion(&mut self.particles, 90.0, 35.0, col_t);
+                    }
+                    let shard_col = RGB::from_u8(
+                        (t.danger.0 as f32 * alpha) as u8, 0, 0);
+                    ctx.print_color(82, 5, shard_col, bg_rgb, "[ SHATTERED ]");
+                }
+                _ => {}
+            }
+        }
     }
 
     // ── CHARACTER SHEET ───────────────────────────────────────────────────────
@@ -4089,11 +4916,30 @@ impl State {
             ("Luck",      p.stats.luck),
         ];
         for (i, (name, val)) in stats.iter().enumerate() {
-            // stat_line/draw_bar_solid take (u8,u8,u8) tuples
-            let col = if *val < 0 { t.danger } else if *val >= 50 { t.gold } else { t.heading };
+            // Animated stat color: high stats pulse brighter, low stats jitter red
+            let base_col = if *val < 0 { t.danger } else if *val >= 50 { t.gold } else { t.heading };
+            let col = if *val >= 80 {
+                // Very high: rainbow shimmer
+                let pal = [(220u8,180u8,40u8),(60,220,80),(80,200,220),(80,80,220),(180,60,200),(220,60,60)];
+                pal[((self.frame / 8 + i as u64) as usize) % pal.len()]
+            } else if *val >= 50 {
+                // High: gold pulse
+                let bright = (self.frame / 12) % 2 == 0;
+                if bright { t.gold } else { (t.gold.0/2 + 30, t.gold.1/2 + 20, 10) }
+            } else if *val < 0 {
+                // Negative: jitter red
+                let jitter = (self.frame / 5 + i as u64) % 4 < 2;
+                if jitter { t.danger } else { (t.danger.0/2, 0, 0) }
+            } else { base_col };
             stat_line(ctx, 3, 5 + i as i32 * 2, name, &format!("{:+}", val), col, &t);
             let bar_val = (*val).max(0).min(100);
             draw_bar_solid(ctx, 3, 6 + i as i32 * 2, 20, bar_val, 100, col, &t);
+            // Sparkle on very high stat
+            if *val >= 70 && self.frame % 20 == (i as u64 * 4) % 20 {
+                self.particles.push(Particle::spark(
+                    23.0, (5 + i as i32 * 2) as f32,
+                    0.05, -0.08, "✦", col));
+            }
         }
 
         // Power tier
@@ -4113,7 +4959,22 @@ impl State {
             }
         } else { tier_rgb };
         let (plabel, pval) = p.power_display();
-        stat_line(ctx, 3, 20, &format!("{}: ", plabel), &pval, tier_col, &t);
+        // THE VOID tier: glitch random char substitution
+        use chaos_rpg_core::power_tier::TierEffect as TierFx;
+        let display_val = if tier.has_effect() && matches!(tier.effect(), TierFx::Flash) {
+            // Flash = THE VOID: randomly glitch characters
+            let glitch_chars = ["?","#","@","!","∞","∑","λ","░","▒"];
+            let chars: Vec<char> = pval.chars().collect();
+            chars.iter().map(|&c| {
+                let r = (c as u64 * 31 + self.frame * 7) % 100;
+                if r < 20 {
+                    glitch_chars[(c as u64 + self.frame) as usize % glitch_chars.len()].to_string()
+                } else {
+                    c.to_string()
+                }
+            }).collect::<String>()
+        } else { pval };
+        stat_line(ctx, 3, 20, &format!("{}: ", plabel), &display_val, tier_col, &t);
         // Tier flavor text (truncated to fit inner width)
         let flavor = tier.flavor();
         let flavor_short: String = flavor.chars().take(21).collect();
@@ -4267,6 +5128,18 @@ impl State {
         print_hint(ctx, 20, 73, "[P]", " Full Tree  ", &t);
         print_hint(ctx, 36, 73, "[B]", " Body  ", &t);
         print_hint(ctx, 47, 73, "[Esc]", " Back", &t);
+
+        // Render stat sparkle particles
+        for p in &mut self.particles { p.step(); }
+        self.particles.retain(|p| p.alive());
+        if self.config.visuals.enable_particles {
+            for p in &self.particles {
+                let rc = p.render_col();
+                let px = p.x as i32; let py = p.y as i32;
+                if py < 3 || py > 72 || px < 2 || px > 157 { continue; }
+                ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
+            }
+        }
     }
 
     // ── TUTORIAL ─────────────────────────────────────────────────────────────
@@ -4551,6 +5424,18 @@ impl State {
         print_hint(ctx, 22, 75, "[PgUp/PgDn]", " Page  ", &t);
         if sp > 0 { print_hint(ctx, 46, 75, "[N]", " Auto-allocate all points  ", &t); }
         print_hint(ctx, 2,  76, "[Esc/C]", " Back to Sheet", &t);
+
+        // Render allocation burst particles
+        for p in &mut self.particles { p.step(); }
+        self.particles.retain(|p| p.alive());
+        if self.config.visuals.enable_particles {
+            for p in &self.particles {
+                let rc = p.render_col();
+                let px = p.x as i32; let py = p.y as i32;
+                if py < 3 || py > 73 || px < 2 || px > 157 { continue; }
+                ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
+            }
+        }
     }
 
     // ── BODY CHART ────────────────────────────────────────────────────────────
@@ -5506,6 +6391,8 @@ impl State {
                             let msgs = p.auto_allocate_passives(seed);
                             for m in msgs { self.combat_log.push(m); }
                             self.passive_scroll = 0;
+                            // Allocation burst particles
+                            emit_level_up_fountain(&mut self.particles, 80.0, 40.0);
                         }
                     }
                 }
@@ -5649,6 +6536,7 @@ impl State {
                         p.inventory[idx].stat_modifiers.push(StatModifier::generate_random(ms));
                     }
                     self.craft_message = format!("REFORGED! {} modifiers chaos-rolled anew.", n);
+                    self.craft_anim_timer = 40; self.craft_anim_type = 1;
                 }
             }
             1 => { // Augment
@@ -5740,6 +6628,7 @@ impl State {
                         _ => { item.is_weapon = !item.is_weapon; format!("[{}] transmogrified!", tag) }
                     };
                     self.craft_message = result;
+                    self.craft_anim_timer = 40; self.craft_anim_type = 2;
                     self.achievements.check_event("corrupt_used", 1);
                     if risk == 2 { self.achievements.check_event("corrupt_used", 5); }
                     self.achievements.save();
@@ -5796,6 +6685,7 @@ impl State {
                     } else {
                         self.craft_message = format!("SHATTERED {}! (No mods to scatter.)", name);
                     }
+                    self.craft_anim_timer = 40; self.craft_anim_type = 3;
                     self.craft_phase = CraftPhase::SelectItem;
                 }
             }
