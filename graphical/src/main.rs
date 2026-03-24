@@ -28,12 +28,14 @@ use chaos_rpg_core::{
     daily_leaderboard::{LocalDailyStore, DailyEntry, LeaderboardRow, submit_score, fetch_scores},
 };
 
+mod chaos_field;
 mod renderer;
 mod sprites;
 mod theme;
 mod ui_overlay;
 mod visual_config;
 use visual_config as vc;
+use chaos_field::ChaosField;
 
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
 
@@ -147,8 +149,12 @@ impl RoomEvent {
 
 #[derive(Clone)]
 struct Particle {
-    x: i32,
+    x: f32,
     y: f32,
+    vx: f32,
+    vy: f32,
+    friction: f32,  // velocity multiplier per frame (1.0 = no friction, 0.85 = high)
+    gravity: f32,   // added to vy each frame
     text: String,
     col: (u8, u8, u8),
     age: u32,
@@ -156,21 +162,106 @@ struct Particle {
 }
 
 impl Particle {
+    /// Simple float-up particle (existing API, backwards-compatible).
     fn new(x: i32, y: i32, text: impl Into<String>, col: (u8,u8,u8), lifetime: u32) -> Self {
-        Self { x, y: y as f32, text: text.into(), col, age: 0, lifetime }
+        Self {
+            x: x as f32, y: y as f32,
+            vx: 0.0, vy: -visual_config::PARTICLE_DRIFT,
+            friction: 1.0, gravity: 0.0,
+            text: text.into(), col, age: 0, lifetime,
+        }
+    }
+    /// Burst/explode particle with velocity.
+    fn burst(x: f32, y: f32, vx: f32, vy: f32,
+             text: impl Into<String>, col: (u8,u8,u8), lifetime: u32) -> Self {
+        Self { x, y, vx, vy, friction: 0.90, gravity: 0.04,
+               text: text.into(), col, age: 0, lifetime }
+    }
+    /// Fast spark: high friction, short life.
+    fn spark(x: f32, y: f32, vx: f32, vy: f32, text: &'static str, col: (u8,u8,u8)) -> Self {
+        Self { x, y, vx, vy, friction: 0.82, gravity: 0.06,
+               text: text.to_string(), col, age: 0, lifetime: 18 }
     }
     fn alive(&self) -> bool { self.age < self.lifetime }
-    fn step(&mut self) { self.age += 1; self.y -= visual_config::PARTICLE_DRIFT; }
-    /// Dim color in the last 30% of lifetime.
+    fn step(&mut self) {
+        self.age += 1;
+        self.x += self.vx;
+        self.y += self.vy;
+        self.vx *= self.friction;
+        self.vy = self.vy * self.friction + self.gravity;
+    }
+    /// Dim color in the last 40% of lifetime.
     fn render_col(&self) -> (u8, u8, u8) {
         let fade_at = (self.lifetime as f32 * visual_config::PARTICLE_FADE_START) as u32;
         if self.age <= fade_at { return self.col; }
         let pct = 1.0 - (self.age - fade_at) as f32 / (self.lifetime - fade_at).max(1) as f32;
         (
-            ((self.col.0 as f32 * pct) as u8).max(12),
-            ((self.col.1 as f32 * pct) as u8).max(12),
-            ((self.col.2 as f32 * pct) as u8).max(12),
+            ((self.col.0 as f32 * pct) as u8).max(10),
+            ((self.col.1 as f32 * pct) as u8).max(10),
+            ((self.col.2 as f32 * pct) as u8).max(10),
         )
+    }
+}
+
+// ── Particle emitter helpers ──────────────────────────────────────────────────
+
+fn emit_death_explosion(particles: &mut Vec<Particle>, cx: f32, cy: f32, col: (u8,u8,u8)) {
+    const CHARS: &[&str] = &["☠","×","+","·","*","#","!","▓","▒","░","█","▄"];
+    use std::f32::consts::TAU;
+    for i in 0..40usize {
+        let angle = i as f32 * TAU / 40.0;
+        let speed = 0.25 + (i % 5) as f32 * 0.12;
+        let vx = angle.cos() * speed;
+        let vy = angle.sin() * speed * 0.6; // slight squash
+        let ch = CHARS[i % CHARS.len()];
+        let lt = 30 + (i % 25) as u32;
+        particles.push(Particle::burst(cx, cy, vx, vy, ch, col, lt));
+    }
+}
+
+fn emit_level_up_fountain(particles: &mut Vec<Particle>, cx: f32, cy: f32) {
+    const CHARS: &[&str] = &["★","✦","+","·","↑","▲"];
+    let col = (255u8, 215u8, 0u8);
+    let white = (255u8, 255u8, 230u8);
+    for i in 0..30usize {
+        let spread = (i as f32 - 15.0) * 0.08;
+        let vy = -(0.4 + (i % 5) as f32 * 0.09);
+        let c = if i % 3 == 0 { white } else { col };
+        particles.push(Particle::burst(cx + spread, cy, spread * 0.3, vy, CHARS[i % CHARS.len()], c, 50 + i as u32));
+    }
+}
+
+fn emit_crit_burst(particles: &mut Vec<Particle>, cx: f32, cy: f32) {
+    let col = (255u8, 215u8, 30u8);
+    use std::f32::consts::TAU;
+    for i in 0..16usize {
+        let angle = i as f32 * TAU / 16.0;
+        let speed = 0.18 + (i % 4) as f32 * 0.06;
+        particles.push(Particle::spark(cx, cy, angle.cos() * speed, angle.sin() * speed, "✦", col));
+    }
+}
+
+fn emit_hit_sparks(particles: &mut Vec<Particle>, cx: f32, cy: f32, col: (u8,u8,u8), count: usize) {
+    use std::f32::consts::TAU;
+    for i in 0..count {
+        let angle = i as f32 * TAU / count as f32;
+        let speed = 0.12 + (i % 3) as f32 * 0.07;
+        particles.push(Particle::spark(cx, cy, angle.cos() * speed, angle.sin() * speed, "·", col));
+    }
+}
+
+fn emit_loot_sparkle(particles: &mut Vec<Particle>, cx: f32, cy: f32, col: (u8,u8,u8)) {
+    const CHARS: &[&str] = &["✦","·","*","+"];
+    use std::f32::consts::TAU;
+    for i in 0..12usize {
+        let angle = i as f32 * TAU / 12.0;
+        // Slow orbit: give high friction and small starting velocity
+        let r = 1.5 + (i % 3) as f32 * 0.4;
+        let vx = angle.cos() * 0.06 * r;
+        let vy = angle.sin() * 0.04 * r;
+        particles.push(Particle { x: cx + angle.cos() * r, y: cy + angle.sin() * r,
+            vx, vy, friction: 1.0, gravity: 0.0,
+            text: CHARS[i % CHARS.len()].to_string(), col, age: 0, lifetime: 150 });
     }
 }
 
@@ -240,6 +331,13 @@ struct State {
     hit_shake: u32,             // frames of outer-border shake flash on big crits
     spell_beam: u32,            // frames of beam animation
     spell_beam_col: (u8,u8,u8),
+    // ── Chaos field ──
+    chaos_field: ChaosField,
+    // ── HP ghost bars ──
+    ghost_player_hp: f32,       // previous HP fraction (0.0-1.0) for ghost bar
+    ghost_player_timer: u32,    // frames the ghost bar lingers
+    ghost_enemy_hp: f32,
+    ghost_enemy_timer: u32,
     // ── Kill linger ──
     kill_linger: u32,                       // frames to stay on combat after kill
     post_combat_screen: Option<AppScreen>,  // screen to go to after linger
@@ -324,6 +422,11 @@ impl State {
             hit_shake: 0,
             spell_beam: 0,
             spell_beam_col: (80, 120, 255),
+            chaos_field: ChaosField::new(),
+            ghost_player_hp: 1.0,
+            ghost_player_timer: 0,
+            ghost_enemy_hp: 1.0,
+            ghost_enemy_timer: 0,
             kill_linger: 0,
             post_combat_screen: None,
             passive_scroll: 0,
@@ -357,6 +460,36 @@ impl State {
 
     fn cycle_theme(&mut self) {
         self.theme_idx = (self.theme_idx + 1) % theme::THEMES.len();
+    }
+
+    /// Clear the screen to theme bg and render the chaos field background.
+    /// Call at the start of every draw function instead of `ctx.cls_bg(bg)`.
+    fn chaos_bg(&mut self, ctx: &mut BTerm) {
+        let t = self.theme().clone();
+
+        // Boss 11 (The Paradox): slightly lighter bg as inversion cue
+        let is_paradox = self.boss_id == Some(11) && self.config.visuals.invert_screen_for_paradox;
+        let bg_tuple = if is_paradox {
+            (t.bg.0.saturating_add(18), t.bg.1.saturating_add(18), t.bg.2.saturating_add(18))
+        } else {
+            t.bg
+        };
+
+        let bg = RGB::from_u8(bg_tuple.0, bg_tuple.1, bg_tuple.2);
+        ctx.cls_bg(bg);
+
+        // Boss 6 (The Null): suppress chaos field — the proof stops computing
+        let is_null_fight = self.boss_id == Some(6);
+
+        if self.config.visuals.enable_chaos_field
+            && !self.config.visuals.reduce_motion
+            && !is_null_fight
+        {
+            let corruption = self.player.as_ref().map(|p| p.corruption).unwrap_or(0);
+            self.chaos_field.update(self.frame, self.floor_num, corruption);
+            self.chaos_field.draw(ctx, bg_tuple, t.muted, t.accent,
+                                  self.floor_num, corruption, self.frame);
+        }
     }
 
     fn max_mana(&self) -> i64 {
@@ -1588,6 +1721,10 @@ impl State {
             self.combat_log.push(ev.to_display_string());
         }
 
+        // ── Record HP before events for ghost bars ────────────────────────────
+        let php_before = self.player.as_ref().map(|p| p.current_hp as f32 / p.max_hp.max(1) as f32).unwrap_or(1.0);
+        let ehp_before = self.enemy.as_ref().map(|e| e.hp as f32 / e.max_hp.max(1) as f32).unwrap_or(1.0);
+
         // ── Spawn visual effects ──────────────────────────────────────────────
         {
             use chaos_rpg_core::combat::CombatEvent;
@@ -1596,19 +1733,25 @@ impl State {
                     // Enemy takes damage from player
                     CombatEvent::PlayerAttack { damage, is_crit } => {
                         if *is_crit {
-                            // Crit: 3 staggered particles for extra flash
                             let jx = 10 + (self.frame % 10) as i32;
                             self.particles.push(Particle::new(jx,     6, format!("★ CRIT ★"), (255, 215, 0), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 2, 8, format!("{}", damage), (255, 240, 80), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 4, 10, "✦✦✦".to_string(), (255, 180, 0), vc::particle_lifetime_crit()));
+                            emit_crit_burst(&mut self.particles, jx as f32 + 4.0, 8.0);
                             self.enemy_flash = vc::flash_crit();
                             self.enemy_flash_col = (255, 215, 0);
                             self.hit_shake = vc::shake_crit();
+                            // Update enemy ghost bar
+                            self.ghost_enemy_hp = ehp_before;
+                            self.ghost_enemy_timer = 60;
                         } else {
                             let jx = 12 + (self.frame % 8) as i32;
                             self.particles.push(Particle::new(jx, 7, format!("-{}", damage), (80, 220, 80), vc::particle_lifetime_normal()));
+                            emit_hit_sparks(&mut self.particles, jx as f32, 7.0, (80, 220, 80), 6);
                             self.enemy_flash = vc::flash_normal();
                             self.enemy_flash_col = (80, 220, 80);
+                            self.ghost_enemy_hp = ehp_before;
+                            self.ghost_enemy_timer = 50;
                         }
                     }
                     // Player takes damage from enemy
@@ -1618,14 +1761,19 @@ impl State {
                             self.particles.push(Particle::new(jx,     5, format!("☠ CRIT ☠"), (255, 40, 0), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 2, 8, format!("-{} !", damage), (255, 80, 30), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 4, 11, "!!!".to_string(), (200, 20, 20), vc::particle_lifetime_crit()));
+                            emit_hit_sparks(&mut self.particles, jx as f32 + 4.0, 8.0, (220, 50, 20), 10);
                             self.player_flash = vc::flash_crit();
                             self.hit_shake = vc::shake_crit();
                         } else {
                             let jx = 95 + (self.frame % 8) as i32;
                             self.particles.push(Particle::new(jx, 7, format!("-{}", damage), (220, 50, 50), vc::particle_lifetime_normal()));
+                            emit_hit_sparks(&mut self.particles, jx as f32, 7.0, (200, 60, 60), 5);
                             self.player_flash = vc::flash_normal();
                             if self.is_boss_fight { self.hit_shake = vc::shake_boss(); }
                         }
+                        // Update player ghost bar
+                        self.ghost_player_hp = php_before;
+                        self.ghost_player_timer = 60;
                     }
                     // Healing
                     CombatEvent::PlayerHealed { amount } => {
@@ -1641,21 +1789,27 @@ impl State {
                             self.particles.push(Particle::new(99, 11, "⚡⚡⚡".to_string(), (255, 80, 0), vc::particle_lifetime_backfire()));
                             self.hit_shake = vc::shake_heavy();
                             self.player_flash = vc::flash_crit();
+                            self.ghost_player_hp = php_before;
+                            self.ghost_player_timer = 60;
                         } else {
                             self.spell_beam_col = (80, 140, 255);
                             self.particles.push(Particle::new(10, 5,  format!("✦ SPELL ✦"), (150, 200, 255), vc::particle_lifetime_spell()));
                             self.particles.push(Particle::new(12, 8,  format!("-{}", damage), (130, 190, 255), vc::particle_lifetime_spell()));
                             self.enemy_flash = vc::flash_crit();
                             self.enemy_flash_col = (80, 140, 255);
+                            self.ghost_enemy_hp = ehp_before;
+                            self.ghost_enemy_timer = 50;
                         }
                         self.spell_beam = vc::beam_charge() + vc::beam_hold();
                     }
-                    // Enemy kill reward — big celebration
+                    // Enemy kill reward — big celebration + death explosion
                     CombatEvent::EnemyDied { xp, gold } => {
                         self.particles.push(Particle::new(5,  4, format!("+{} XP", xp),    (255, 215, 0), vc::particle_lifetime_reward()));
                         self.particles.push(Particle::new(5,  7, format!("+{}g", gold),     (255, 180, 60), vc::particle_lifetime_reward()));
                         self.particles.push(Particle::new(12, 5, "★ DEFEATED ★".to_string(), (255, 240, 100), vc::particle_lifetime_reward()));
                         self.particles.push(Particle::new(14, 9, "✦✦✦✦✦".to_string(),       (200, 160, 40), vc::particle_lifetime_reward()));
+                        let t_danger = self.theme().danger;
+                        emit_death_explosion(&mut self.particles, 38.0, 18.0, t_danger);
                         self.enemy_flash = vc::kill_flash();
                         self.enemy_flash_col = (255, 255, 255);
                         self.hit_shake = vc::shake_crit();
@@ -1803,6 +1957,8 @@ impl State {
                 self.push_log(format!("  {} skill point(s) available!", skill_pts));
             }
             self.emit_audio(AudioEvent::LevelUp);
+            // Level-up fountain particles on player panel
+            emit_level_up_fountain(&mut self.particles, 118.0, 20.0);
         }
 
         // ── Boss post-turn hooks ──────────────────────────────────────────────
@@ -2328,7 +2484,7 @@ impl State {
         let muted = RGB::from_u8(t.muted.0, t.muted.1,   t.muted.2);
         let danger = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
 
         // ── Math symbol rain (background flavor) — full 160×80 coverage ──
@@ -2424,7 +2580,7 @@ impl State {
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "SELECT MODE", &t);
 
         let modes = [
@@ -2464,7 +2620,7 @@ impl State {
         let wrn = RGB::from_u8(t.warn.0,   t.warn.1,   t.warn.2);
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "CHARACTER CREATION", &t);
 
         // ── Name entry ──
@@ -2642,7 +2798,7 @@ impl State {
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
         let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "CHOOSE YOUR BOON", &t);
 
         ctx.print_color(5, 3, dim, bg, "A gift from the chaos engine. Only one. Choose wisely.");
@@ -2724,7 +2880,7 @@ impl State {
             None => { self.screen = AppScreen::Title; return; }
         };
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
 
         // ── Header bar ────────────────────────────────────────────────────────
@@ -3072,7 +3228,7 @@ impl State {
             }
         }
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
         draw_subpanel(ctx, 2, 2, 155, 70, "", &t);
 
@@ -3124,7 +3280,7 @@ impl State {
             None => { self.screen = AppScreen::FloorNav; return; }
         };
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
 
         // Combat border with floor/kill context in title bar
         let floor_kills = self.player.as_ref().map(|p| (p.floor, p.kills)).unwrap_or((1, 0));
@@ -3145,6 +3301,16 @@ impl State {
         let ep = ehp as f32 / emhp.max(1) as f32;
         let ec = t.hp_color(ep);
         stat_line(ctx, 3, 5, "HP ", &format!("{}/{}", ehp, emhp), ec, &t);
+        // Ghost bar (shows previous HP level as a dim overhang)
+        if self.config.visuals.enable_hp_ghost && self.ghost_enemy_timer > 0 {
+            self.ghost_enemy_timer = self.ghost_enemy_timer.saturating_sub(1);
+            let ghost_fill = (self.ghost_enemy_hp * 74.0) as i32;
+            let cur_fill = (ep * 74.0) as i32;
+            let ghost_col = RGB::from_u8(t.danger.0 / 3, t.danger.1 / 3, t.danger.2 / 3);
+            for gx in cur_fill..ghost_fill {
+                ctx.set(3 + gx, 6, ghost_col, RGB::from_u8(t.bg.0, t.bg.1, t.bg.2), 177u16);
+            }
+        }
         draw_bar_gradient(ctx, 3, 6, 74, ehp, emhp, ec, t.muted, &t);
 
         // Sprite — now 20 lines tall
@@ -3161,6 +3327,16 @@ impl State {
         let pp = php as f32 / pmhp.max(1) as f32;
         let pc = t.hp_color(pp);
         stat_line(ctx, 83, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
+        // Player ghost bar
+        if self.config.visuals.enable_hp_ghost && self.ghost_player_timer > 0 {
+            self.ghost_player_timer = self.ghost_player_timer.saturating_sub(1);
+            let ghost_fill = (self.ghost_player_hp * 73.0) as i32;
+            let cur_fill = (pp * 73.0) as i32;
+            let ghost_col = RGB::from_u8(t.danger.0 / 3, t.danger.1 / 3, t.danger.2 / 3);
+            for gx in cur_fill..ghost_fill {
+                ctx.set(83 + gx, 6, ghost_col, RGB::from_u8(t.bg.0, t.bg.1, t.bg.2), 177u16);
+            }
+        }
         draw_bar_gradient(ctx, 83, 6, 73, php, pmhp, pc, t.muted, &t);
         stat_line(ctx, 83, 7, "MP ", &format!("{}/{}", self.current_mana, self.max_mana()), t.mana, &t);
         draw_bar_solid(ctx, 83, 8, 73, self.current_mana, self.max_mana(), t.mana, &t);
@@ -3390,17 +3566,29 @@ impl State {
             }
         }
 
-        // 5. Floating damage numbers — step and render
+        // 5. Floating particles — step, cull, render
         for p in &mut self.particles { p.step(); }
         self.particles.retain(|p| p.alive());
-        for p in &self.particles {
-            let rc = p.render_col();
-            let py = p.y as i32;
-            if py < 2 || py > 38 { continue; } // clip to combat panels area
-            ctx.print_color(p.x, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
+        let max_p = self.config.visuals.max_particles as usize;
+        if self.particles.len() > max_p {
+            self.particles.drain(0..self.particles.len() - max_p);
+        }
+        if self.config.visuals.enable_particles {
+            for p in &self.particles {
+                let rc = p.render_col();
+                let px = p.x as i32;
+                let py = p.y as i32;
+                if py < 1 || py > 78 || px < 1 || px > 158 { continue; }
+                ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
+            }
         }
 
-        // 6. Chaos Engine Visualization overlay ([V])
+        // 6. Boss-specific visual overlay
+        if self.boss_id.is_some() {
+            self.draw_boss_visual_overlay(ctx, bg);
+        }
+
+        // 7. Chaos Engine Visualization overlay ([V])
         if self.chaos_viz_open {
             self.draw_chaos_viz_overlay(ctx);
         }
@@ -3408,6 +3596,118 @@ impl State {
         // [V] hint at bottom right of actions bar
         ctx.print_color(3, 78, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg,
             if self.chaos_viz_open { "[V] Close Engine Viz" } else { "[V] Engine Viz" });
+    }
+
+    fn draw_boss_visual_overlay(&self, ctx: &mut BTerm, bg: RGB) {
+        let Some(bid) = self.boss_id else { return; };
+        let t = self.theme().clone();
+        let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let dng = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
+        let suc = RGB::from_u8(t.success.0, t.success.1, t.success.2);
+        let gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+        let muted = RGB::from_u8(t.muted.0, t.muted.1,   t.muted.2);
+
+        match bid {
+            // Boss 4 — THE EIGENSTATE: flicker between 1HP and 10000HP visual
+            4 if self.config.visuals.enable_eigenstate_flicker => {
+                let flicker = (self.frame / 3) % 2 == 0;
+                let label = if flicker { " [1 HP] " } else { " [10,000 HP] " };
+                let col = if flicker { suc } else { dng };
+                ctx.print_color(20, 3, col, bg, label);
+                // Static-noise flicker around enemy name
+                if (self.frame / 2) % 3 != 0 {
+                    let noise_chars = ["▒","░","▓","?","!"];
+                    for i in 0..5i32 {
+                        let nc = noise_chars[(self.frame as usize / 2 + i as usize) % noise_chars.len()];
+                        ctx.print_color(3 + i * 2, 4, muted, bg, nc);
+                    }
+                }
+            }
+
+            // Boss 6 — THE NULL: announce pipeline nullified + mono bar indicator
+            6 => {
+                let null_col = RGB::from_u8(60, 60, 60);
+                ctx.print_color(3, 37, null_col, bg, "[ CHAOS PIPELINE: NULLIFIED — BASE STATS ONLY ]");
+                // Draining bar that shrinks each turn
+                let turns = self.boss_turn.min(40) as i32;
+                let drain_width = 74 - turns;
+                for x in 0..drain_width {
+                    ctx.set(3 + x, 38, null_col, bg, 176u16);
+                }
+            }
+
+            // Boss 9 — THE COMMITTEE: vote indicators above enemy panel
+            9 => {
+                let vote_mask = self.boss_extra as u8;  // bitmask of secured votes
+                let vote_labels = ["HP%", "ROLL", "GOLD", "KILLS", "TAUNT"];
+                let vote_x = [3i32, 16, 30, 43, 57];
+                ctx.print_color(3, 3, ac, bg, "COMMITTEE VOTES:");
+                for (i, (label, &vx)) in vote_labels.iter().zip(vote_x.iter()).enumerate() {
+                    let secured = (vote_mask >> i) & 1 == 1;
+                    let col = if secured { suc } else { muted };
+                    let sym = if secured { "[Y]" } else { "[ ]" };
+                    ctx.print_color(vx, 4, col, bg, &format!("{} {}", sym, label));
+                }
+                let secured_count = vote_mask.count_ones();
+                let tally_col = if secured_count >= 3 { suc } else { dng };
+                ctx.print_color(72, 4, tally_col, bg, &format!("{}/5", secured_count));
+            }
+
+            // Boss 10 — THE RECURSION: stack bar showing accumulated damage
+            10 => {
+                let stack_dmg = self.boss_extra;
+                let bar_label = format!("STACK: {} dmg (will reflect on attack)", stack_dmg);
+                let bar_frac = (stack_dmg as f32 / 10000.0).clamp(0.0, 1.0);
+                let bar_filled = (bar_frac * 72.0) as i32;
+                let stack_col = if bar_frac > 0.75 { dng }
+                    else if bar_frac > 0.4 { RGB::from_u8(255, 150, 50) }
+                    else { gld };
+                ctx.print_color(3, 37, stack_col, bg, &bar_label.chars().take(70).collect::<String>());
+                for x in 0..bar_filled {
+                    ctx.set(3 + x, 38, stack_col, bg, 219u16);
+                }
+                for x in bar_filled..72i32 {
+                    ctx.set(3 + x, 38, muted, bg, 176u16);
+                }
+            }
+
+            // Boss 11 — THE PARADOX: visual inversion cue
+            11 if self.config.visuals.invert_screen_for_paradox => {
+                // Draw inverted-HP note on player panel
+                let note_col = RGB::from_u8(200, 60, 200);
+                ctx.print_color(83, 38, note_col, bg, "[ PARADOX: lower defense = less damage ]");
+            }
+
+            // Boss 12 — THE ALGORITHM REBORN: phase annotations
+            12 => {
+                let phase = if self.boss_extra == 0 { 1 }
+                    else if self.boss_extra == 1 { 2 }
+                    else { 3 };
+                let phase_str = match phase {
+                    1 => "PHASE 1: EVALUATION",
+                    2 => "PHASE 2: ADAPTATION",
+                    _ => "PHASE 3: COUNTER-SPECIALIZATION",
+                };
+                let phase_col = match phase {
+                    1 => ac,
+                    2 => gld,
+                    _ => dng,
+                };
+                ctx.print_color(40, 3, phase_col, bg, phase_str);
+                // Chaos field forms "I SEE YOU" in phase 3 (spelled out in combat log hint)
+                if phase == 3 && (self.frame / 60) % 8 == 0 {
+                    let flash = RGB::from_u8(
+                        t.danger.0 / 2,
+                        t.danger.1 / 2,
+                        t.danger.2 / 2,
+                    );
+                    ctx.print_color(60, 37, flash, bg, "I  S E E  Y O U");
+                }
+            }
+
+            _ => {}
+        }
     }
 
     fn draw_chaos_viz_overlay(&self, ctx: &mut BTerm) {
@@ -3512,7 +3812,7 @@ impl State {
         let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "SHOP", &t);
 
         let pgold = self.player.as_ref().map(|p| p.gold).unwrap_or(0);
@@ -3599,7 +3899,7 @@ impl State {
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "CRAFTING BENCH", &t);
 
         let has_inventory = self.player.as_ref().map(|p| !p.inventory.is_empty()).unwrap_or(false);
@@ -3769,7 +4069,7 @@ impl State {
 
         let p = match &self.player { Some(p) => p.clone(), None => { self.screen = AppScreen::FloorNav; return; } };
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
 
         // Header
@@ -3982,7 +4282,7 @@ impl State {
         let succ  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
         let danger= RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         let slide = self.tutorial_slide.max(1);
 
         // Outer panel
@@ -4125,7 +4425,7 @@ impl State {
         let p = match &self.player { Some(p) => p.clone(), None => { self.screen = AppScreen::FloorNav; return; } };
         let allocated_set: std::collections::HashSet<u32> = p.allocated_nodes.iter().cloned().collect();
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "PASSIVE TREE", &t);
 
         // Header bar
@@ -4265,7 +4565,7 @@ impl State {
 
         let p = match &self.player { Some(p) => p.clone(), None => { self.screen = AppScreen::FloorNav; return; } };
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
         print_center(ctx, 0, 1, 159, t.heading, &t, "BODY CONDITION");
         draw_separator(ctx, 1, 2, 157, &t);
@@ -4385,7 +4685,7 @@ impl State {
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
 
         // ── Flashing "YOU DIED" banner — centered in full 160-col screen ──
@@ -4480,7 +4780,7 @@ impl State {
         let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
 
         // ── Animated victory banner — centered in 160-col screen ──
@@ -4563,7 +4863,7 @@ impl State {
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
         let wrn = RGB::from_u8(t.warn.0,   t.warn.1,   t.warn.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "SCOREBOARD", &t);
 
         // ── Hall of Chaos (regular scores) — left side ──
@@ -5692,7 +5992,7 @@ impl State {
         let suc   = RGB::from_u8(t.success.0, t.success.1, t.success.2);
         let muted = RGB::from_u8(t.muted.0,   t.muted.1,   t.muted.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "ACHIEVEMENTS", &t);
 
         // Helper: rarity -> color
@@ -5941,7 +6241,7 @@ impl State {
         let dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
         let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "RUN HISTORY", &t);
 
         let runs = self.run_history.runs.clone();
@@ -6020,7 +6320,7 @@ impl State {
         let dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
         let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         let today = chrono_date_simple();
         draw_panel(ctx, 0, 0, 159, 79, &format!("DAILY LEADERBOARD — {}", today), &t);
 
@@ -6110,7 +6410,7 @@ impl State {
         let suc  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
         let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "BESTIARY", &t);
 
         let bestiary = PlayerBestiary::load();
@@ -6174,7 +6474,7 @@ impl State {
         let suc  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
         let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "CODEX — THE PROOF", &t);
 
         let progress = CodexProgress::load();
@@ -6234,7 +6534,7 @@ impl State {
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
 
-        ctx.cls_bg(bg);
+        self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "SETTINGS", &t);
 
         let ox = 30i32; let oy = 12i32;

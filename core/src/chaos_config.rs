@@ -25,6 +25,8 @@ use serde::{Deserialize, Serialize};
 
 fn default_one() -> f64 { 1.0 }
 fn default_true() -> bool { true }
+fn default_max_particles() -> u32 { 2000 }
+fn default_field_density() -> f64 { 1.0 }
 fn default_url() -> String { "https://chaos-rpg-leaderboard.mfletcherdev.workers.dev".to_string() }
 fn default_music_vibe() -> String { "chill".to_string() }
 fn default_volume() -> f64 { 1.0 }
@@ -129,6 +131,61 @@ impl Default for MetaConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VisualsConfig {
+    /// Enable the chaos field animated background.
+    #[serde(default = "default_true")]
+    pub enable_chaos_field: bool,
+    /// Enable particle effects (damage numbers, explosions, etc.)
+    #[serde(default = "default_true")]
+    pub enable_particles: bool,
+    /// Enable screen shake on heavy hits.
+    #[serde(default = "default_true")]
+    pub enable_screen_shake: bool,
+    /// Enable HP ghost bars (show recent damage taken).
+    #[serde(default = "default_true")]
+    pub enable_hp_ghost: bool,
+    /// Maximum live particles (reduce to 500 for low-end machines).
+    #[serde(default = "default_max_particles")]
+    pub max_particles: u32,
+    /// Chaos field density multiplier (0.0=off, 0.5=sparse, 1.0=normal, 2.0=dense).
+    #[serde(default = "default_field_density")]
+    pub chaos_field_density: f64,
+    /// Global animation speed multiplier.
+    #[serde(default = "default_one")]
+    pub animation_speed: f64,
+    /// Reduce motion: disables shake, reduces particles 75%, slows animations.
+    #[serde(default)]
+    pub reduce_motion: bool,
+    /// Reduce flashing: caps brightness changes, disables rapid flicker.
+    #[serde(default)]
+    pub reduce_flashing: bool,
+    /// Screen inversion for The Paradox boss fight.
+    #[serde(default = "default_true")]
+    pub invert_screen_for_paradox: bool,
+    /// Eigenstate boss rapid flicker effect.
+    #[serde(default = "default_true")]
+    pub enable_eigenstate_flicker: bool,
+}
+
+impl Default for VisualsConfig {
+    fn default() -> Self {
+        Self {
+            enable_chaos_field: true,
+            enable_particles: true,
+            enable_screen_shake: true,
+            enable_hp_ghost: true,
+            max_particles: 2000,
+            chaos_field_density: 1.0,
+            animation_speed: 1.0,
+            reduce_motion: false,
+            reduce_flashing: false,
+            invert_screen_for_paradox: true,
+            enable_eigenstate_flicker: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChaosConfig {
     #[serde(default)]
@@ -141,6 +198,8 @@ pub struct ChaosConfig {
     pub leaderboard: LeaderboardConfig,
     #[serde(default)]
     pub meta: MetaConfig,
+    #[serde(default)]
+    pub visuals: VisualsConfig,
     /// True if a config file was actually found and loaded.
     #[serde(skip)]
     pub loaded_from_file: bool,
@@ -214,6 +273,24 @@ fetch_on_open = true
 [meta]
 # Override player name shown in leaderboard submissions
 player_name = ""
+
+[visuals]
+# Animated mathematical background (the Proof computing behind every screen)
+enable_chaos_field = true
+# Particle effects: damage numbers, explosions, crits, death bursts
+enable_particles = true
+# Screen shake on heavy hits and boss attacks
+enable_screen_shake = true
+# Ghost HP bars showing recent damage taken (combat only)
+enable_hp_ghost = true
+# Maximum live particles (reduce to 500 for low-end machines)
+max_particles = 2000
+# Chaos field density (0.0=off, 0.5=sparse, 1.0=default, 2.0=dense)
+chaos_field_density = 1.0
+# Reduce motion: disable shake, cut particles 75%, slow animations
+reduce_motion = false
+# Reduce flashing: cap brightness spikes, disable rapid flicker (accessibility)
+reduce_flashing = false
 "#;
         let path = Self::path();
         let _ = std::fs::write(path, example);
