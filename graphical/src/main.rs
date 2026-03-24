@@ -29,13 +29,22 @@ use chaos_rpg_core::{
 };
 
 mod chaos_field;
+mod color_grade;
+mod death_seq;
 mod renderer;
 mod sprites;
+mod text_effects;
 mod theme;
+mod tile_effects;
 mod ui_overlay;
 mod visual_config;
+mod weather;
 use visual_config as vc;
 use chaos_field::ChaosField;
+use color_grade::ColorGrade;
+use death_seq::DeathSeq;
+use tile_effects::TileEffects;
+use weather::{Weather, WeatherType};
 
 // ─── SAVE / LOAD ──────────────────────────────────────────────────────────────
 
@@ -608,6 +617,13 @@ struct State {
     // ── Bestiary / Codex selected entry ──
     bestiary_selected: usize,
     codex_selected: usize,
+    // ── Visual push systems ──
+    color_grade: ColorGrade,
+    tile_effects: TileEffects,
+    weather: Weather,
+    death_seq: DeathSeq,
+    // Track if death cinematic has played this death
+    death_cinematic_done: bool,
 }
 
 impl State {
@@ -690,11 +706,31 @@ impl State {
             combat_log_collapsed: false,
             bestiary_selected: 0,
             codex_selected: 0,
+            color_grade: ColorGrade::default(),
+            tile_effects: TileEffects::new(),
+            weather: Weather::new(),
+            death_seq: DeathSeq::new(),
+            death_cinematic_done: false,
         }
     }
 
     fn theme(&self) -> &theme::Theme {
         &theme::THEMES[self.theme_idx]
+    }
+
+    /// Returns a color-graded clone of the current theme.
+    /// All draw functions should use this instead of self.theme_graded().
+    fn theme_graded(&self) -> theme::Theme {
+        let mut t = self.theme_graded();
+        self.color_grade.apply_to_theme(&mut t);
+        // Breathing borders via tile_effects
+        let bb = self.tile_effects.border_brightness();
+        t.border = (
+            (t.border.0 as f32 * bb).clamp(0.0, 255.0) as u8,
+            (t.border.1 as f32 * bb).clamp(0.0, 255.0) as u8,
+            (t.border.2 as f32 * bb).clamp(0.0, 255.0) as u8,
+        );
+        t
     }
 
     fn cycle_theme(&mut self) {
@@ -704,7 +740,7 @@ impl State {
     /// Clear the screen to theme bg and render the chaos field background.
     /// Call at the start of every draw function instead of `ctx.cls_bg(bg)`.
     fn chaos_bg(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
 
         // Boss 11 (The Paradox): slightly lighter bg as inversion cue
         let is_paradox = self.boss_id == Some(11) && self.config.visuals.invert_screen_for_paradox;
@@ -729,6 +765,76 @@ impl State {
             self.chaos_field.draw(ctx, bg_tuple, t.muted, t.accent,
                                   self.floor_num, corruption, self.frame);
         }
+    }
+
+    /// Drive ColorGrade from current game state. Called once per frame from tick().
+    fn update_color_grade(&mut self) {
+        // Null fight: full desaturation
+        if self.boss_id == Some(6) && self.screen == AppScreen::Combat {
+            self.color_grade.set_null_fight();
+            return;
+        }
+        // Paradox fight: full hue inversion
+        if self.boss_id == Some(11) && self.screen == AppScreen::Combat
+            && self.config.visuals.invert_screen_for_paradox {
+            self.color_grade.set_paradox();
+            return;
+        }
+        // Game over / death
+        if self.screen == AppScreen::GameOver {
+            self.color_grade.set_death();
+            return;
+        }
+        // Victory
+        if self.screen == AppScreen::Victory {
+            self.color_grade.set_victory();
+            return;
+        }
+        // Low HP (< 25%)
+        if let Some(ref p) = self.player {
+            let php = p.current_hp as f32 / p.max_hp.max(1) as f32;
+            if php < 0.25 && self.screen == AppScreen::Combat {
+                self.color_grade.set_low_hp();
+                return;
+            }
+            // High corruption
+            if p.corruption >= 300 {
+                self.color_grade.set_high_corruption();
+                return;
+            }
+        }
+        // Boss phase 2/3
+        if self.is_boss_fight && self.screen == AppScreen::Combat {
+            if self.boss_turn >= 10 {
+                self.color_grade.set_boss_phase3();
+            } else if self.boss_turn >= 5 {
+                self.color_grade.set_boss_phase2();
+            } else {
+                self.color_grade.set_normal();
+            }
+            return;
+        }
+        // Deep floors
+        if self.floor_num >= 76 {
+            self.color_grade.set_deep_floor();
+            return;
+        }
+        self.color_grade.set_normal();
+    }
+
+    /// Trigger a pulse ring centered at (cx, cy) — called on impactful events.
+    pub fn trigger_pulse_ring(&mut self, cx: f32, cy: f32, col: (f32,f32,f32), intensity: f32) {
+        self.tile_effects.emit_pulse_ring(cx, cy, col, intensity, 22.0);
+    }
+
+    /// Trigger an impact ripple — called on hit/crit.
+    pub fn trigger_ripple(&mut self, cx: f32, cy: f32, col: (f32,f32,f32)) {
+        self.tile_effects.emit_impact_ripple(cx, cy, col);
+    }
+
+    /// Trigger screen earthquake — called on boss death, misery milestone, etc.
+    pub fn trigger_earthquake(&mut self, intensity: f32, frames: u32) {
+        self.tile_effects.emit_earthquake(intensity, frames);
     }
 
     /// Lerp display HP/MP fractions toward actual values (call once per frame from tick).
@@ -1932,6 +2038,16 @@ impl State {
         self.save_score_now();
         self.emit_audio(AudioEvent::EntityDied { is_player: true });
         self.emit_audio(AudioEvent::GameOver);
+        // Start death cinematic
+        let final_dmg = self.player.as_ref()
+            .map(|p| p.run_stats.final_blow_damage).unwrap_or(enemy_dmg);
+        let epitaph = self.player.as_ref().map(|p|
+            format!("A {} who reached floor {}. The mathematics consumed them.",
+                p.class.name(), p.floor)
+        ).unwrap_or_else(|| "The chaos consumed them.".to_string());
+        self.death_seq.start(final_dmg, &enemy_name, &epitaph);
+        self.death_cinematic_done = false;
+        self.trigger_earthquake(0.9, 50);
         self.screen = AppScreen::GameOver;
     }
 
@@ -2009,6 +2125,7 @@ impl State {
                             self.enemy_flash = vc::flash_crit();
                             self.enemy_flash_col = (255, 215, 0);
                             self.hit_shake = vc::shake_crit();
+                            self.trigger_ripple(38.0, 18.0, (1.0, 0.8, 0.0));
                             // Update enemy ghost bar
                             self.ghost_enemy_hp = ehp_before;
                             self.ghost_enemy_timer = 60;
@@ -2032,6 +2149,8 @@ impl State {
                             emit_hit_sparks(&mut self.particles, jx as f32 + 4.0, 8.0, (220, 50, 20), 10);
                             self.player_flash = vc::flash_crit();
                             self.hit_shake = vc::shake_crit();
+                            self.trigger_ripple(118.0, 20.0, (1.0, 0.15, 0.0));
+                            self.trigger_earthquake(0.4, 15);
                         } else {
                             let jx = 95 + (self.frame % 8) as i32;
                             self.particles.push(Particle::new(jx, 7, format!("-{}", damage), (220, 50, 50), vc::particle_lifetime_normal()));
@@ -2081,6 +2200,8 @@ impl State {
                         self.enemy_flash = vc::kill_flash();
                         self.enemy_flash_col = (255, 255, 255);
                         self.hit_shake = vc::shake_crit();
+                        self.trigger_earthquake(0.55, 30);
+                        self.trigger_ripple(38.0, 18.0, (0.9, 0.7, 0.1));
                     }
                     // Status applied
                     CombatEvent::StatusApplied { name } => {
@@ -2227,6 +2348,7 @@ impl State {
             self.emit_audio(AudioEvent::LevelUp);
             // Level-up fountain particles on player panel
             emit_level_up_fountain(&mut self.particles, 118.0, 20.0);
+            self.trigger_pulse_ring(80.0, 40.0, (1.0, 0.85, 0.0), 1.2);
         }
 
         // ── Boss post-turn hooks ──────────────────────────────────────────────
@@ -2377,6 +2499,16 @@ impl State {
                 self.save_score_now();
                 self.emit_audio(AudioEvent::EntityDied { is_player: true });
                 self.emit_audio(AudioEvent::GameOver);
+                // Start death cinematic
+                let final_dmg = self.player.as_ref()
+                    .map(|p| p.run_stats.final_blow_damage).unwrap_or(enemy_dmg);
+                let epitaph = self.player.as_ref().map(|p|
+                    format!("A {} who reached floor {}. The mathematics consumed them.",
+                        p.class.name(), p.floor)
+                ).unwrap_or_else(|| "The chaos consumed them.".to_string());
+                self.death_seq.start(final_dmg, &enemy_name, &epitaph);
+                self.death_cinematic_done = false;
+                self.trigger_earthquake(0.9, 50);
                 self.screen = AppScreen::GameOver;
             }
 
@@ -2639,6 +2771,35 @@ impl GameState for State {
         self.frame += 1;
         self.update_display_fractions();
 
+        // ── Visual push: update all effect systems ────────────────────────────
+        self.color_grade.update();
+        self.tile_effects.update(self.frame);
+        self.death_seq.update();
+
+        // Drive ColorGrade from game state
+        self.update_color_grade();
+
+        // Weather: pick type from current floor/boss state
+        let wt = WeatherType::for_floor(self.floor_num, self.is_boss_fight);
+        self.weather.set_type(wt);
+        self.weather.update(self.frame);
+
+        // Screen-space lights: clear every frame, re-register from game state
+        self.tile_effects.clear_lights();
+        if let Some(ref p) = self.player {
+            let php = p.current_hp as f32 / p.max_hp.max(1) as f32;
+            // Low HP edge effect
+            let lhp_target = if php < 0.25 {
+                ((0.25 - php) / 0.25) * 0.85
+            } else { 0.0 };
+            self.tile_effects.set_low_hp(lhp_target);
+            // Vignette on deep floors
+            let vig_target = if self.floor_num >= 50 {
+                ((self.floor_num - 50) as f32 / 50.0).min(0.4)
+            } else { 0.0 };
+            self.tile_effects.set_vignette(vig_target, (0.0, 0.0, 0.0));
+        }
+
         if self.auto_mode {
             self.tick_auto_play(ctx);
         }
@@ -2653,7 +2814,33 @@ impl GameState for State {
                     self.screen = next;
                 }
             }
+            // Draw overlay after kill-linger combat frame
+            let t = self.theme_graded();
+            self.tile_effects.draw_overlay(ctx, t.bg);
             return;
+        }
+
+        // Death cinematic — intercept GameOver screen until cinematic finishes
+        if self.screen == AppScreen::GameOver && !self.death_cinematic_done {
+            if self.death_seq.active {
+                // Draw chaos bg first
+                self.chaos_bg(ctx);
+                let t = self.theme_graded();
+                self.death_seq.draw(ctx, t.bg);
+                if self.death_seq.is_done() {
+                    self.death_cinematic_done = true;
+                    self.death_seq.active = false;
+                }
+                // Handle Enter to skip cinematic
+                if let Some(key) = ctx.key {
+                    if key == VirtualKeyCode::Return || key == VirtualKeyCode::Space {
+                        self.death_cinematic_done = true;
+                        self.death_seq.active = false;
+                    }
+                }
+                self.tile_effects.draw_overlay(ctx, t.bg);
+                return;
+            }
         }
 
         match self.screen.clone() {
@@ -2681,11 +2868,31 @@ impl GameState for State {
             AppScreen::Settings         => self.draw_settings(ctx),
         }
 
+        // ── Visual push overlays (drawn over all UI, under banner) ──────────────
+        {
+            let t = self.theme_graded();
+            // Weather (drawn after chaos bg but before UI — only in chaos_bg context;
+            // here we just draw any frame-based weather overlay chars)
+            self.weather.draw(ctx, t.bg);
+            // TileEffects overlay: pulse rings, vignette, low HP edge
+            self.tile_effects.draw_overlay(ctx, t.bg);
+            // Storm flash
+            if self.weather.storm_flash > 0 {
+                let bright = (self.weather.storm_flash as f32 / 3.0 * 60.0) as u8;
+                let fl = RGB::from_u8(bright, bright, bright);
+                for y in [0i32, 79] {
+                    for x in 0..160i32 {
+                        ctx.print_color(x, y, fl, fl, " ");
+                    }
+                }
+            }
+        }
+
         // Achievement banner overlay — shown on top of any screen
         if self.achievement_banner_frames > 0 {
             self.achievement_banner_frames -= 1;
             if let Some(ref banner_text) = self.achievement_banner.clone() {
-                let t = self.theme().clone();
+                let t = self.theme_graded();
                 let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
                 let gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
                 let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
@@ -2712,7 +2919,7 @@ impl GameState for State {
         // ── Floor transition overlay ──────────────────────────────────────────
         if self.floor_transition_timer > 0 {
             self.floor_transition_timer -= 1;
-            let t = self.theme().clone();
+            let t = self.theme_graded();
             let bg = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
             // Fade: 0..30 = fade-in, 30..120 = hold, 120..150 = fade-out
             let elapsed = 150 - self.floor_transition_timer;
@@ -2765,7 +2972,7 @@ impl GameState for State {
         // ── Boss entrance animation overlay ───────────────────────────────────
         if self.boss_entrance_timer > 0 {
             self.boss_entrance_timer -= 1;
-            let t = self.theme().clone();
+            let t = self.theme_graded();
             let bg = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
             let total = 180u32;
             let elapsed = total - self.boss_entrance_timer;
@@ -2868,7 +3075,7 @@ impl State {
     // ── TITLE ─────────────────────────────────────────────────────────────────
 
     fn draw_title(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -3038,7 +3245,7 @@ impl State {
     // ── MODE SELECT ───────────────────────────────────────────────────────────
 
     fn draw_mode_select(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -3074,7 +3281,7 @@ impl State {
     // ── CHAR CREATION ─────────────────────────────────────────────────────────
 
     fn draw_char_creation(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -3256,7 +3463,7 @@ impl State {
     // ── BOON SELECT ───────────────────────────────────────────────────────────
 
     fn draw_boon_select(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -3323,7 +3530,7 @@ impl State {
     // Three zones: header (row 0-2), map center (rows 3-60), footer (rows 61-79).
 
     fn draw_floor_nav(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -3624,7 +3831,7 @@ impl State {
     // ── ROOM VIEW ─────────────────────────────────────────────────────────────
 
     fn draw_room_view(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -3638,6 +3845,10 @@ impl State {
             let hd_val = self.room_event.hp_delta;
             let dt = self.room_event.damage_taken;
             let bonuses: Vec<(&'static str, i64)> = self.room_event.stat_bonuses.clone();
+            // Shrine blessing pulse
+            if !bonuses.is_empty() || hd_val > 0 {
+                self.trigger_pulse_ring(80.0, 40.0, (0.4, 0.6, 1.0), 0.9);
+            }
             if let Some(ref mut p) = self.player {
                 if gd != 0 { p.gold += gd; }
                 if hd_val > 0  { p.heal(hd_val); }
@@ -3713,7 +3924,7 @@ impl State {
     // ── COMBAT ────────────────────────────────────────────────────────────────
 
     fn draw_combat(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -4158,7 +4369,7 @@ impl State {
 
     fn draw_boss_visual_overlay(&mut self, ctx: &mut BTerm, bg: RGB) {
         let Some(bid) = self.boss_id else { return; };
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
         let dng = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
@@ -4465,7 +4676,7 @@ impl State {
     }
 
     fn draw_chaos_viz_overlay(&self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -4558,7 +4769,7 @@ impl State {
     // ── SHOP ──────────────────────────────────────────────────────────────────
 
     fn draw_shop(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -4644,7 +4855,7 @@ impl State {
     // ── CRAFTING ──────────────────────────────────────────────────────────────
 
     fn draw_crafting(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -4883,7 +5094,7 @@ impl State {
     fn draw_character_sheet(&mut self, ctx: &mut BTerm) {
         use chaos_rpg_core::factions::{Faction, ReputationTier};
 
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -5307,7 +5518,7 @@ impl State {
     // ── TUTORIAL ─────────────────────────────────────────────────────────────
 
     fn draw_tutorial(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg    = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd    = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac    = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -5447,7 +5658,7 @@ impl State {
     fn draw_passive_tree(&mut self, ctx: &mut BTerm) {
         use chaos_rpg_core::passive_tree::{nodes, NodeType};
 
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -5603,7 +5814,7 @@ impl State {
     // ── BODY CHART ────────────────────────────────────────────────────────────
 
     fn draw_body_chart(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
@@ -5723,7 +5934,7 @@ impl State {
     // ── GAME OVER ─────────────────────────────────────────────────────────────
 
     fn draw_game_over(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
@@ -5819,7 +6030,7 @@ impl State {
     // ── VICTORY ───────────────────────────────────────────────────────────────
 
     fn draw_victory(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -5901,7 +6112,7 @@ impl State {
     // ── SCOREBOARD ────────────────────────────────────────────────────────────
 
     fn draw_scoreboard(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,     t.bg.1,     t.bg.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
@@ -6598,6 +6809,7 @@ impl State {
                             self.passive_scroll = 0;
                             // Allocation burst particles
                             emit_level_up_fountain(&mut self.particles, 80.0, 40.0);
+                            self.trigger_pulse_ring(80.0, 40.0, (0.8, 1.0, 0.6), 1.0);
                         }
                     }
                 }
@@ -7088,7 +7300,7 @@ impl State {
     fn draw_achievements(&mut self, ctx: &mut BTerm) {
         use chaos_rpg_core::achievements::AchievementRarity;
 
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg    = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd    = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac    = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -7336,7 +7548,7 @@ impl State {
     }
 
     fn draw_run_history(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -7415,7 +7627,7 @@ impl State {
 
 impl State {
     fn draw_daily_leaderboard(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -7505,7 +7717,7 @@ impl State {
 impl State {
     fn draw_bestiary(&mut self, ctx: &mut BTerm) {
         use chaos_rpg_core::player_bestiary::PlayerBestiary;
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -7631,7 +7843,7 @@ impl State {
     fn draw_codex(&mut self, ctx: &mut BTerm) {
         use chaos_rpg_core::codex_progress::CodexProgress;
         use chaos_rpg_core::lore::codex::CODEX_ENTRIES;
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
@@ -7743,7 +7955,7 @@ impl State {
     // ── SETTINGS ─────────────────────────────────────────────────────────────
 
     fn draw_settings(&mut self, ctx: &mut BTerm) {
-        let t = self.theme().clone();
+        let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
