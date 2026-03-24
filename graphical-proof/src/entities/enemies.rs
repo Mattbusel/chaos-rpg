@@ -518,3 +518,709 @@ fn render_abomination(
         idx += 1;
     }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+//  PART 2 — Element system, boss profiles, spawn/death, AmorphousEntity
+// ════════════════════════════════════════════════════════════════════════════
+
+// ── Enemy element ────────────────────────────────────────────────────────────
+
+/// Element type driving enemy visual theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EnemyElement {
+    Fire,
+    Ice,
+    Lightning,
+    Poison,
+    Shadow,
+    Holy,
+    Neutral,
+}
+
+impl EnemyElement {
+    /// Primary color for this element.
+    pub fn primary_color(&self) -> Vec4 {
+        match self {
+            EnemyElement::Fire      => Vec4::new(1.0, 0.45, 0.1, 1.0),
+            EnemyElement::Ice       => Vec4::new(0.5, 0.75, 1.0, 1.0),
+            EnemyElement::Lightning => Vec4::new(1.0, 1.0, 0.3, 1.0),
+            EnemyElement::Poison    => Vec4::new(0.3, 0.8, 0.2, 1.0),
+            EnemyElement::Shadow    => Vec4::new(0.3, 0.15, 0.45, 1.0),
+            EnemyElement::Holy      => Vec4::new(1.0, 0.95, 0.7, 1.0),
+            EnemyElement::Neutral   => Vec4::new(0.7, 0.25, 0.2, 1.0),
+        }
+    }
+
+    /// Accent / secondary color.
+    pub fn accent_color(&self) -> Vec4 {
+        match self {
+            EnemyElement::Fire      => Vec4::new(1.0, 0.7, 0.0, 1.0),
+            EnemyElement::Ice       => Vec4::new(0.8, 0.9, 1.0, 1.0),
+            EnemyElement::Lightning => Vec4::new(1.0, 1.0, 0.8, 1.0),
+            EnemyElement::Poison    => Vec4::new(0.5, 0.2, 0.7, 1.0),
+            EnemyElement::Shadow    => Vec4::new(0.15, 0.05, 0.25, 1.0),
+            EnemyElement::Holy      => Vec4::new(1.0, 1.0, 1.0, 1.0),
+            EnemyElement::Neutral   => Vec4::new(0.9, 0.4, 0.3, 1.0),
+        }
+    }
+
+    /// Glyph palette for this element.
+    pub fn glyph_palette(&self) -> &'static [char] {
+        match self {
+            EnemyElement::Fire      => &['^', '*', '~', '#', '!', 'v', '>', '<'],
+            EnemyElement::Ice       => &['*', '+', '.', ':', '#', '=', '-', 'o'],
+            EnemyElement::Lightning => &['!', '/', '\\', 'X', '+', '#', '|', '-'],
+            EnemyElement::Poison    => &['~', '.', ':', ';', '?', '%', '&', 'S'],
+            EnemyElement::Shadow    => &['.', ' ', ':', '`', '\'', ',', '-', '~'],
+            EnemyElement::Holy      => &['*', '+', '.', '\'', ':', '!', '#', '^'],
+            EnemyElement::Neutral   => &['#', 'X', '+', '-', '|', '/', '\\', '.'],
+        }
+    }
+
+    /// Death style for this element.
+    pub fn death_style(&self) -> ElementalDeathStyle {
+        match self {
+            EnemyElement::Fire      => ElementalDeathStyle::Fire,
+            EnemyElement::Ice       => ElementalDeathStyle::Ice,
+            EnemyElement::Lightning => ElementalDeathStyle::Lightning,
+            EnemyElement::Poison    => ElementalDeathStyle::Poison,
+            EnemyElement::Shadow    => ElementalDeathStyle::Shadow,
+            EnemyElement::Holy      => ElementalDeathStyle::Holy,
+            EnemyElement::Neutral   => ElementalDeathStyle::Default,
+        }
+    }
+
+    /// Glow color for this element.
+    pub fn glow_color(&self) -> Vec3 {
+        match self {
+            EnemyElement::Fire      => Vec3::new(1.0, 0.4, 0.05),
+            EnemyElement::Ice       => Vec3::new(0.4, 0.7, 1.0),
+            EnemyElement::Lightning => Vec3::new(1.0, 1.0, 0.5),
+            EnemyElement::Poison    => Vec3::new(0.3, 0.8, 0.2),
+            EnemyElement::Shadow    => Vec3::new(0.2, 0.05, 0.3),
+            EnemyElement::Holy      => Vec3::new(1.0, 0.95, 0.7),
+            EnemyElement::Neutral   => Vec3::new(0.8, 0.2, 0.1),
+        }
+    }
+
+    /// Preferred formation shape for this element.
+    pub fn preferred_formation(&self) -> FormationShape {
+        match self {
+            EnemyElement::Fire      => FormationShape::Triangle,
+            EnemyElement::Ice       => FormationShape::Diamond,
+            EnemyElement::Lightning => FormationShape::Star,
+            EnemyElement::Poison    => FormationShape::Spiral,
+            EnemyElement::Shadow    => FormationShape::Crescent,
+            EnemyElement::Holy      => FormationShape::Ring,
+            EnemyElement::Neutral   => FormationShape::Cluster,
+        }
+    }
+
+    /// Emission intensity for this element.
+    pub fn emission(&self) -> f32 {
+        match self {
+            EnemyElement::Fire      => 0.5,
+            EnemyElement::Ice       => 0.3,
+            EnemyElement::Lightning => 0.6,
+            EnemyElement::Poison    => 0.2,
+            EnemyElement::Shadow    => 0.1,
+            EnemyElement::Holy      => 0.5,
+            EnemyElement::Neutral   => 0.15,
+        }
+    }
+}
+
+/// Guess an element from an enemy name.
+pub fn element_from_name(name: &str) -> EnemyElement {
+    let lower = name.to_lowercase();
+    if lower.contains("fire") || lower.contains("flame") || lower.contains("ember")
+        || lower.contains("inferno") || lower.contains("pyro")
+    { EnemyElement::Fire }
+    else if lower.contains("ice") || lower.contains("frost") || lower.contains("crystal")
+        || lower.contains("cryo") || lower.contains("frozen")
+    { EnemyElement::Ice }
+    else if lower.contains("lightning") || lower.contains("thunder") || lower.contains("volt")
+        || lower.contains("shock") || lower.contains("spark")
+    { EnemyElement::Lightning }
+    else if lower.contains("poison") || lower.contains("toxic") || lower.contains("venom")
+        || lower.contains("acid") || lower.contains("plague")
+    { EnemyElement::Poison }
+    else if lower.contains("shadow") || lower.contains("dark") || lower.contains("void")
+        || lower.contains("night") || lower.contains("abyss")
+    { EnemyElement::Shadow }
+    else if lower.contains("holy") || lower.contains("light") || lower.contains("radiant")
+        || lower.contains("divine") || lower.contains("sacred")
+    { EnemyElement::Holy }
+    else { EnemyElement::Neutral }
+}
+
+// ── Boss visual profiles ─────────────────────────────────────────────────────
+
+/// Unique boss visual identifiers (matching proof-engine BossType).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BossVisualProfile {
+    Mirror,
+    Null,
+    Committee,
+    FibonacciHydra,
+    Eigenstate,
+    Ouroboros,
+    AlgorithmReborn,
+    ChaosWeaver,
+    VoidSerpent,
+    PrimeFactorial,
+}
+
+impl BossVisualProfile {
+    /// Map a boss name string to a profile.
+    pub fn from_name(name: &str) -> Option<Self> {
+        let lower = name.to_lowercase();
+        if lower.contains("mirror") { Some(BossVisualProfile::Mirror) }
+        else if lower.contains("null") { Some(BossVisualProfile::Null) }
+        else if lower.contains("committee") || lower.contains("judge") { Some(BossVisualProfile::Committee) }
+        else if lower.contains("fibonacci") || lower.contains("hydra") { Some(BossVisualProfile::FibonacciHydra) }
+        else if lower.contains("eigen") { Some(BossVisualProfile::Eigenstate) }
+        else if lower.contains("ouroboros") { Some(BossVisualProfile::Ouroboros) }
+        else if lower.contains("algorithm") || lower.contains("reborn") { Some(BossVisualProfile::AlgorithmReborn) }
+        else if lower.contains("chaos") || lower.contains("weaver") { Some(BossVisualProfile::ChaosWeaver) }
+        else if lower.contains("void") || lower.contains("serpent") { Some(BossVisualProfile::VoidSerpent) }
+        else if lower.contains("prime") || lower.contains("factorial") { Some(BossVisualProfile::PrimeFactorial) }
+        else { None }
+    }
+
+    /// Glyph count for this boss.
+    pub fn glyph_count(&self) -> usize {
+        match self {
+            BossVisualProfile::Mirror          => 18,
+            BossVisualProfile::Null            => 15,
+            BossVisualProfile::Committee       => 25,
+            BossVisualProfile::FibonacciHydra  => 21,
+            BossVisualProfile::Eigenstate      => 20,
+            BossVisualProfile::Ouroboros       => 24,
+            BossVisualProfile::AlgorithmReborn => 30,
+            BossVisualProfile::ChaosWeaver     => 22,
+            BossVisualProfile::VoidSerpent     => 28,
+            BossVisualProfile::PrimeFactorial  => 20,
+        }
+    }
+
+    /// Formation shape for this boss at the given phase.
+    pub fn formation(&self, phase: u32) -> FormationShape {
+        match self {
+            BossVisualProfile::Mirror          => FormationShape::Diamond,
+            BossVisualProfile::Null            => FormationShape::Ring,
+            BossVisualProfile::Committee       => FormationShape::Semicircle,
+            BossVisualProfile::FibonacciHydra  => if phase == 0 { FormationShape::Cluster } else { FormationShape::Swarm },
+            BossVisualProfile::Eigenstate      => if phase % 2 == 0 { FormationShape::Star } else { FormationShape::Diamond },
+            BossVisualProfile::Ouroboros       => FormationShape::Ring,
+            BossVisualProfile::AlgorithmReborn => match phase { 0 => FormationShape::Grid, 1 => FormationShape::Diamond, 2 => FormationShape::Star, _ => FormationShape::Pentagram },
+            BossVisualProfile::ChaosWeaver     => [FormationShape::Star, FormationShape::Spiral, FormationShape::Cross, FormationShape::Triangle, FormationShape::Pentagon][(phase as usize) % 5],
+            BossVisualProfile::VoidSerpent     => FormationShape::Snake,
+            BossVisualProfile::PrimeFactorial  => FormationShape::Grid,
+        }
+    }
+
+    /// Formation scale for this boss.
+    pub fn formation_scale(&self) -> f32 {
+        match self {
+            BossVisualProfile::Mirror          => 1.5,
+            BossVisualProfile::Null            => 1.3,
+            BossVisualProfile::Committee       => 2.5,
+            BossVisualProfile::FibonacciHydra  => 2.0,
+            BossVisualProfile::Eigenstate      => 1.6,
+            BossVisualProfile::Ouroboros       => 2.0,
+            BossVisualProfile::AlgorithmReborn => 2.5,
+            BossVisualProfile::ChaosWeaver     => 1.8,
+            BossVisualProfile::VoidSerpent     => 3.0,
+            BossVisualProfile::PrimeFactorial  => 1.5,
+        }
+    }
+}
+
+// ── Enemy visual state (full-featured) ───────────────────────────────────────
+
+/// Full enemy visual state tracked across frames.
+#[derive(Clone)]
+pub struct EnemyVisualState {
+    pub name: String,
+    pub tier: EnemyTier,
+    pub element: EnemyElement,
+    pub boss_profile: Option<BossVisualProfile>,
+    pub hp_frac: f32,
+    pub phase: u32,
+    pub spawn_t: f32,
+    pub death_t: f32,
+    pub hit_reaction_t: f32,
+    pub time: f32,
+    pub is_alive: bool,
+}
+
+impl EnemyVisualState {
+    pub fn new(name: &str, tier: u32, element: EnemyElement) -> Self {
+        let et = EnemyTier::from_tier(tier);
+        let boss_profile = BossVisualProfile::from_name(name);
+        Self {
+            name: name.to_string(),
+            tier: et,
+            element,
+            boss_profile,
+            hp_frac: 1.0,
+            phase: 0,
+            spawn_t: 0.0,
+            death_t: 0.0,
+            hit_reaction_t: 1.0,
+            time: 0.0,
+            is_alive: true,
+        }
+    }
+
+    pub fn from_name(name: &str, tier: u32) -> Self {
+        Self::new(name, tier, element_from_name(name))
+    }
+
+    /// Advance by dt seconds.
+    pub fn tick(&mut self, dt: f32) {
+        self.time += dt;
+        if self.spawn_t < 1.0 { self.spawn_t = (self.spawn_t + dt * 2.0).min(1.0); }
+        if !self.is_alive && self.death_t < 1.0 { self.death_t = (self.death_t + dt * 0.8).min(1.0); }
+        if self.hit_reaction_t < 1.0 { self.hit_reaction_t = (self.hit_reaction_t + dt * 5.0).min(1.0); }
+    }
+
+    pub fn trigger_hit(&mut self) { self.hit_reaction_t = 0.0; }
+
+    pub fn trigger_death(&mut self) {
+        self.is_alive = false;
+        self.death_t = 0.0;
+    }
+
+    pub fn set_phase(&mut self, phase: u32) { self.phase = phase; }
+
+    pub fn is_death_complete(&self) -> bool { !self.is_alive && self.death_t >= 1.0 }
+}
+
+// ── Full-featured render entry point ─────────────────────────────────────────
+
+/// Render an enemy with full visual state: element theme, spawn/death
+/// animations, boss-specific profiles, and hit reactions.
+pub fn render_enemy_full(
+    engine: &mut ProofEngine,
+    state: &EnemyVisualState,
+    position: Vec3,
+    frame: u64,
+) {
+    let time = state.time;
+    let element = state.element;
+    let primary = element.primary_color();
+    let accent = element.accent_color();
+    let glow = element.glow_color();
+    let em = element.emission() + state.tier.emission();
+
+    // Determine formation positions
+    let formation_shape = if let Some(bp) = state.boss_profile {
+        bp.formation(state.phase)
+    } else {
+        element.preferred_formation()
+    };
+    let glyph_count = if let Some(bp) = state.boss_profile {
+        bp.glyph_count()
+    } else {
+        state.tier.glyph_count()
+    };
+    let scale = if let Some(bp) = state.boss_profile {
+        bp.formation_scale()
+    } else {
+        match state.tier {
+            EnemyTier::Minion      => 0.6,
+            EnemyTier::Elite       => 1.0,
+            EnemyTier::Champion    => 1.3,
+            EnemyTier::Boss        => 1.8,
+            EnemyTier::Abomination => 2.2,
+        }
+    };
+
+    let target_positions = formation_shape.generate_positions(glyph_count, scale);
+
+    // Spawn animation: glyphs expand from center
+    let mut positions = if state.spawn_t < 1.0 {
+        formations::spawn_animation(&target_positions, state.spawn_t)
+    } else {
+        target_positions.clone()
+    };
+
+    // Idle animation (element-specific)
+    if state.is_alive {
+        positions = apply_element_idle(&positions, element, time);
+    }
+
+    // HP-based drift
+    positions = formations::apply_hp_drift(&positions, state.hp_frac, time);
+
+    // Hit reaction
+    if state.hit_reaction_t < 1.0 {
+        positions = formations::apply_hit_reaction(&positions, state.hit_reaction_t, 0.4);
+    }
+
+    // Boss-specific animation
+    if let Some(bp) = state.boss_profile {
+        positions = apply_boss_anim(&positions, bp, state.phase, time);
+    }
+
+    // Death dissolution
+    if !state.is_alive {
+        let style = element.death_style();
+        positions = positions
+            .iter()
+            .enumerate()
+            .map(|(i, p)| style.modify_death_pos(*p, state.death_t, i))
+            .collect();
+    }
+
+    // Build char palette
+    let palette = element.glyph_palette();
+    let name_chars: Vec<char> = state.name.chars().filter(|c| !c.is_whitespace()).take(4).collect();
+
+    // Death color
+    let death_style = element.death_style();
+
+    for (i, p) in positions.iter().enumerate() {
+        let world_pos = position + *p;
+
+        // Pick character from name chars first, then element palette
+        let ch = if i < name_chars.len() {
+            name_chars[i]
+        } else {
+            palette[i % palette.len()]
+        };
+
+        // Color: blend primary/accent based on distance from center
+        let dist = p.length();
+        let t = (dist / (scale * 1.5)).clamp(0.0, 1.0);
+        let mut color = lerp_color(primary, accent, t);
+
+        // Spawn flash
+        if state.spawn_t < 1.0 {
+            let flash = (1.0 - state.spawn_t) * 0.5;
+            color.x = (color.x + flash).min(1.0);
+            color.y = (color.y + flash).min(1.0);
+            color.z = (color.z + flash).min(1.0);
+        }
+
+        // Death color
+        if !state.is_alive {
+            color = death_style.death_color(color, state.death_t);
+        }
+
+        // Glow pulse for elite+ tiers
+        let glow_r = match state.tier {
+            EnemyTier::Minion => 0.0,
+            EnemyTier::Elite => 0.3,
+            EnemyTier::Champion => 0.5,
+            EnemyTier::Boss => 0.8,
+            EnemyTier::Abomination => 1.0,
+        };
+
+        if glow_r > 0.01 {
+            spawn_enemy_glow(engine, ch, world_pos, color, em, state.tier.glyph_scale(), glow, glow_r);
+        } else {
+            spawn_enemy(engine, ch, world_pos, color, em, state.tier.glyph_scale());
+        }
+    }
+}
+
+// ── Element-specific idle animation ──────────────────────────────────────────
+
+fn apply_element_idle(positions: &[Vec3], element: EnemyElement, time: f32) -> Vec<Vec3> {
+    match element {
+        EnemyElement::Fire => {
+            // Flickering upward drift
+            positions.iter().enumerate().map(|(i, p)| {
+                let flicker = (time * 6.0 + i as f32 * 2.1).sin() * 0.05;
+                let rise = ((time * TAU + i as f32).sin() * 0.04).abs();
+                *p + Vec3::new(flicker, rise, 0.0)
+            }).collect()
+        }
+        EnemyElement::Ice => {
+            // Slow crystalline pulse
+            formations::apply_breathing(positions, time, 0.4, 0.03)
+        }
+        EnemyElement::Lightning => {
+            // Jittery flicker
+            positions.iter().enumerate().map(|(i, p)| {
+                let jx = (time * 15.0 + i as f32 * 3.7).sin() * 0.03;
+                let jy = (time * 12.0 + i as f32 * 5.1).cos() * 0.03;
+                *p + Vec3::new(jx, jy, 0.0)
+            }).collect()
+        }
+        EnemyElement::Poison => {
+            // Bubbling
+            positions.iter().enumerate().map(|(i, p)| {
+                let bubble = ((time * 3.0 + i as f32 * 1.3).sin() * 0.04).max(0.0);
+                *p + Vec3::new(0.0, bubble, 0.0)
+            }).collect()
+        }
+        EnemyElement::Shadow => {
+            // Undulating tendrils
+            positions.iter().enumerate().map(|(i, p)| {
+                let wave = (time * 1.5 + p.y * 2.0 + i as f32 * 0.5).sin() * 0.06;
+                *p + Vec3::new(wave, 0.0, 0.0)
+            }).collect()
+        }
+        EnemyElement::Holy => {
+            // Radiant center pulse
+            positions.iter().map(|p| {
+                let dist = p.length();
+                let wave = (time * TAU - dist * 3.0).sin() * 0.04;
+                *p * (1.0 + wave)
+            }).collect()
+        }
+        EnemyElement::Neutral => {
+            formations::apply_breathing(positions, time, 0.6, 0.03)
+        }
+    }
+}
+
+// ── Boss-specific animation ──────────────────────────────────────────────────
+
+fn apply_boss_anim(
+    positions: &[Vec3],
+    profile: BossVisualProfile,
+    phase: u32,
+    time: f32,
+) -> Vec<Vec3> {
+    match profile {
+        BossVisualProfile::Mirror => {
+            // Subtle mirror shimmer
+            positions.iter().enumerate().map(|(i, p)| {
+                let shimmer = (time * 3.0 + i as f32 * 0.8).sin() * 0.02;
+                Vec3::new(p.x + shimmer, p.y, p.z)
+            }).collect()
+        }
+        BossVisualProfile::Null => {
+            // Void contract/expand
+            let pulse = (time * 0.8).sin() * 0.15;
+            positions.iter().map(|p| *p * (1.0 + pulse)).collect()
+        }
+        BossVisualProfile::Committee => {
+            // Each judge bobs independently
+            let count = positions.len();
+            positions.iter().enumerate().map(|(i, p)| {
+                let judge = (i * 5) / count.max(1);
+                let bob = (time * 1.5 + judge as f32 * 1.2).sin() * 0.08;
+                *p + Vec3::new(0.0, bob, 0.0)
+            }).collect()
+        }
+        BossVisualProfile::FibonacciHydra => {
+            // Heads sway
+            let heads = (phase + 1).min(5) as usize;
+            let hc = (positions.len() / heads).max(1);
+            positions.iter().enumerate().map(|(i, p)| {
+                let head = i / hc;
+                let sway = (time * 2.0 + head as f32 * PI * 0.4).sin() * 0.1;
+                *p + Vec3::new(sway, 0.0, 0.0)
+            }).collect()
+        }
+        BossVisualProfile::Eigenstate => {
+            // Two states shimmer
+            positions.iter().enumerate().map(|(i, p)| {
+                let offset = if i % 2 == 0 { 1.0 } else { -1.0 };
+                let shift = (time * 1.0).sin() * 0.15 * offset;
+                *p + Vec3::new(shift, 0.0, 0.0)
+            }).collect()
+        }
+        BossVisualProfile::Ouroboros => {
+            formations::apply_rotation(positions, time, 0.3)
+        }
+        BossVisualProfile::AlgorithmReborn => {
+            let intensity = 0.03 + phase as f32 * 0.02;
+            let pulse = (time * (1.0 + phase as f32 * 0.3)).sin() * intensity;
+            positions.iter().map(|p| *p * (1.0 + pulse)).collect()
+        }
+        BossVisualProfile::ChaosWeaver => {
+            positions.iter().enumerate().map(|(i, p)| {
+                let seed = (i as u32).wrapping_mul(2654435761);
+                let jx = (time * 8.0 + seed as f32 * 0.001).sin() * 0.08;
+                let jy = (time * 7.0 + seed as f32 * 0.0013).cos() * 0.08;
+                *p + Vec3::new(jx, jy, 0.0)
+            }).collect()
+        }
+        BossVisualProfile::VoidSerpent => {
+            // Sinusoidal body
+            positions.iter().enumerate().map(|(i, p)| {
+                let t = i as f32 / positions.len() as f32;
+                let wave = (time * 2.0 + t * TAU * 1.5).sin() * 0.15;
+                *p + Vec3::new(0.0, wave, 0.0)
+            }).collect()
+        }
+        BossVisualProfile::PrimeFactorial => {
+            // Grid pulses
+            positions.iter().enumerate().map(|(i, p)| {
+                let wave = (time * 3.0 + i as f32 * 0.5).sin() * 0.03;
+                *p * (1.0 + wave)
+            }).collect()
+        }
+    }
+}
+
+// ── AmorphousEntity builder (formation-backed) ──────────────────────────────
+
+/// Build an AmorphousEntity for an enemy (backwards-compatible signature).
+pub fn build_enemy_entity(name: &str, tier: u32, position: Vec3) -> AmorphousEntity {
+    let enemy_tier = EnemyTier::from_tier(tier);
+    let element = element_from_name(name);
+    let boss_profile = BossVisualProfile::from_name(name);
+
+    let (glyph_count, scale) = if let Some(bp) = boss_profile {
+        (bp.glyph_count(), bp.formation_scale())
+    } else {
+        (enemy_tier.glyph_count(), match enemy_tier {
+            EnemyTier::Minion      => 0.6,
+            EnemyTier::Elite       => 1.0,
+            EnemyTier::Champion    => 1.3,
+            EnemyTier::Boss        => 1.8,
+            EnemyTier::Abomination => 2.2,
+        })
+    };
+
+    let formation_shape = if let Some(bp) = boss_profile {
+        bp.formation(0)
+    } else {
+        element.preferred_formation()
+    };
+
+    let positions = formation_shape.generate_positions(glyph_count, scale);
+    let palette = element.glyph_palette();
+    let primary = element.primary_color();
+    let accent = element.accent_color();
+    let name_chars: Vec<char> = name.chars().filter(|c| !c.is_whitespace()).take(4).collect();
+
+    let mut chars = Vec::with_capacity(glyph_count);
+    let mut colors = Vec::with_capacity(glyph_count);
+
+    for (i, p) in positions.iter().enumerate() {
+        let ch = if i < name_chars.len() { name_chars[i] } else { palette[i % palette.len()] };
+        chars.push(ch);
+
+        let dist = p.length();
+        let t = (dist / (scale * 1.5)).clamp(0.0, 1.0);
+        colors.push(lerp_color(primary, accent, t));
+    }
+
+    let mut entity = AmorphousEntity::new(format!("enemy_{}", name), position);
+    entity.entity_mass = 30.0 + tier as f32 * 10.0;
+    entity.pulse_rate = 0.8;
+    entity.pulse_depth = 0.04;
+    entity.formation = positions;
+    entity.formation_chars = chars;
+    entity.formation_colors = colors;
+    entity
+}
+
+/// Update an existing AmorphousEntity from an EnemyVisualState.
+pub fn update_enemy_entity(entity: &mut AmorphousEntity, state: &EnemyVisualState) {
+    let formation_shape = if let Some(bp) = state.boss_profile {
+        bp.formation(state.phase)
+    } else {
+        state.element.preferred_formation()
+    };
+    let glyph_count = if let Some(bp) = state.boss_profile {
+        bp.glyph_count()
+    } else {
+        state.tier.glyph_count()
+    };
+    let scale = if let Some(bp) = state.boss_profile {
+        bp.formation_scale()
+    } else {
+        match state.tier {
+            EnemyTier::Minion      => 0.6,
+            EnemyTier::Elite       => 1.0,
+            EnemyTier::Champion    => 1.3,
+            EnemyTier::Boss        => 1.8,
+            EnemyTier::Abomination => 2.2,
+        }
+    };
+
+    let target = formation_shape.generate_positions(glyph_count, scale);
+    let mut positions = if state.spawn_t < 1.0 {
+        formations::spawn_animation(&target, state.spawn_t)
+    } else {
+        target
+    };
+
+    if state.is_alive { positions = apply_element_idle(&positions, state.element, state.time); }
+    positions = formations::apply_hp_drift(&positions, state.hp_frac, state.time);
+    if state.hit_reaction_t < 1.0 { positions = formations::apply_hit_reaction(&positions, state.hit_reaction_t, 0.4); }
+    if let Some(bp) = state.boss_profile { positions = apply_boss_anim(&positions, bp, state.phase, state.time); }
+
+    if !state.is_alive {
+        let style = state.element.death_style();
+        positions = positions.iter().enumerate().map(|(i, p)| style.modify_death_pos(*p, state.death_t, i)).collect();
+    }
+
+    let palette = state.element.glyph_palette();
+    let primary = state.element.primary_color();
+    let accent = state.element.accent_color();
+    let name_chars: Vec<char> = state.name.chars().filter(|c| !c.is_whitespace()).take(4).collect();
+
+    let len = positions.len();
+    let mut chars = Vec::with_capacity(len);
+    let mut colors = Vec::with_capacity(len);
+    let death_style = state.element.death_style();
+
+    for (i, p) in positions.iter().enumerate() {
+        let ch = if i < name_chars.len() { name_chars[i] } else { palette[i % palette.len()] };
+        chars.push(ch);
+
+        let dist = p.length();
+        let t = (dist / (scale * 1.5)).clamp(0.0, 1.0);
+        let mut color = lerp_color(primary, accent, t);
+
+        if state.spawn_t < 1.0 {
+            let flash = (1.0 - state.spawn_t) * 0.5;
+            color.x = (color.x + flash).min(1.0);
+            color.y = (color.y + flash).min(1.0);
+            color.z = (color.z + flash).min(1.0);
+        }
+        if !state.is_alive {
+            color = death_style.death_color(color, state.death_t);
+        }
+        colors.push(color);
+    }
+
+    entity.formation = positions;
+    entity.formation_chars = chars;
+    entity.formation_colors = colors;
+    entity.hp = state.hp_frac * entity.max_hp;
+    entity.update_cohesion();
+}
+
+// ── Classification utility ───────────────────────────────────────────────────
+
+/// Classify an enemy by tier, element, and optional boss profile.
+pub fn classify_enemy(name: &str, tier: u32) -> (EnemyTier, EnemyElement, Option<BossVisualProfile>) {
+    let et = EnemyTier::from_tier(tier);
+    let element = element_from_name(name);
+    let boss = BossVisualProfile::from_name(name);
+    (et, element, boss)
+}
+
+// ── Utility ──────────────────────────────────────────────────────────────────
+
+fn lerp_color(a: Vec4, b: Vec4, t: f32) -> Vec4 {
+    a + (b - a) * t.clamp(0.0, 1.0)
+}
+
+/// Convert hue [0,1] to a saturated RGBA color.
+fn hue_to_color(hue: f32, saturation: f32) -> Vec4 {
+    let h = hue * 6.0;
+    let c = saturation;
+    let x = c * (1.0 - (h % 2.0 - 1.0).abs());
+    let (r, g, b) = match h as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    Vec4::new(r, g, b, 1.0)
+}
