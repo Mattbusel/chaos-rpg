@@ -69,6 +69,11 @@ impl ProofGame for ChaosRpgGame {
     }
 
     fn update(&mut self, engine: &mut ProofEngine, dt: f32) {
+        // CRITICAL: Clear all glyphs from previous frame.
+        // We do immediate-mode rendering — every glyph is spawned fresh each frame.
+        // Without this, glyphs accumulate and FPS drops to zero within seconds.
+        engine.scene.glyphs = proof_engine::glyph::GlyphPool::new(8192);
+
         // Handle debug tool input BEFORE game input (F-keys, console, etc.)
         let debug_consumed = self.debug_tools.handle_input(engine);
 
