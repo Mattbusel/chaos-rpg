@@ -119,15 +119,14 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let bg = BACKGROUNDS[state.cc_bg];
     let diff = DIFFICULTIES[state.cc_diff];
 
-    ui_render::text(engine, &format!("-- {} --", cls.name()), -8.0, -3.5, theme.accent, 0.35, 0.6);
-    // Truncate description to fit
-    let desc: String = cls.description().chars().take(60).collect();
-    ui_render::small(engine, &desc, -8.0, -4.0, theme.primary);
-    ui_render::small(engine, &format!("Passive: {}", cls.passive_name()), -8.0, -4.5, theme.primary);
+    // Class preview — word-wrapped description
+    ui_render::text(engine, &format!("-- {} --", cls.name()), -8.0, -2.8, theme.accent, 0.35, 0.6);
+    ui_render::text_wrapped(engine, cls.description(), -8.0, -3.3, 35, theme.primary, 0.25, 0.35);
+    ui_render::small(engine, &format!("Passive: {}", cls.passive_name()), -8.0, -4.8, theme.success);
 
-    ui_render::text(engine, &format!("-- {} --", bg.name()), 0.0, -3.5, theme.accent, 0.35, 0.6);
-    let bg_desc: String = bg.description().chars().take(40).collect();
-    ui_render::small(engine, &bg_desc, 0.0, -4.0, theme.primary);
+    // Background preview
+    ui_render::text(engine, &format!("-- {} --", bg.name()), 1.0, -2.8, theme.accent, 0.35, 0.6);
+    ui_render::text_wrapped(engine, bg.description(), 1.0, -3.3, 30, theme.primary, 0.25, 0.35);
 
-    ui_render::small(engine, "[N] Edit name | Enter/Space to confirm | Esc back", -7.0, -5.2, theme.muted);
+    ui_render::small(engine, "[N] Name | Enter/Space confirm | Esc back", -7.0, -5.2, theme.muted);
 }

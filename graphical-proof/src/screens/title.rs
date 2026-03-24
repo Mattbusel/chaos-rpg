@@ -71,13 +71,17 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
     // +Y = top of screen (ui_render negates Y internally)
 
-    // Logo (top)
+    // Logo (top) — Tier 1 brightness
     ui_render::title(engine, "CHAOS RPG", 4.5, theme.heading);
 
-    // Tagline
-    ui_render::text_centered(engine, theme.tagline, 3.0, theme.dim, 0.25, 0.25);
+    // Tagline — Tier 4 brightness, higher emission for readability over chaos field
+    ui_render::text_centered(engine, theme.tagline, 3.0, theme.dim, 0.28, 0.4);
 
-    // Menu items (center, going downward = decreasing Y)
+    // Semi-transparent dark panel behind menu for contrast
+    ui_render::panel_bg(engine, -5.0, 2.0, 10.0, 6.5, theme.bg, 0.4);
+    ui_render::box_single(engine, -5.0, 2.0, 10.0, 6.5, theme.border, 0.3, 0.3);
+
+    // Menu items — Tier 2/3 brightness
     let items = [
         "[1] Continue", "[2] New Run", "[3] Tutorial", "[4] Achievements",
         "[5] Run History", "[6] Daily Board", "[7] Settings", "[8] Quit",
@@ -88,17 +92,18 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
     for (idx, label) in items.iter().enumerate() {
         let selected = idx == state.selected_menu;
+        // Tier 1 (selected) vs Tier 3 (unselected)
         let color = if selected { theme.selected } else { theme.primary };
-        let emission = if selected { 0.8 } else { 0.3 };
+        let emission = if selected { 1.0 } else { 0.4 };
         let y = menu_top - idx as f32 * line_height;
 
         if selected {
-            ui_render::cursor_arrow(engine, -4.0, y, theme.accent, 0.35, state.frame);
+            ui_render::cursor_arrow(engine, -4.2, y, theme.accent, 0.4, state.frame);
         }
         ui_render::text(engine, label, -3.2, y, color, 0.4, emission);
     }
 
-    // Footer (bottom)
+    // Footer — Tier 5 brightness
     ui_render::small(engine, &format!("[T] Theme: {}", theme.name), -4.0, -4.5, theme.muted);
     ui_render::small(engine, "Arrows + Enter/Space | Number keys", -4.5, -5.0, theme.muted);
 }

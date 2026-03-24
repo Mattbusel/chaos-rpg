@@ -95,13 +95,14 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
         let start = floor.current_room.saturating_sub(visible / 2);
         let end = (start + visible).min(floor.rooms.len());
 
-        for (di, idx) in (start..end).enumerate() {
+        let mut y = 3.0;
+        for (_, idx) in (start..end).enumerate() {
             let room = &floor.rooms[idx];
             let is_current = idx == floor.current_room;
-            let y = 3.0 - di as f32 * 0.55;
 
             let icon = room_icon(&room.room_type);
             let label = format!("{}{} {:>2}. {:?}", if is_current { ">" } else { " " }, icon, idx + 1, room.room_type);
+            // Tier 1 (current) vs Tier 3 (available) vs Tier 4 (visited)
             let color = if is_current { theme.selected } else {
                 match room.room_type {
                     RoomType::Boss => theme.danger,
@@ -112,12 +113,15 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
                     _ => theme.primary,
                 }
             };
-            ui_render::text(engine, &label, -8.0, y, color, 0.3, if is_current { 0.7 } else { 0.3 });
+            let emission = if is_current { 0.8 } else if room.visited { 0.2 } else { 0.4 };
+            ui_render::text(engine, &label, -8.0, y, color, 0.3, emission);
+            y -= 0.45;
 
-            // Description for current room
+            // Description ONLY for current room, on its own line
             if is_current && !room.description.is_empty() {
                 let desc: String = room.description.chars().take(35).collect();
-                ui_render::small(engine, &desc, -7.5, y - 0.3, theme.dim);
+                ui_render::text(engine, &desc, -7.2, y, theme.dim, 0.22, 0.25);
+                y -= 0.35;
             }
         }
     }
@@ -131,7 +135,9 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
         ui_render::bar(engine, 2.0, 2.6, 4.0, hp_pct, theme.hp_color(hp_pct), theme.muted, 0.25);
 
         let max_mp = (p.stats.mana + 50).max(50);
+        let mp_pct = if max_mp > 0 { state.current_mana as f32 / max_mp as f32 } else { 0.0 };
         ui_render::text(engine, &format!("MP {}/{}", state.current_mana, max_mp), 2.0, 2.0, theme.mana, 0.3, 0.5);
+        ui_render::bar(engine, 2.0, 1.6, 4.0, mp_pct, theme.mana, theme.muted, 0.25);
 
         ui_render::text(engine, &format!("Gold: {}", p.gold), 2.0, 1.2, theme.gold, 0.3, 0.4);
         ui_render::text(engine, &format!("Kills: {}", p.kills), 2.0, 0.7, theme.primary, 0.3, 0.4);

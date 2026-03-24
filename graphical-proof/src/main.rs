@@ -130,14 +130,25 @@ impl ProofGame for ChaosRpgGame {
         let anim_transforms = self.anim_bridge.update(dt, &self.state);
         let _ = &anim_transforms; // transforms are applied by screen-specific renderers
 
-        // Only render chaos field on the title screen — it's too distracting elsewhere
-        if self.state.screen == AppScreen::Title {
+        // Chaos field on all screens with per-screen brightness
+        let chaos_brightness = match self.state.screen {
+            AppScreen::Title => 1.0,
+            AppScreen::CharacterCreation | AppScreen::BoonSelect | AppScreen::ModeSelect => 0.3,
+            AppScreen::FloorNav | AppScreen::RoomView => 0.2,
+            AppScreen::Combat => 0.15,
+            AppScreen::Shop | AppScreen::Crafting => 0.25,
+            AppScreen::CharacterSheet | AppScreen::BodyChart | AppScreen::PassiveTree => 0.1,
+            AppScreen::GameOver => 0.0, // freezes
+            AppScreen::Victory => 0.5,  // golden
+            _ => 0.15, // default for meta screens
+        };
+        if chaos_brightness > 0.01 {
             self.chaos_compute.set_floor_theme(
                 self.state.floor_num,
                 self.state.corruption_frac() * 500.0,
             );
-            self.chaos_compute.update(dt);
-            self.chaos_compute.render(engine);
+            self.chaos_compute.update(dt * chaos_brightness); // slower at lower brightness
+            self.chaos_compute.render_at_brightness(engine, chaos_brightness);
         }
 
         // Screen-specific update + render

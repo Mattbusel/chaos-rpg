@@ -454,6 +454,24 @@ impl GpuChaosField {
         }
     }
 
+    pub fn render_at_brightness(&self, engine: &mut ProofEngine, brightness: f32) {
+        for p in &self.particles {
+            if p.is_dead() { continue; }
+            let a = p.alpha() * brightness;
+            if a < 0.01 { continue; }
+
+            engine.spawn_glyph(Glyph {
+                character: p.character,
+                position: Vec3::new(p.position[0], p.position[1], p.position[2]),
+                color: Vec4::new(p.color[0] * brightness, p.color[1] * brightness, p.color[2] * brightness, p.color[3] * brightness),
+                emission: p.emission * brightness * 0.3,
+                scale: Vec2::splat(p.scale * a),
+                layer: RenderLayer::Background,
+                ..Default::default()
+            });
+        }
+    }
+
     pub fn particle_count(&self) -> u32 {
         self.particle_count
     }
@@ -779,6 +797,14 @@ impl ChaosComputeManager {
     pub fn render(&self, engine: &mut ProofEngine) {
         self.chaos_field.render(engine);
         self.fluid_sim.render(engine);
+    }
+
+    pub fn render_at_brightness(&self, engine: &mut ProofEngine, brightness: f32) {
+        self.chaos_field.render_at_brightness(engine, brightness);
+        // Don't render fluids at low brightness
+        if brightness > 0.5 {
+            self.fluid_sim.render(engine);
+        }
     }
 
     pub fn set_floor_theme(&mut self, floor: u32, corruption: f32) {
