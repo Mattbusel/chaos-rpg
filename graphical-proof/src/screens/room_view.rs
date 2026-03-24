@@ -3,9 +3,11 @@
 use proof_engine::prelude::*;
 use crate::state::{AppScreen, GameState};
 use crate::theme::THEMES;
+use crate::ui_render;
 
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
-    let enter = engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Escape);
+    let enter = engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Space);
+    let esc = engine.input.just_pressed(Key::Escape);
     let p_key = engine.input.just_pressed(Key::P);
     let l_key = engine.input.just_pressed(Key::L);
 
@@ -17,7 +19,6 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
             }
         }
         if state.room_event.portal_available {
-            // Skip floors via portal
             state.floor_num += 3;
             state.room_event.resolved = true;
         }
@@ -31,9 +32,9 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
         }
     }
     // Continue
-    if enter && state.room_event.resolved {
+    if (enter || esc) && state.room_event.resolved {
         state.screen = AppScreen::FloorNav;
-    } else if enter {
+    } else if enter || esc {
         state.room_event.resolved = true;
     }
 }
@@ -41,28 +42,63 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
+    // Event title
     if !state.room_event.title.is_empty() {
-        render_text(engine, &state.room_event.title, -8.0, 7.0, theme.heading, 0.8);
+        ui_render::heading_centered(engine, &state.room_event.title, 4.5, theme.heading);
     }
 
+    // Event lines
     for (i, line) in state.room_event.lines.iter().enumerate() {
-        let truncated: String = line.chars().take(70).collect();
-        render_text(engine, &truncated, -16.0, 4.0 - i as f32 * 1.0, theme.primary, 0.4);
+        let truncated: String = line.chars().take(48).collect();
+        ui_render::small(engine, &truncated, -7.5, 3.0 - i as f32 * 0.42, theme.primary);
     }
 
+    // Stat deltas
+    let mut info_y = 3.0 - state.room_event.lines.len() as f32 * 0.42 - 0.5;
+    if state.room_event.gold_delta != 0 {
+        let sign = if state.room_event.gold_delta > 0 { "+" } else { "" };
+        let c = if state.room_event.gold_delta > 0 { theme.gold } else { theme.danger };
+        ui_render::small(engine, &format!("{}{}  gold", sign, state.room_event.gold_delta), -7.5, info_y, c);
+        info_y -= 0.38;
+    }
+    if state.room_event.hp_delta != 0 {
+        let sign = if state.room_event.hp_delta > 0 { "+" } else { "" };
+        let c = if state.room_event.hp_delta > 0 { theme.success } else { theme.danger };
+        ui_render::small(engine, &format!("{}{}  HP", sign, state.room_event.hp_delta), -7.5, info_y, c);
+        info_y -= 0.38;
+    }
+    if state.room_event.damage_taken != 0 {
+        ui_render::small(engine, &format!("-{} damage taken", state.room_event.damage_taken), -7.5, info_y, theme.danger);
+        info_y -= 0.38;
+    }
+    for (stat, val) in &state.room_event.stat_bonuses {
+        let sign = if *val > 0 { "+" } else { "" };
+        ui_render::small(engine, &format!("{}{} {}", sign, val, stat), -7.5, info_y, theme.accent);
+        info_y -= 0.38;
+    }
+
+    // Pending pickups
+    if let Some(ref item) = state.room_event.pending_item {
+        ui_render::body(engine, &format!("Item: {}", item.name), -7.5, info_y - 0.2, theme.gold);
+    }
+    if let Some(ref spell) = state.room_event.pending_spell {
+        ui_render::body(engine, &format!("Spell: {}", spell.name), -7.5, info_y - 0.6, theme.mana);
+    }
+
+    // Control hints
     let mut hints = Vec::new();
     if state.room_event.pending_item.is_some() { hints.push("[P] Pick up"); }
     if state.room_event.pending_spell.is_some() { hints.push("[L] Learn spell"); }
     if state.room_event.portal_available { hints.push("[P] Enter portal"); }
-    hints.push("[Enter] Continue");
+    hints.push("[Enter/Space] Continue");
 
-    render_text(engine, &hints.join("  "), -12.0, -10.0, theme.muted, 0.25);
+    ui_render::small(engine, &hints.join("  "), -7.5, -5.0, theme.muted);
 
-    // ── Dungeon minimap overlay (from proof-engine DungeonBridge) ──
+    // Dungeon minimap overlay
     render_dungeon_minimap(state, engine, theme);
 }
 
-/// Render the proof-engine dungeon minimap in the top-right corner of the room view.
+/// Render the proof-engine dungeon minimap in the top-right corner.
 fn render_dungeon_minimap(
     state: &GameState,
     engine: &mut ProofEngine,
@@ -76,9 +112,9 @@ fn render_dungeon_minimap(
     };
 
     if let Some(minimap) = bridge.get_minimap_data() {
-        let offset_x = 12.0_f32;
-        let offset_y = 8.0_f32;
-        let scale = 0.35_f32;
+        let offset_x = 5.5_f32;
+        let offset_y = 4.5_f32;
+        let scale = 0.3_f32;
 
         for entry in &minimap.entries {
             let px = offset_x + entry.x as f32 * scale;
@@ -95,21 +131,8 @@ fn render_dungeon_minimap(
             });
         }
 
-        // Biome label
         let biome = bridge.biome();
         let floor_label = format!("F{} - {}", bridge.floor_number(), biome);
-        render_text(engine, &floor_label, offset_x - 1.0, offset_y + 1.0, theme.muted, 0.3);
-    }
-}
-
-fn render_text(engine: &mut ProofEngine, text: &str, x: f32, y: f32, color: Vec4, emission: f32) {
-    for (i, ch) in text.chars().enumerate() {
-        engine.spawn_glyph(Glyph {
-            character: ch,
-            position: Vec3::new(x + i as f32 * 0.45, y, 0.0),
-            color, emission,
-            layer: RenderLayer::UI,
-            ..Default::default()
-        });
+        ui_render::small(engine, &floor_label, offset_x - 0.5, offset_y + 0.8, theme.muted);
     }
 }

@@ -1,8 +1,10 @@
-//! Codex — lore fragments and world knowledge.
+//! Codex — lore fragments and world knowledge. Categorized entries,
+//! reading pane with word-wrapped text, animated scroll indicator.
 
 use proof_engine::prelude::*;
 use crate::state::{AppScreen, GameState};
 use crate::theme::THEMES;
+use crate::ui_render;
 
 /// Codex entries — static lore content.
 const CODEX_ENTRIES: &[(&str, &str)] = &[
@@ -21,69 +23,119 @@ const CODEX_ENTRIES: &[(&str, &str)] = &[
     ("The Algorithm Reborn", "The final boss. The Proof itself, given will. It adapts to your strategy, counters your strengths, and in Phase 3, becomes the chaos field. Fighting it means fighting the engine itself."),
 ];
 
+// ── Update ──────────────────────────────────────────────────────────────────
+
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
-    let up = engine.input.just_pressed(Key::Up);
-    let down = engine.input.just_pressed(Key::Down);
-    let esc = engine.input.just_pressed(Key::Escape) || engine.input.just_pressed(Key::Q);
+    let up = engine.input.just_pressed(Key::Up) || engine.input.just_pressed(Key::W);
+    let down = engine.input.just_pressed(Key::Down) || engine.input.just_pressed(Key::S);
+    let esc = engine.input.just_pressed(Key::Escape) || engine.input.just_pressed(Key::Space);
 
     if up && state.codex_scroll > 0 { state.codex_scroll -= 1; }
     if down && state.codex_scroll < CODEX_ENTRIES.len().saturating_sub(1) { state.codex_scroll += 1; }
     if esc { state.screen = AppScreen::Title; }
 }
 
+// ── Render ──────────────────────────────────────────────────────────────────
+
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    let frame = state.frame;
 
-    render_text(engine, &format!("CODEX — {} entries", CODEX_ENTRIES.len()),
-        -18.0, 9.0, theme.heading, 0.8);
+    // ── Header ──
+    ui_render::heading_centered(engine, "CODEX", 4.8, theme.heading);
+    ui_render::text_centered(engine, &format!("{} entries", CODEX_ENTRIES.len()), 4.0, theme.dim, 0.25, 0.3);
 
-    // Left panel: entry list
-    let start = state.codex_scroll.saturating_sub(6);
-    let end = (start + 14).min(CODEX_ENTRIES.len());
+    ui_render::text_centered(engine, "================================", 3.3, theme.border, 0.22, 0.12);
+
+    // ── Left panel: entry list ──
+    let start = state.codex_scroll.saturating_sub(5);
+    let end = (start + 12).min(CODEX_ENTRIES.len());
     for (di, idx) in (start..end).enumerate() {
         let (title, _) = CODEX_ENTRIES[idx];
         let selected = idx == state.codex_scroll;
         let color = if selected { theme.selected } else { theme.primary };
+        let em = if selected { 0.7 } else { 0.3 };
         let prefix = if selected { "> " } else { "  " };
-        render_text(engine, &format!("{}{}", prefix, title), -18.0, 7.0 - di as f32 * 1.0, color,
-            if selected { 0.7 } else { 0.35 });
+
+        // Entry number
+        let line = format!("{}{:>2}. {}", prefix, idx + 1, title);
+        ui_render::text(engine, &line, -8.2, 2.8 - di as f32 * 0.5, color, 0.27, em);
+
+        // Active indicator
+        if selected {
+            let pulse = ((frame as f32 * 0.08).sin() * 0.2 + 0.8).max(0.0);
+            engine.spawn_glyph(Glyph {
+                character: '>',
+                position: Vec3::new(-8.6, 2.8 - di as f32 * 0.5, 0.0),
+                color: Vec4::new(theme.accent.x * pulse, theme.accent.y * pulse, theme.accent.z * pulse, pulse),
+                emission: pulse * 0.6,
+                layer: RenderLayer::UI,
+                ..Default::default()
+            });
+        }
     }
 
-    // Right panel: selected entry content
+    // Scroll indicator track
+    let scroll_pct = if CODEX_ENTRIES.is_empty() { 0.0 } else { state.codex_scroll as f32 / CODEX_ENTRIES.len() as f32 };
+    for i in 0..12 {
+        ui_render::text(engine, ":", -2.0, 2.8 - i as f32 * 0.5, theme.muted, 0.15, 0.05);
+    }
+    let indicator_y = 2.8 - scroll_pct * 5.5;
+    ui_render::text(engine, "#", -2.0, indicator_y, theme.accent, 0.2, 0.4);
+
+    // ── Right panel: selected entry content ──
     if let Some((title, body)) = CODEX_ENTRIES.get(state.codex_scroll) {
-        render_text(engine, title, 1.0, 7.0, theme.heading, 0.7);
+        let px = -0.5;
+        let mut py = 2.8;
+
+        // Title with decorative border
+        ui_render::text(engine, "+--Reading Pane--+", px - 0.2, py + 0.35, theme.border, 0.2, 0.2);
+        ui_render::text(engine, title, px, py, theme.heading, 0.35, 0.7);
+        py -= 0.55;
+
+        // Separator
+        ui_render::text(engine, "----------------", px, py, theme.muted, 0.2, 0.1);
+        py -= 0.45;
 
         // Word-wrap the body text
-        let max_width = 40;
-        let mut y = 5.0;
-        let mut line = String::new();
+        let max_width = 32;
+        let mut line_buf = String::new();
         for word in body.split_whitespace() {
-            if line.len() + word.len() + 1 > max_width {
-                render_text(engine, &line, 1.0, y, theme.dim, 0.35);
-                y -= 1.0;
-                line = word.to_string();
-                if y < -8.0 { break; }
+            if line_buf.len() + word.len() + 1 > max_width {
+                ui_render::text(engine, &line_buf, px, py, theme.dim, 0.23, 0.3);
+                py -= 0.38;
+                line_buf = word.to_string();
+                if py < -4.5 { break; }
             } else {
-                if !line.is_empty() { line.push(' '); }
-                line.push_str(word);
+                if !line_buf.is_empty() { line_buf.push(' '); }
+                line_buf.push_str(word);
             }
         }
-        if !line.is_empty() && y >= -8.0 {
-            render_text(engine, &line, 1.0, y, theme.dim, 0.35);
+        if !line_buf.is_empty() && py >= -4.5 {
+            ui_render::text(engine, &line_buf, px, py, theme.dim, 0.23, 0.3);
+            py -= 0.38;
         }
+
+        // Bottom border
+        ui_render::text(engine, "+----------------+", px - 0.2, py - 0.1, theme.border, 0.2, 0.2);
     }
 
-    render_text(engine, "[Up/Down] Scroll  [Esc] Back", -18.0, -12.0, theme.muted, 0.2);
-}
-
-fn render_text(engine: &mut ProofEngine, text: &str, x: f32, y: f32, color: Vec4, emission: f32) {
-    for (i, ch) in text.chars().enumerate() {
+    // ── Ambient particles ──
+    for i in 0..3u32 {
+        let seed_f = i as f32 * 53.7 + frame as f32 * 0.015;
+        let px = -5.0 + seed_f.sin() * 6.0;
+        let py = -4.5 + (seed_f * 0.5).cos() * 0.6;
+        let glow = ((frame as f32 * 0.05 + i as f32 * 2.0).sin() * 0.3 + 0.4).max(0.0);
         engine.spawn_glyph(Glyph {
-            character: ch,
-            position: Vec3::new(x + i as f32 * 0.45, y, 0.0),
-            color, emission,
+            character: '~',
+            position: Vec3::new(px, py, 0.0),
+            color: Vec4::new(theme.accent.x * glow, theme.accent.y * glow, theme.accent.z * glow, glow * 0.5),
+            emission: glow * 0.2,
             layer: RenderLayer::UI,
             ..Default::default()
         });
     }
+
+    // ── Footer ──
+    ui_render::small(engine, "[Up/Down] Scroll  [Esc/Space] Back", -5.5, -5.2, theme.muted);
 }
