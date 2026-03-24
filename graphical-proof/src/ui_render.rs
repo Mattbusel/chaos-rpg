@@ -31,16 +31,16 @@ pub fn text(engine: &mut ProofEngine, s: &str, x: f32, y: f32, color: Vec4, scal
     text_z(engine, s, x, y, Z_TEXT, color, scale, emission);
 }
 
-/// Text at a specific Z depth. Negates X and Y for correct screen orientation.
-/// Engine: +X=screen left, +Y=screen down. We negate both so callers use
-/// normal screen coords: +X=right, +Y=up.
+/// Text at a specific Z depth.
+/// Engine: +X=screen left (look_at_rh from +Z), +Y=screen up.
+/// We negate X so callers use normal coords (+X=right). Y is unchanged.
 pub fn text_z(engine: &mut ProofEngine, s: &str, x: f32, y: f32, z: f32, color: Vec4, scale: f32, emission: f32) {
     let sp = spacing(scale);
     for (i, ch) in s.chars().enumerate() {
         if ch == ' ' { continue; }
         engine.spawn_glyph(Glyph {
             character: ch,
-            position: Vec3::new(-(x + i as f32 * sp), -y, z),
+            position: Vec3::new(-(x + i as f32 * sp), y, z),
             scale: Vec2::splat(scale),
             color, emission,
             layer: RenderLayer::UI,
@@ -80,7 +80,7 @@ pub fn bar(engine: &mut ProofEngine, x: f32, y: f32, width: f32, ratio: f32, fil
         let (ch, c, em) = if i < filled { ('\u{2588}', fill, 0.5) } else { ('\u{2591}', empty, 0.1) };
         engine.spawn_glyph(Glyph {
             character: ch,
-            position: Vec3::new(-(x + i as f32 * sp), -y, Z_TEXT),
+            position: Vec3::new(-(x + i as f32 * sp), y, Z_TEXT),
             scale: Vec2::splat(scale), color: c, emission: em,
             layer: RenderLayer::UI, ..Default::default()
         });
@@ -108,7 +108,7 @@ const BOX_V_S: char  = '│';
 fn emit_glyph(engine: &mut ProofEngine, ch: char, x: f32, y: f32, z: f32, color: Vec4, scale: f32, emission: f32) {
     engine.spawn_glyph(Glyph {
         character: ch,
-        position: Vec3::new(-x, -y, z), // negate X and Y for screen coords
+        position: Vec3::new(-x, y, z), // negate X only
         scale: Vec2::splat(scale), color, emission,
         layer: RenderLayer::UI,
         ..Default::default()
@@ -185,7 +185,7 @@ pub fn panel_bg(engine: &mut ProofEngine, x: f32, y: f32, w: f32, h: f32, color:
         for c in 0..cols {
             engine.spawn_glyph(Glyph {
                 character: '░',
-                position: Vec3::new(-(x + c as f32 * sp), -(y - r as f32 * row_sp), Z_PANEL),
+                position: Vec3::new(-(x + c as f32 * sp), y - r as f32 * row_sp, Z_PANEL),
                 scale: Vec2::splat(scale),
                 color: dim_color,
                 emission: 0.05,
