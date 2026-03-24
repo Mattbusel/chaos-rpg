@@ -138,6 +138,11 @@ impl TileEffects {
         self.low_hp_target = target.clamp(0.0, 1.0);
     }
 
+    pub fn clear_low_hp(&mut self) {
+        self.low_hp        = 0.0;
+        self.low_hp_target = 0.0;
+    }
+
     pub fn add_light(&mut self, x: f32, y: f32, radius: f32, intensity: f32, color: (f32,f32,f32), pulse: bool) {
         self.lights.push(LightSource { x, y, radius, intensity, color, pulse, phase: 0.0 });
     }

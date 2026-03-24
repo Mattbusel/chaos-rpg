@@ -243,6 +243,10 @@ impl ChaosField {
         bg: (u8, u8, u8), muted: (u8, u8, u8), accent: (u8, u8, u8),
         floor: u32, corruption: u32, frame: u64,
     ) {
+        // Chaos field disabled — was causing distracting falling characters
+        let _ = (ctx, bg, muted, accent, floor, corruption, frame);
+        return;
+        #[allow(unreachable_code)]
         let bg_rgb = RGB::from_u8(bg.0, bg.1, bg.2);
         let corruption_f = (corruption as f32 / 400.0).clamp(0.0, 1.0);
 
