@@ -1183,7 +1183,8 @@ fn render_combat_log(state: &GameState, engine: &mut ProofEngine) {
     }
 
     // Log header
-    ui_render::small(engine, "--- Combat Log [L to hide] ---", -8.0, -3.8, theme.dim);
+    ui_render::separator(engine, -8.0, -3.75, 10.0, theme.dim, 0.25);
+    ui_render::text_z(engine, "Combat Log [L]", -4.5, -3.75, ui_render::Z_BORDER, theme.dim, 0.25, 0.2);
 
     // Separator line
     let sep_y = -4.05;

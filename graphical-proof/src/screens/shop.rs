@@ -86,7 +86,7 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     }
 
     // Separator
-    ui_render::text_centered(engine, "--------------------------------", 2.5, theme.border, 0.25, 0.15);
+    ui_render::separator(engine, -8.2, 2.5, 16.4, theme.border, 0.25);
 
     // Item list
     let list_x = -8.2;
