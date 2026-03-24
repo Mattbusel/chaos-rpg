@@ -28,9 +28,13 @@ use chaos_rpg_core::{
     daily_leaderboard::{LocalDailyStore, DailyEntry, LeaderboardRow, submit_score, fetch_scores},
 };
 
+mod achievement_banner;
+mod anim_config;
 mod chaos_field;
 mod color_grade;
+mod combat_anim;
 mod death_seq;
+mod nemesis_reveal;
 mod renderer;
 mod sprites;
 mod text_effects;
@@ -40,9 +44,16 @@ mod ui_overlay;
 mod visual_config;
 mod weather;
 use visual_config as vc;
+use achievement_banner::{AchievementBanner, BannerRarity, rarity_from_name};
+use anim_config::AnimConfig;
 use chaos_field::ChaosField;
 use color_grade::ColorGrade;
+use combat_anim::{
+    CombatAnim, WeaponKind, SpellElement, StatusKind,
+    weapon_kind_from_name, spell_element_from_name, status_kind_from_name,
+};
 use death_seq::DeathSeq;
+use nemesis_reveal::NemesisReveal;
 use tile_effects::TileEffects;
 use weather::{Weather, WeatherType};
 
@@ -624,6 +635,17 @@ struct State {
     death_seq: DeathSeq,
     // Track if death cinematic has played this death
     death_cinematic_done: bool,
+    // ── Extended animation systems ──
+    combat_anim: CombatAnim,
+    nemesis_reveal: NemesisReveal,
+    rich_banner: AchievementBanner,
+    anim_config: AnimConfig,
+    // Tracks the most recent CombatAction for animation selection
+    last_action_type: u8,  // 0=none 1=attack 2=heavy 3=spell 4=defend 5=flee 6=item
+    last_spell_name: String,
+    // Room entry animation state
+    room_entry_timer: u32,
+    room_entry_type: u8,  // 0=none 1=combat 2=shop 3=shrine 4=rift 5=boss
 }
 
 impl State {
@@ -711,6 +733,14 @@ impl State {
             weather: Weather::new(),
             death_seq: DeathSeq::new(),
             death_cinematic_done: false,
+            combat_anim: CombatAnim::new(),
+            nemesis_reveal: NemesisReveal::new(),
+            rich_banner: AchievementBanner::new(),
+            anim_config: AnimConfig::load(),
+            last_action_type: 0,
+            last_spell_name: String::new(),
+            room_entry_timer: 0,
+            room_entry_type: 0,
         }
     }
 
@@ -835,6 +865,42 @@ impl State {
     /// Trigger screen earthquake — called on boss death, misery milestone, etc.
     pub fn trigger_earthquake(&mut self, intensity: f32, frames: u32) {
         self.tile_effects.emit_earthquake(intensity, frames);
+    }
+
+    /// Draw room entry color flash overlay — fades in from room-type color.
+    fn draw_room_entry_flash(&self, ctx: &mut BTerm) {
+        if self.room_entry_timer == 0 { return; }
+        let t = self.room_entry_timer;
+        let max_t: u32 = match self.room_entry_type {
+            5 => 30, 1 => 30, 3 => 25, 4 => 30, _ => 20,
+        };
+        let alpha = t as f32 / max_t as f32;
+        // Color by room type: 1=combat(red) 2=shop(gold) 3=shrine(blue) 4=rift(purple) 5=boss(deep red)
+        let (r, g, b) = match self.room_entry_type {
+            1 => (180u8, 30u8,  10u8),
+            2 => (180u8, 140u8, 10u8),
+            3 => (30u8,  80u8,  200u8),
+            4 => (100u8, 10u8,  180u8),
+            5 => (220u8, 10u8,  10u8),
+            _ => return,
+        };
+        let v = (alpha * 40.0) as u8;
+        if v == 0 { return; }
+        let flash_col = RGB::from_u8(
+            r.saturating_mul(v / 40 + 1).min(v),
+            g.saturating_mul(v / 40 + 1).min(v / 2),
+            b.saturating_mul(v / 40 + 1).min(v),
+        );
+        let bg_rgb = RGB::from_u8(0, 0, 0);
+        // Flash the screen border (top/bottom rows)
+        for x in 0..160i32 {
+            ctx.print_color(x, 0, flash_col, bg_rgb, "█");
+            ctx.print_color(x, 79, flash_col, bg_rgb, "█");
+        }
+        for y in 1..79i32 {
+            ctx.print_color(0, y, flash_col, bg_rgb, "█");
+            ctx.print_color(159, y, flash_col, bg_rgb, "█");
+        }
     }
 
     /// Lerp display HP/MP fractions toward actual values (call once per frame from tick).
@@ -1109,6 +1175,7 @@ impl State {
                             nem_enemy.base_damage = (nem_enemy.base_damage * (100 + nemesis.damage_bonus_pct as i64) / 100).max(1);
                             nem_enemy.xp_reward *= 5;
                             nem_enemy.gold_reward *= 3;
+                            let nem_display_name = nem_enemy.name.clone();
                             self.push_log(format!("☠ NEMESIS RETURNS: {}!", nem_enemy.name));
                             self.push_log(format!("HP +{}%  DMG +{}%", nemesis.hp_bonus_pct, nemesis.damage_bonus_pct));
                             self.enemy = Some(nem_enemy);
@@ -1118,6 +1185,18 @@ impl State {
                             if let Some(ref mut cs) = self.combat_state { cs.is_cursed = self.is_cursed_floor; }
                             self.emit_audio(AudioEvent::NemesisSpawned);
                             self.emit_audio(AudioEvent::BossEncounterStart { boss_tier: 2 });
+                            // Trigger nemesis reveal cinematic if not skipped
+                            if !self.anim_config.skip_nemesis_reveal {
+                                let pname = self.player.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+                                let ability = nemesis.enemy_name.clone();
+                                self.nemesis_reveal.start(
+                                    &nem_display_name, nemesis.floor_killed_at,
+                                    &ability, nemesis.hp_bonus_pct as u32, nemesis.damage_bonus_pct as u32,
+                                    &pname,
+                                );
+                                // Stay on floor nav while reveal plays; combat starts after Enter
+                                return;
+                            }
                             self.screen = AppScreen::Combat;
                             return;
                         }
@@ -1194,6 +1273,8 @@ impl State {
                 self.gauntlet_stage = 0;
                 self.combat_state = Some(CombatState::new(room_seed));
                 if let Some(ref mut cs) = self.combat_state { cs.is_cursed = self.is_cursed_floor; }
+                self.room_entry_type = if is_boss { 5 } else { 1 };
+                self.room_entry_timer = 30;
                 self.screen = AppScreen::Combat;
             }
 
@@ -1242,6 +1323,8 @@ impl State {
                 self.shop_heal_cost = heal_cost;
                 self.shop_cursor = 0;
                 self.emit_audio(AudioEvent::ShopEntered);
+                self.room_entry_type = 2;
+                self.room_entry_timer = 20;
                 self.screen = AppScreen::Shop;
             }
 
@@ -1265,6 +1348,8 @@ impl State {
                 ev.stat_bonuses = vec![(stat_name, buff)];
                 ev.hp_delta = hp_restore;
                 self.room_event = ev;
+                self.room_entry_type = 3;
+                self.room_entry_timer = 25;
                 self.screen = AppScreen::RoomView;
             }
 
@@ -1372,6 +1457,8 @@ impl State {
                 ev.lines.push(String::new());
                 ev.lines.push("[Enter] Accept fate".to_string());
                 self.room_event = ev;
+                self.room_entry_type = 4;
+                self.room_entry_timer = 30;
                 self.screen = AppScreen::RoomView;
             }
 
@@ -2109,6 +2196,45 @@ impl State {
         let php_before = self.player.as_ref().map(|p| p.current_hp as f32 / p.max_hp.max(1) as f32).unwrap_or(1.0);
         let ehp_before = self.enemy.as_ref().map(|e| e.hp as f32 / e.max_hp.max(1) as f32).unwrap_or(1.0);
 
+        // ── Start combat animations from events ───────────────────────────────
+        {
+            use chaos_rpg_core::combat::CombatEvent;
+            let anim_speed = self.anim_config.effective_combat();
+            let wname = self.player.as_ref()
+                .and_then(|p| p.equipped.weapon.as_ref())
+                .map(|w| w.name.as_str())
+                .unwrap_or("");
+            let weapon = weapon_kind_from_name(wname);
+            let spell_nm = self.last_spell_name.clone();
+            let element = spell_element_from_name(&spell_nm);
+            for ev in &events {
+                match ev {
+                    CombatEvent::PlayerAttack { damage, is_crit } => {
+                        if self.last_action_type == 2 {
+                            self.combat_anim.start_player_heavy(*damage, *is_crit, weapon, anim_speed);
+                        } else {
+                            self.combat_anim.start_player_melee(*damage, *is_crit, weapon, anim_speed);
+                        }
+                    }
+                    CombatEvent::SpellCast { damage, backfired, .. } => {
+                        self.combat_anim.start_player_spell(*damage, false, element, self.anim_config.effective_spell());
+                    }
+                    CombatEvent::EnemyAttack { damage, is_crit } => {
+                        self.combat_anim.start_enemy_attack(*damage, *is_crit, anim_speed);
+                    }
+                    CombatEvent::PlayerDefend { .. } => {
+                        self.combat_anim.start_defend(anim_speed);
+                    }
+                    CombatEvent::StatusApplied { name } => {
+                        let sk = status_kind_from_name(name);
+                        // Fire status ring on enemy (assume enemy applied it to player or vice versa)
+                        self.combat_anim.start_status_apply(sk, false, anim_speed);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
         // ── Spawn visual effects ──────────────────────────────────────────────
         {
             use chaos_rpg_core::combat::CombatEvent;
@@ -2349,6 +2475,8 @@ impl State {
             // Level-up fountain particles on player panel
             emit_level_up_fountain(&mut self.particles, 118.0, 20.0);
             self.trigger_pulse_ring(80.0, 40.0, (1.0, 0.85, 0.0), 1.2);
+            let lvl_speed = self.anim_config.effective_combat();
+            self.combat_anim.start_level_up_pillar(lvl_speed);
         }
 
         // ── Boss post-turn hooks ──────────────────────────────────────────────
@@ -2519,6 +2647,8 @@ impl State {
                 self.boss_extra2 = 0;
                 self.push_log("You escaped into the chaos!".to_string());
                 self.emit_audio(AudioEvent::PlayerFled);
+                let flee_speed = self.anim_config.effective_combat();
+                self.combat_anim.start_flee(true, flee_speed);
                 self.enemy = None;
                 if let Some(ref mut p) = self.player { p.rooms_without_kill += 1; }
                 self.advance_floor_room();
@@ -2686,9 +2816,14 @@ impl State {
             };
             self.achievements.check_run(&run_summary);
             self.achievements.save();
-            if let Some(banner) = self.achievements.pop_banner() {
-                self.achievement_banner = Some(banner);
+            if let Some((banner_text, rarity_str)) = self.achievements.pop_banner_with_rarity() {
+                // Legacy simple banner (for terminal/other consumers)
+                self.achievement_banner = Some(banner_text.clone());
                 self.achievement_banner_frames = 180;
+                // Rich rarity banner
+                let rarity = rarity_from_name(&rarity_str);
+                let speed = self.anim_config.effective_achievement();
+                self.rich_banner.start(&banner_text, rarity, speed);
             }
 
             // Build shareable recap text
@@ -2775,6 +2910,19 @@ impl GameState for State {
         self.color_grade.update();
         self.tile_effects.update(self.frame);
         self.death_seq.update();
+
+        // Combat animation sequencer
+        let frame_now = self.frame;
+        self.combat_anim.update(frame_now);
+        for ep in std::mem::take(&mut self.combat_anim.pending_particles) {
+            self.particles.push(Particle::burst(ep.x, ep.y, ep.vx, ep.vy, ep.ch, ep.col, ep.lifetime));
+        }
+
+        // Nemesis reveal update
+        self.nemesis_reveal.update();
+
+        // Room entry animation countdown
+        if self.room_entry_timer > 0 { self.room_entry_timer -= 1; }
 
         // Drive ColorGrade from game state
         self.update_color_grade();
@@ -2888,31 +3036,22 @@ impl GameState for State {
             }
         }
 
-        // Achievement banner overlay — shown on top of any screen
+        // Achievement banner overlay — rich rarity-tiered system
+        {
+            let t = self.theme_graded();
+            let frame = self.frame;
+            self.rich_banner.update(frame);
+            // Drain any unlock particles into the main particle system
+            for bp in std::mem::take(&mut self.rich_banner.pending_particles) {
+                self.particles.push(Particle::burst(bp.x, bp.y, bp.vx, bp.vy, bp.ch, bp.col, bp.lifetime));
+            }
+            self.rich_banner.draw(ctx, t.bg, frame);
+        }
+        // Legacy simple banner (still drives the old achievement_banner_frames countdown)
         if self.achievement_banner_frames > 0 {
             self.achievement_banner_frames -= 1;
-            if let Some(ref banner_text) = self.achievement_banner.clone() {
-                let t = self.theme_graded();
-                let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
-                let gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
-                let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
-                let alpha = if self.achievement_banner_frames < 40 {
-                    self.achievement_banner_frames as f32 / 40.0
-                } else { 1.0 };
-                let fade_gld = RGB::from_u8(
-                    (t.gold.0 as f32 * alpha) as u8,
-                    (t.gold.1 as f32 * alpha) as u8,
-                    (t.gold.2 as f32 * alpha) as u8,
-                );
-                let txt: String = banner_text.chars().take(50).collect();
-                let box_w = (txt.len() as i32 + 5).max(24);
-                let bx = ((160 - box_w) / 2).max(0);
-                ctx.draw_box(bx, 1, box_w, 4, fade_gld, bg);
-                ctx.print_color(bx + 2, 2, gld, bg, "ACHIEVEMENT UNLOCKED");
-                ctx.print_color(bx + 2, 3, hd,  bg, &txt);
-                if self.achievement_banner_frames == 0 {
-                    self.achievement_banner = None;
-                }
+            if self.achievement_banner_frames == 0 {
+                self.achievement_banner = None;
             }
         }
 
@@ -3826,6 +3965,12 @@ impl State {
             ctx.print_color(2, 64, RGB::from_u8(80, 220, 80), bg,
                 "◆ AUTO PILOT ACTIVE — pauses at item/shop/craft. [Z] to stop.");
         }
+
+        // Nemesis reveal overlay — draws over floor nav when active
+        if self.nemesis_reveal.active {
+            let frame = self.frame;
+            self.nemesis_reveal.draw(ctx, t.bg, frame);
+        }
     }
 
     // ── ROOM VIEW ─────────────────────────────────────────────────────────────
@@ -3919,6 +4064,9 @@ impl State {
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg_rgb, &p.text);
             }
         }
+
+        // Room entry flash overlay
+        self.draw_room_entry_flash(ctx);
     }
 
     // ── COMBAT ────────────────────────────────────────────────────────────────
@@ -4350,7 +4498,14 @@ impl State {
             }
         }
 
-        // 6. Boss-specific visual overlay
+        // 6. Combat animation overlay (slash trails, telegraph, spell paths, etc.)
+        {
+            let frame = self.frame;
+            let bg_rgb = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
+            self.combat_anim.draw(ctx, bg_rgb, frame);
+        }
+
+        // 6b. Boss-specific visual overlay
         if self.boss_id.is_some() {
             self.draw_boss_visual_overlay(ctx, bg);
         }
@@ -4764,6 +4919,9 @@ impl State {
                         chain_len, pos_count, neg_count));
             }
         }
+
+        // Room entry flash overlay
+        self.draw_room_entry_flash(ctx);
     }
 
     // ── SHOP ──────────────────────────────────────────────────────────────────
@@ -6452,7 +6610,16 @@ impl State {
                 _ => {}
             },
 
-            AppScreen::FloorNav => match key {
+            AppScreen::FloorNav => {
+                // If nemesis reveal is active, Enter/Escape advances to combat
+                if self.nemesis_reveal.active {
+                    if matches!(key, VirtualKeyCode::Return | VirtualKeyCode::Escape | VirtualKeyCode::Space) {
+                        self.nemesis_reveal.active = false;
+                        self.screen = AppScreen::Combat;
+                    }
+                    return;
+                }
+            match key {
                 VirtualKeyCode::E | VirtualKeyCode::Return => {
                     self.enter_current_room();
                 }
@@ -6497,7 +6664,7 @@ impl State {
                     self.screen = AppScreen::Title;
                 }
                 _ => {}
-            },
+            }}, // end FloorNav match + nemesis_reveal block
 
             AppScreen::RoomView => {
                 let has_item  = self.room_event.pending_item.is_some();
@@ -6594,6 +6761,22 @@ impl State {
                     _ => None,
                 };
                 if let Some(act) = action {
+                    // Track action type for combat animation selection
+                    match &act {
+                        CombatAction::Attack      => { self.last_action_type = 1; }
+                        CombatAction::HeavyAttack => { self.last_action_type = 2; }
+                        CombatAction::UseSpell(idx) => {
+                            self.last_action_type = 3;
+                            // Capture spell name before resolve
+                            self.last_spell_name = self.player.as_ref()
+                                .and_then(|p| p.known_spells.get(*idx))
+                                .map(|s| s.name.clone())
+                                .unwrap_or_default();
+                        }
+                        CombatAction::Defend  => { self.last_action_type = 4; }
+                        CombatAction::Flee    => { self.last_action_type = 5; }
+                        _                     => { self.last_action_type = 0; }
+                    }
                     // Emit pre-action audio
                     match &act {
                         CombatAction::Attack => self.emit_audio(AudioEvent::PlayerAttack),

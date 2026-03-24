@@ -72,6 +72,9 @@ pub struct AchievementStore {
     /// Achievements unlocked this session (cleared on new session). Used for banner display.
     #[serde(default)]
     pub pending_banners: Vec<String>,
+    /// Rarity names parallel to pending_banners for rich display.
+    #[serde(default)]
+    pub pending_banner_rarities: Vec<String>,
 }
 
 impl Default for AchievementStore {
@@ -79,6 +82,7 @@ impl Default for AchievementStore {
         Self {
             achievements: all_achievements(),
             pending_banners: Vec::new(),
+            pending_banner_rarities: Vec::new(),
         }
     }
 }
@@ -122,6 +126,8 @@ impl AchievementStore {
                 a.unlocked = true;
                 a.unlock_date = chrono_date();
                 self.pending_banners.push(a.name.to_string());
+                let rarity_name = format!("{:?}", a.rarity).to_lowercase();
+                self.pending_banner_rarities.push(rarity_name);
                 return true;
             }
         }
@@ -146,6 +152,18 @@ impl AchievementStore {
 
     pub fn pop_banner(&mut self) -> Option<String> {
         if self.pending_banners.is_empty() { None } else { Some(self.pending_banners.remove(0)) }
+    }
+
+    /// Pop the next pending banner together with its rarity name string.
+    pub fn pop_banner_with_rarity(&mut self) -> Option<(String, String)> {
+        if self.pending_banners.is_empty() { return None; }
+        let text = self.pending_banners.remove(0);
+        let rarity = if !self.pending_banner_rarities.is_empty() {
+            self.pending_banner_rarities.remove(0)
+        } else {
+            "common".to_string()
+        };
+        Some((text, rarity))
     }
 }
 

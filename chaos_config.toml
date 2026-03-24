@@ -1,0 +1,30 @@
+# CHAOS RPG — Animation Configuration
+# Adjust these values to tune animation pacing.
+#
+# animation_speed: global multiplier (0.5=cinematic, 1.0=normal, 2.0=fast)
+# Per-category speeds stack on top of the global multiplier.
+# Skip flags let speedrunners skip cinematics.
+
+[animation]
+# Global speed multiplier (0.5 = half speed / cinematic, 2.0 = double speed)
+animation_speed = 1.0
+
+# Per-category overrides
+combat_animation_speed       = 1.0
+spell_animation_speed        = 1.0
+crafting_animation_speed     = 1.0
+transition_animation_speed   = 1.0
+achievement_animation_speed  = 1.0
+
+# Skip cinematics entirely
+skip_boss_entrance      = false
+skip_floor_transition   = false
+skip_nemesis_reveal     = false
+skip_phase_transition   = false
+skip_achievement_banner = false
+
+# Hold durations in seconds
+boss_entrance_hold       = 3.0
+floor_transition_hold    = 2.5
+death_sequence_hold      = 3.0
+achievement_banner_hold  = 2.0
