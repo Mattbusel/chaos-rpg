@@ -6,35 +6,65 @@
 use proof_engine::prelude::*;
 use proof_engine::integration::ProofGame;
 
+#[allow(unused)]
 mod state;
+#[allow(unused)]
 mod theme;
+#[allow(unused)]
 mod screens;
+#[allow(unused)]
 mod entities;
+#[allow(unused)]
 mod effects;
+#[allow(unused)]
 pub mod magic;
+#[allow(unused)]
 mod scenes;
+#[allow(unused)]
 mod audio_bridge;
+#[allow(unused)]
 mod music_bridge;
+#[allow(unused)]
 mod anim_bridge;
+#[allow(unused)]
 pub mod lighting;
+#[allow(unused)]
 pub mod shader_presets;
+#[allow(unused)]
 pub mod cinematics;
+#[allow(unused)]
 pub mod physics_bridge;
+#[allow(unused)]
 pub mod dungeon_bridge;
+#[allow(unused)]
 pub mod boss_bridge;
+#[allow(unused)]
 pub mod enemy_ai;
+#[allow(unused)]
 pub mod weather_system;
+#[allow(unused)]
 pub mod terrain_map;
+#[allow(unused)]
 pub mod game_economy;
+#[allow(unused)]
 pub mod dialogue_system;
+#[allow(unused)]
 pub mod mod_system;
+#[allow(unused)]
 pub mod replay_system;
+#[allow(unused)]
 pub mod save_upgrade;
+#[allow(unused)]
 pub mod debug_tools;
+#[allow(unused)]
 pub mod ui_render;
+#[allow(unused)]
 pub mod gpu_chaos;
+#[allow(unused)]
 pub mod combat_visuals;
+#[allow(unused)]
 pub mod combat_hud;
+#[allow(unused)]
 pub mod exploration;
 
 use state::{AppScreen, GameState};
@@ -82,7 +112,7 @@ impl ProofGame for ChaosRpgGame {
         engine.scene.glyphs = proof_engine::glyph::GlyphPool::new(8192);
 
         // Handle debug tool input BEFORE game input (F-keys, console, etc.)
-        let debug_consumed = self.debug_tools.handle_input(engine);
+        let _debug_consumed = self.debug_tools.handle_input(engine);
 
         // Tick visual timers
         self.state.tick_timers(dt);
@@ -238,6 +268,7 @@ impl ProofGame for ChaosRpgGame {
 }
 
 /// Minimal fallback for screens not yet ported — just show the screen name.
+#[allow(dead_code)]
 fn render_fallback_screen(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
     let label = format!("{:?} — Press [Esc] to return", state.screen);
