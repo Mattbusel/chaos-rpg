@@ -1718,28 +1718,6 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     // 14. Boss overlay — always last
     crate::effects::boss_visuals::render_boss_overlay(state, engine);
 
-    // 15. Combat visual orchestration overlay (entities, animations, damage)
-    {
-        // Use a thread-local visual state for the orchestration layer.
-        // This gives the combat_visuals system its own state without needing
-        // to store it in GameState.
-        use std::cell::RefCell;
-        thread_local! {
-            static VIS: RefCell<crate::combat_visuals::CombatVisualState> =
-                RefCell::new(crate::combat_visuals::CombatVisualState::new());
-            static HUD: RefCell<crate::combat_hud::CombatHudState> =
-                RefCell::new(crate::combat_hud::CombatHudState::new());
-        }
-        VIS.with(|vis_cell| {
-            let vis = vis_cell.borrow();
-            // Render combat visuals overlay (turn indicator, target highlight,
-            // combo counter, effectiveness text, etc.)
-            crate::combat_visuals::render(&vis, state, engine);
-            HUD.with(|hud_cell| {
-                let hud = hud_cell.borrow();
-                // Render the full HUD overlay
-                crate::combat_hud::render(&hud, &vis, state, engine);
-            });
-        });
-    }
+    // combat_visuals and combat_hud disabled — their content duplicates
+    // what combat.rs already renders, causing overlapping unreadable text.
 }

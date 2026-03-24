@@ -69,29 +69,28 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
-    // Y axis: negative = top of screen, positive = bottom of screen
-    // (because gl_Position.y is negated in the vertex shader)
+    // +Y = top of screen (ui_render negates Y internally)
 
     // Logo (top)
-    ui_render::title(engine, "CHAOS RPG", -4.5, theme.heading);
+    ui_render::title(engine, "CHAOS RPG", 4.5, theme.heading);
 
     // Tagline
-    ui_render::text_centered(engine, theme.tagline, -3.0, theme.dim, 0.25, 0.25);
+    ui_render::text_centered(engine, theme.tagline, 3.0, theme.dim, 0.25, 0.25);
 
-    // Menu items (center, going downward = increasing Y)
+    // Menu items (center, going downward = decreasing Y)
     let items = [
         "[1] Continue", "[2] New Run", "[3] Tutorial", "[4] Achievements",
         "[5] Run History", "[6] Daily Board", "[7] Settings", "[8] Quit",
     ];
 
-    let menu_top = -1.5;
+    let menu_top = 1.5;
     let line_height = 0.6;
 
     for (idx, label) in items.iter().enumerate() {
         let selected = idx == state.selected_menu;
         let color = if selected { theme.selected } else { theme.primary };
         let emission = if selected { 0.8 } else { 0.3 };
-        let y = menu_top + idx as f32 * line_height;
+        let y = menu_top - idx as f32 * line_height;
 
         if selected {
             ui_render::cursor_arrow(engine, -4.0, y, theme.accent, 0.35, state.frame);
@@ -100,6 +99,6 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     }
 
     // Footer (bottom)
-    ui_render::small(engine, &format!("[T] Theme: {}", theme.name), -4.0, 4.5, theme.muted);
-    ui_render::small(engine, "Arrows + Enter/Space | Number keys", -4.5, 5.0, theme.muted);
+    ui_render::small(engine, &format!("[T] Theme: {}", theme.name), -4.0, -4.5, theme.muted);
+    ui_render::small(engine, "Arrows + Enter/Space | Number keys", -4.5, -5.0, theme.muted);
 }

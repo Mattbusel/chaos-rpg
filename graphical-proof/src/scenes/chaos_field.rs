@@ -59,9 +59,9 @@ const GLITCH_CHARS: &[char] = &[
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const FAR_COUNT: usize = 30;
-const MID_COUNT: usize = 50;
-const NEAR_COUNT: usize = 70;
+const FAR_COUNT: usize = 8;
+const MID_COUNT: usize = 12;
+const NEAR_COUNT: usize = 15;
 const GOLDEN_ANGLE: f32 = 2.399_963_2;
 const VIEW_X: f32 = 9.5;
 const VIEW_Y: f32 = 6.5;
@@ -294,7 +294,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         engine.spawn_glyph(Glyph {
             character: ch,
             position: Vec3::new(x, y, 2.0),
-            scale: Vec2::splat(0.5),
+            scale: Vec2::splat(0.25),
             color: Vec4::new(col.x * a, col.y * a, col.z * a, a),
             emission: a * 0.15,
             glow_color: col, glow_radius: 0.3,
@@ -332,7 +332,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         engine.spawn_glyph(Glyph {
             character: ch,
             position: Vec3::new(x, y, 3.0),
-            scale: Vec2::splat(0.3),
+            scale: Vec2::splat(0.08),
             color: Vec4::new(col.x * a, col.y * a, col.z * a, a),
             emission: a * 0.08,
             rotation: (t * 0.08 + i as f32 * 0.3).cos() * 0.1,
@@ -368,7 +368,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         engine.spawn_glyph(Glyph {
             character: ch,
             position: Vec3::new(x, y, 4.0),
-            scale: Vec2::splat(0.15),
+            scale: Vec2::splat(0.08),
             color: Vec4::new(base_color.x * a, base_color.y * a, base_color.z * a, a),
             emission: a * 0.03,
             blend_mode: BlendMode::Additive,
