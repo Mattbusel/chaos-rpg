@@ -24,6 +24,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    ui_render::screen_backing(engine, 0.6);
 
     ui_render::heading_centered(engine, "SETTINGS", 5.0, theme.heading);
 

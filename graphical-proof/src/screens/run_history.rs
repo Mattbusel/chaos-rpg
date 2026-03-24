@@ -19,6 +19,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    ui_render::screen_backing(engine, 0.6);
 
     ui_render::heading_centered(engine, "RUN HISTORY", 5.0, theme.heading);
     ui_render::small(engine, &format!("{} runs recorded", state.run_history.runs.len()), -3.0, 4.2, theme.dim);

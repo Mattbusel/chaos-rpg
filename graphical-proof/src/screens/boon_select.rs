@@ -35,6 +35,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    ui_render::screen_backing(engine, 0.6);
     ui_render::heading_centered(engine, "CHOOSE YOUR BOON", 4.5, theme.heading);
     ui_render::text_centered(engine, "One gift to carry into The Proof.", 3.5, theme.dim, 0.3, 0.3);
 

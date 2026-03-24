@@ -33,6 +33,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    ui_render::screen_backing(engine, 0.6);
 
     ui_render::heading_centered(engine, "DAILY LEADERBOARD", 5.0, theme.heading);
     let status_trunc: String = state.daily_status.chars().take(45).collect();

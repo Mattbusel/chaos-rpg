@@ -33,15 +33,19 @@ pub fn text(engine: &mut ProofEngine, s: &str, x: f32, y: f32, color: Vec4, scal
 
 /// Text at a specific Z depth. Callers use +Y=up convention.
 /// We negate Y because the vertex shader negates gl_Position.y.
+/// Positions are snapped to reduce sub-pixel blur.
 pub fn text_z(engine: &mut ProofEngine, s: &str, x: f32, y: f32, z: f32, color: Vec4, scale: f32, emission: f32) {
     let sp = spacing(scale);
+    // Snap base position to reduce sub-pixel blur
+    let snap = |v: f32| -> f32 { (v * 20.0).round() / 20.0 };
     for (i, ch) in s.chars().enumerate() {
         if ch == ' ' { continue; }
         engine.spawn_glyph(Glyph {
             character: ch,
-            position: Vec3::new(x + i as f32 * sp, -y, z),
+            position: Vec3::new(snap(x + i as f32 * sp), snap(-y), z),
             scale: Vec2::splat(scale),
-            color, emission,
+            color,
+            emission: emission.min(0.3), // cap emission to prevent bloom bleed on text
             layer: RenderLayer::UI,
             ..Default::default()
         });
@@ -193,6 +197,21 @@ pub fn panel_bg(engine: &mut ProofEngine, x: f32, y: f32, w: f32, h: f32, color:
             });
         }
     }
+}
+
+/// Dark screen-wide backing to improve text readability over chaos field.
+/// Call this at the start of any screen's render function.
+pub fn screen_backing(engine: &mut ProofEngine, opacity: f32) {
+    // Single large dark glyph behind everything
+    engine.spawn_glyph(Glyph {
+        character: '█',
+        position: Vec3::new(0.0, 0.0, 1.0), // behind UI text (z=0)
+        scale: Vec2::new(25.0, 15.0),
+        color: Vec4::new(0.0, 0.0, 0.0, opacity),
+        emission: 0.0,
+        layer: RenderLayer::World, // below UI layer
+        ..Default::default()
+    });
 }
 
 /// Draw a complete panel: background fill + double-line border.

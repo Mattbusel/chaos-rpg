@@ -1677,6 +1677,9 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
 /// Render the complete combat screen.
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
+    // Dark backing for text readability
+    crate::ui_render::screen_backing(engine, 0.5);
+
     // 1. Arena floor (background layer)
     render_arena_floor(state, engine);
 

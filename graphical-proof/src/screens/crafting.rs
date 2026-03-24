@@ -60,6 +60,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    ui_render::screen_backing(engine, 0.6);
     let frame = state.frame;
 
     ui_render::heading_centered(engine, "CRAFTING BENCH", 4.8, theme.heading);

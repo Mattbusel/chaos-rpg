@@ -69,7 +69,8 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
-    // +Y = top of screen (ui_render negates Y internally)
+    // Dark backing for text readability over chaos field
+    ui_render::screen_backing(engine, 0.4);
 
     // Logo (top) — Tier 1 brightness
     ui_render::title(engine, "CHAOS RPG", 4.5, theme.heading);
