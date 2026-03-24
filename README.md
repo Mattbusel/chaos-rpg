@@ -41,12 +41,11 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 | File | Description |
 |------|-------------|
-| `chaos-rpg-v2.0.0-windows.zip` | **Everything in one zip.** Proof Engine + legacy frontend + config. |
-| `chaos-rpg-proof.exe` | **Proof Engine frontend — the new one. Recommended.** |
-| `chaos-rpg-graphical.exe` | Legacy bracket-lib frontend (fallback). |
+| `chaos-rpg-graphical.exe` | **Stable release.** Polished bracket-lib OpenGL frontend. Full-featured, battle-tested. **Recommended for playing.** |
+| `chaos-rpg-proof.exe` | **Early preview.** Built on a custom 283K-line mathematical rendering engine. Work in progress — rough but functional. |
 
-3. Double-click `chaos-rpg-proof.exe` to run
-4. If Windows Defender blocks it: click **More info** then **Run anyway** (full source is public here)
+3. Double-click to run
+4. If Windows SmartScreen blocks it: click **More info** then **Run anyway** (full source is public here)
 
 ### Option B: itch.io
 
@@ -54,7 +53,8 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 ### Which version should I run?
 
-- **chaos-rpg-proof** — **The Proof Engine frontend.** Custom 221K-line mathematical rendering engine. PBR lighting, shader graph, particle physics, 3D boss visuals, weather, procedural music, terrain. **This is the one.**
+- **chaos-rpg-graphical** — The stable, polished frontend. Full visual effects, 5 themes, all features. **Play this one.**
+- **chaos-rpg-proof** — **Early preview** of the next-generation frontend built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a custom 283K-line mathematical rendering engine. All game mechanics work (combat, bosses, crafting, achievements), but visuals are still being refined. Includes chaos engine visualizer (V key), auto-pilot (Z key), and animated chaos field background. This is a technology preview — expect rough edges.
 - **chaos-rpg-graphical** — Legacy bracket-lib frontend. Simpler but stable.
 - **chaos-rpg-terminal** — Runs in any terminal. Works over SSH. No GPU required.
 
