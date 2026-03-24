@@ -2641,6 +2641,7 @@ impl State {
                 ).unwrap_or_else(|| "The chaos consumed them.".to_string());
                 self.death_seq.start(final_dmg, &enemy_name, &epitaph);
                 self.death_cinematic_done = false;
+                self.tile_effects.clear_low_hp();
                 self.trigger_earthquake(0.9, 50);
                 self.screen = AppScreen::GameOver;
             }

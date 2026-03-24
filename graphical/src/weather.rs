@@ -22,7 +22,7 @@ impl WeatherType {
     pub fn for_floor(floor: u32, is_boss: bool) -> Self {
         if is_boss { return WeatherType::Storm; }
         match floor {
-            0..=10  => WeatherType::DigitalRain,
+            0..=10  => WeatherType::Clear,
             11..=25 => WeatherType::Clear,
             26..=50 => WeatherType::Static,
             51..=75 => WeatherType::Ash,

@@ -83,8 +83,8 @@ impl Grade {
         tint: (0.0, 0.0, 0.0), hue_shift: 180.0,
     };
     pub const DEATH: Grade = Grade {
-        saturation: 0.0, brightness: 0.55, contrast: 1.2,
-        tint: (0.0, 0.0, 0.0), hue_shift: 0.0,
+        saturation: 0.45, brightness: 0.80, contrast: 1.1,
+        tint: (0.04, 0.0, 0.0), hue_shift: 0.0,
     };
     pub const SHRINE: Grade = Grade {
         saturation: 1.1, brightness: 1.08, contrast: 0.95,
