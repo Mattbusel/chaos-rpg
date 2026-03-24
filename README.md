@@ -549,3 +549,4 @@ The chaos pipeline parameters (Lorenz σ/ρ/β, Mandelbrot max_iter, bifurcation
 - [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) - first run walkthrough, stat explanations, survival tips
 - [docs/MECHANICS.md](docs/MECHANICS.md) - full mathematical breakdown of every system
 - [docs/BOSSES.md](docs/BOSSES.md) - all 12 bosses, their mechanics, and how to beat them
+- [docs/LORE.md](docs/LORE.md) - the full lore of The Proof: epochs, factions, engines, bosses, bestiary, items, Fragments
