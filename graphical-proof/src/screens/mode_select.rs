@@ -44,12 +44,12 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
     for (i, (name, desc)) in modes.iter().enumerate() {
         let selected = i == state.mode_cursor;
-        let y = 2.5 - i as f32 * 2.0;
+        let y = 2.5 - i as f32 * 1.8;
         let color = if selected { theme.selected } else { theme.primary };
         let prefix = if selected { "> " } else { "  " };
         ui_render::text(engine, &format!("{}{}", prefix, name), -4.5, y, color, 0.45, if selected { 0.8 } else { 0.4 });
-        ui_render::small(engine, desc, -3.5, y - 0.5, theme.dim);
+        ui_render::small(engine, desc, -3.5, y - 0.6, theme.dim);
     }
 
-    ui_render::small(engine, "Enter/Space to select | Esc to go back", -5.0, -4.5, theme.muted);
+    ui_render::small(engine, "Enter/Space to select | Esc back", -4.5, -5.0, theme.muted);
 }

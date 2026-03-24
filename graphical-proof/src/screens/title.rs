@@ -6,13 +6,11 @@ use crate::theme::THEMES;
 use crate::ui_render;
 
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
-    // Read all input into locals
     let up = engine.input.just_pressed(Key::Up) || engine.input.just_pressed(Key::W);
     let down = engine.input.just_pressed(Key::Down) || engine.input.just_pressed(Key::S);
     let enter = engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Space);
     let theme_key = engine.input.just_pressed(Key::T);
     let quit = engine.input.just_pressed(Key::Escape) || engine.input.just_pressed(Key::Q);
-    // Number keys for direct menu selection
     let num1 = engine.input.just_pressed(Key::Num1);
     let num2 = engine.input.just_pressed(Key::Num2);
     let num3 = engine.input.just_pressed(Key::Num3);
@@ -26,7 +24,6 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     if down && state.selected_menu < 7 { state.selected_menu += 1; }
     if theme_key { state.theme_idx = (state.theme_idx + 1) % THEMES.len(); }
 
-    // Direct number key selection
     if num1 { state.selected_menu = 0; }
     if num2 { state.selected_menu = 1; }
     if num3 { state.selected_menu = 2; }
@@ -36,7 +33,6 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     if num7 { state.selected_menu = 6; }
     if num8 { state.selected_menu = 7; }
 
-    // Activate menu item on Enter, Space, or number key
     let activate = enter || num1 || num2 || num3 || num4 || num5 || num6 || num7 || num8;
 
     if activate {
@@ -73,47 +69,34 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
-    // DEBUG: Single large R at center to test mirroring
-    engine.spawn_glyph(Glyph {
-        character: 'R',
-        position: Vec3::new(0.0, 0.0, 0.0),
-        scale: Vec2::splat(3.0),
-        color: Vec4::new(1.0, 1.0, 1.0, 1.0),
-        emission: 1.0,
-        layer: RenderLayer::UI,
-        ..Default::default()
-    });
+    // ── Logo (top of screen) ──
+    ui_render::title(engine, "CHAOS RPG", 4.5, theme.heading);
 
-    // Logo
-    ui_render::title(engine, "CHAOS RPG", 3.5, theme.heading);
+    // ── Tagline (below logo) ──
+    ui_render::text_centered(engine, theme.tagline, 3.0, theme.dim, 0.25, 0.25);
 
-    // Tagline
-    ui_render::text_centered(engine, theme.tagline, 1.8, theme.dim, 0.25, 0.25);
-
-    // Menu panel with border
-    ui_render::panel(engine, -4.5, 0.6, 9.0, 5.5, theme.border, theme.panel, 0.35);
-
-    // Menu items with number keys
+    // ── Menu (centered vertically) ──
     let items = [
         "[1] Continue", "[2] New Run", "[3] Tutorial", "[4] Achievements",
         "[5] Run History", "[6] Daily Board", "[7] Settings", "[8] Quit",
     ];
 
+    let menu_top = 1.5;
+    let line_height = 0.6;
+
     for (idx, label) in items.iter().enumerate() {
         let selected = idx == state.selected_menu;
         let color = if selected { theme.selected } else { theme.primary };
         let emission = if selected { 0.8 } else { 0.3 };
-        let y = 0.0 - idx as f32 * 0.55;
+        let y = menu_top - idx as f32 * line_height;
 
         if selected {
-            ui_render::cursor_arrow(engine, -3.8, y, theme.accent, 0.35, state.frame);
+            ui_render::cursor_arrow(engine, -4.0, y, theme.accent, 0.35, state.frame);
         }
-        ui_render::text(engine, label, -3.0, y, color, 0.4, emission);
+        ui_render::text(engine, label, -3.2, y, color, 0.4, emission);
     }
 
-    // Theme indicator
-    ui_render::small(engine, &format!("[T] Theme: {}", theme.name), -3.5, -5.0, theme.muted);
-
-    // Input hint
-    ui_render::small(engine, "Arrow keys + Enter/Space to select", -4.0, -5.4, theme.muted);
+    // ── Footer (bottom of screen) ──
+    ui_render::small(engine, &format!("[T] Theme: {}", theme.name), -4.0, -4.5, theme.muted);
+    ui_render::small(engine, "Arrows + Enter/Space | Number keys", -4.5, -5.0, theme.muted);
 }
