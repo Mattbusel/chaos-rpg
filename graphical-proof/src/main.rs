@@ -14,6 +14,8 @@ mod effects;
 mod scenes;
 mod audio_bridge;
 pub mod lighting;
+pub mod shader_presets;
+pub mod cinematics;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
