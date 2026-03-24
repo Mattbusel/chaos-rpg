@@ -2,9 +2,7 @@
 
 use proof_engine::prelude::*;
 use chaos_rpg_core::world::RoomType;
-use chaos_rpg_core::enemy::generate_enemy;
-use chaos_rpg_core::combat::CombatState;
-use crate::state::{AppScreen, GameState, RoomEvent};
+use crate::state::{AppScreen, GameState};
 use crate::theme::THEMES;
 use crate::ui_render;
 
@@ -38,37 +36,16 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
         if key_down && floor.current_room + 1 < room_count { floor.current_room += 1; }
     }
 
+    // Enter current room — uses full game logic (nemesis, gauntlets, bosses, all room types)
     if key_e {
-        if let Some(ref floor) = state.floor {
-            let room = &floor.rooms[floor.current_room];
-            match room.room_type {
-                RoomType::Combat | RoomType::Boss => {
-                    let enemy = generate_enemy(state.floor_num, state.seed.wrapping_add(floor.current_room as u64));
-                    state.is_boss_fight = matches!(room.room_type, RoomType::Boss);
-                    state.enemy = Some(enemy);
-                    state.combat_state = Some(CombatState::new(state.seed));
-                    state.combat_log.clear();
-                    state.display_enemy_hp = 1.0;
-                    state.screen = AppScreen::Combat;
-                }
-                RoomType::Shop => { state.screen = AppScreen::Shop; }
-                RoomType::CraftingBench => { state.screen = AppScreen::Crafting; }
-                _ => {
-                    state.room_event = RoomEvent::empty();
-                    state.room_event.title = format!("{:?}", room.room_type);
-                    state.room_event.lines.push(room.description.clone());
-                    state.room_event.resolved = false;
-                    state.screen = AppScreen::RoomView;
-                }
-            }
-        }
+        crate::game_logic::enter_room(state);
     }
 
+    // Descend — only if all rooms cleared, checks victory, hunger, generates new floor
     if key_d {
-        state.floor_num += 1;
-        let new_floor = chaos_rpg_core::world::generate_floor(state.floor_num, state.seed.wrapping_add(state.floor_num as u64));
-        state.floor = Some(new_floor);
-        if let Some(ref mut player) = state.player { player.floor = state.floor_num; }
+        if crate::game_logic::can_descend(state) {
+            crate::game_logic::descend(state);
+        }
     }
 
     if key_c { state.screen = AppScreen::CharacterSheet; }

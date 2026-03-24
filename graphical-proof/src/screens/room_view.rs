@@ -19,7 +19,9 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
             }
         }
         if state.room_event.portal_available {
-            state.floor_num += 3;
+            // Portal skips 3 floors
+            state.floor_num += 2; // +2 because descend() adds +1
+            crate::game_logic::descend(state);
             state.room_event.resolved = true;
         }
     }
@@ -31,10 +33,16 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
             }
         }
     }
-    // Continue
+    // Continue — apply room effects when accepting
     if (enter || esc) && state.room_event.resolved {
+        // Advance to next room on the floor
+        if let Some(ref mut floor) = state.floor {
+            floor.advance();
+        }
         state.screen = AppScreen::FloorNav;
     } else if enter || esc {
+        // Apply stat bonuses, HP/gold deltas, trap damage
+        crate::game_logic::apply_room_event(state);
         state.room_event.resolved = true;
     }
 }

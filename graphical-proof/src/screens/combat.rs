@@ -1650,18 +1650,18 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 
             match outcome {
                 CombatOutcome::Ongoing => {}
-                CombatOutcome::PlayerWon { xp: _, gold: _ } => {
-                    state.kill_linger = 2.5;
-                    state.post_combat_screen = Some(AppScreen::FloorNav);
+                CombatOutcome::PlayerWon { xp, gold } => {
+                    // Full game logic: XP, gold, loot, level up, gauntlet, nemesis
+                    crate::game_logic::on_combat_victory(state, xp, gold);
                     engine.add_trauma(0.6);
                 }
                 CombatOutcome::PlayerDied => {
-                    state.kill_linger = 1.0;
-                    state.post_combat_screen = Some(AppScreen::GameOver);
+                    // Full game logic: nemesis promotion, score saving, death screen
+                    crate::game_logic::on_player_death(state);
                     engine.add_trauma(0.8);
                 }
                 CombatOutcome::PlayerFled => {
-                    state.screen = AppScreen::FloorNav;
+                    crate::game_logic::on_player_fled(state);
                 }
             }
         }

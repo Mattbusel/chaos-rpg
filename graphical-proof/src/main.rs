@@ -66,6 +66,8 @@ pub mod combat_visuals;
 pub mod combat_hud;
 #[allow(unused)]
 pub mod exploration;
+#[allow(unused)]
+pub mod game_logic;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
