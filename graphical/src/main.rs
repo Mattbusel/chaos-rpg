@@ -812,7 +812,11 @@ impl State {
         }
         // Game over / death
         if self.screen == AppScreen::GameOver {
-            self.color_grade.set_death();
+            // During the cinematic, keep color so red/orange shows; full desaturate only after
+            if self.death_cinematic_done || !self.death_seq.active {
+                self.color_grade.set_death();
+            }
+            // else: let current grade linger so death colors are vivid
             return;
         }
         // Victory
@@ -3227,23 +3231,6 @@ impl State {
 
         self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
-
-        // ── Math symbol rain (background flavor) — full 160×80 coverage ──
-        let math_chars = ["∫","∂","∑","∏","∇","λ","Ω","ε","δ","π","μ","ζ","⊕","∞","√","≈","≠","±","∧","∨"];
-        for col_i in 0..40usize {
-            let col_seed = col_i as u64 * 2654435761;
-            let x = 2 + (col_seed % 154) as i32;
-            let speed = 1 + (col_seed % 3) as u64;
-            let offset = col_seed % 78;
-            let y = ((self.frame / speed.max(1) + offset) % 76) as i32;
-            if y < 2 || y > 77 { continue; }
-            let sym_i = ((col_seed.wrapping_add(self.frame / 8)) % math_chars.len() as u64) as usize;
-            let fade = (y as f32 / 76.0).clamp(0.1, 0.9);
-            let rc = (t.muted.0 as f32 * (1.0 - fade) + t.dim.0 as f32 * fade * 0.4) as u8;
-            let gc = (t.muted.1 as f32 * (1.0 - fade) + t.dim.1 as f32 * fade * 0.4) as u8;
-            let bc = (t.muted.2 as f32 * (1.0 - fade) + t.dim.2 as f32 * fade * 0.4) as u8;
-            ctx.print_color(x, y, RGB::from_u8(rc, gc, bc), bg, math_chars[sym_i]);
-        }
 
         // ── First-load title logo particle convergence ────────────────────
         // On very first frames, particles converge from edges to form the logo
