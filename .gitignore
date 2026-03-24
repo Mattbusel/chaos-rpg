@@ -12,3 +12,5 @@
 .DS_Store
 Thumbs.db
 chaos_rpg_scores.json
+*.exe
+dist/*.zip
