@@ -413,6 +413,60 @@ pub fn engine_lock(item: &Item, engine: &str, include: bool, seed: u64) -> Craft
     }
 }
 
+/// Shatter: destroy the item and scatter modifiers as transferable shards.
+/// (Stub — shard persistence is handled by the caller.)
+pub fn shatter(item: &Item, _seed: u64) -> CraftResult {
+    CraftResult::Success {
+        description: format!("☠ Shattered {} into modifier shards.", item.name),
+        item: Item::generate(0), // placeholder; caller discards this
+    }
+}
+
+/// Imbue: implant a shard into the item.
+/// (Stub — shard selection handled by caller.)
+pub fn imbue(item: &Item, seed: u64) -> CraftResult {
+    let mut result = item.clone();
+    let roll = chaos_roll_verbose(0.5, seed);
+    let stat_idx = (seed % STAT_NAMES.len() as u64) as usize;
+    let value = (roll.final_value * 1000.0) as i64;
+    result.stat_modifiers.push(crate::items::StatModifier {
+        stat: STAT_NAMES[stat_idx].to_string(),
+        value,
+    });
+    let total_mag: i64 = result.stat_modifiers.iter().map(|m| m.value.abs()).sum::<i64>()
+        + result.damage_or_defense.abs();
+    result.rarity = crate::items::Rarity::from_magnitude(total_mag);
+    CraftResult::Success {
+        description: format!("Imbued shard: {} {:+}", STAT_NAMES[stat_idx], value),
+        item: result,
+    }
+}
+
+/// Repair: restore an item's durability to its maximum value.
+/// Cost in gold is handled by the caller (50 + floor × 5).
+pub fn repair(item: &Item) -> CraftResult {
+    if item.durability == item.max_durability {
+        return CraftResult::Failure {
+            reason: format!("{} is already at full durability.", item.name),
+        };
+    }
+    let mut result = item.clone();
+    result.repair_full();
+    CraftResult::Success {
+        description: format!(
+            "Repaired! {} durability restored to {}/{}.",
+            item.name, result.durability, result.max_durability
+        ),
+        item: result,
+    }
+}
+
+/// Gold cost to repair an item (scales with how damaged it is).
+pub fn repair_cost(item: &Item, floor: u32) -> i64 {
+    let missing = item.max_durability.saturating_sub(item.durability) as i64;
+    (50 + floor as i64 * 5) * missing / item.max_durability.max(1) as i64
+}
+
 // ─── DISPLAY ──────────────────────────────────────────────────────────────────
 
 /// Display lines for the crafting bench UI.
@@ -448,6 +502,14 @@ pub fn crafting_bench_lines(item: &Item, gold: i64) -> Vec<String> {
         CYAN,
         RESET
     ));
+    lines.push(format!(
+        "{}║  Durability: {}{}{}                              ║{}",
+        CYAN,
+        item.durability_bar(),
+        CYAN,
+        " ".repeat(0),
+        RESET
+    ));
     if let Some(cor) = &item.corruption {
         lines.push(format!(
             "{}║  {}⚠ CORRUPTED: {}{}{:<28}{}║{}",
@@ -463,6 +525,7 @@ pub fn crafting_bench_lines(item: &Item, gold: i64) -> Vec<String> {
     let fuse_cost = 50 + item.socket_links as i64 * 200;
     let lock_cost = engine_lock_cost(item);
 
+    let repair_cost_val = repair_cost(item, 0 /* caller may pass floor */);
     let ops: &[(&str, &str, i64, bool)] = &[
         (
             "[R] Reforge",
@@ -499,6 +562,12 @@ pub fn crafting_bench_lines(item: &Item, gold: i64) -> Vec<String> {
             "Lock an engine in/out of rolls",
             lock_cost,
             !corrupted && item.engine_locks.len() < 3,
+        ),
+        (
+            "[P] Repair",
+            "Restore item durability to maximum",
+            repair_cost_val,
+            item.durability < item.max_durability,
         ),
     ];
 

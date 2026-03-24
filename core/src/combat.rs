@@ -73,6 +73,18 @@ pub enum CombatEvent {
     ChaosEvent {
         description: String,
     },
+    ItemEquipped {
+        name: String,
+        slot: String,
+    },
+    ItemDurabilityLost {
+        name: String,
+        durability: u8,
+        max_durability: u8,
+    },
+    ItemDestroyed {
+        name: String,
+    },
 }
 
 impl CombatEvent {
@@ -121,6 +133,15 @@ impl CombatEvent {
             }
             CombatEvent::ChaosEvent { description } => {
                 format!("⚡ CHAOS EVENT: {}", description)
+            }
+            CombatEvent::ItemEquipped { name, slot } => {
+                format!("⚙ Equipped {} → {} slot.", name, slot)
+            }
+            CombatEvent::ItemDurabilityLost { name, durability, max_durability } => {
+                format!("◈ {} durability: {}/{}", name, durability, max_durability)
+            }
+            CombatEvent::ItemDestroyed { name } => {
+                format!("💥 {} SHATTERED! It is gone forever.", name)
             }
         }
     }
@@ -237,6 +258,44 @@ pub enum CombatOutcome {
 
 // ─── COMBAT RESOLUTION ───────────────────────────────────────────────────────
 
+// ─── DURABILITY HELPERS ───────────────────────────────────────────────────────
+
+/// Wear the equipped weapon after an attack and push durability events.
+fn push_weapon_wear(player: &mut Character, seed: u64, events: &mut Vec<CombatEvent>) {
+    let wear_amt = ((seed.wrapping_mul(0xb00b) % 11) + 5) as u8; // 5..=15
+    if let Some(w) = &player.equipped.weapon {
+        let name = w.name.clone();
+        let max_dur = w.max_durability;
+        if player.wear_weapon(wear_amt) {
+            events.push(CombatEvent::ItemDestroyed { name });
+        } else if let Some(w2) = &player.equipped.weapon {
+            events.push(CombatEvent::ItemDurabilityLost {
+                name,
+                durability: w2.durability,
+                max_durability: max_dur,
+            });
+        }
+    }
+}
+
+/// Wear the equipped body armor when the player takes a hit.
+fn push_armor_wear(player: &mut Character, seed: u64, events: &mut Vec<CombatEvent>) {
+    let wear_amt = ((seed.wrapping_mul(0xc0de) % 8) + 3) as u8; // 3..=10
+    if let Some(b) = &player.equipped.body {
+        let name = b.name.clone();
+        let max_dur = b.max_durability;
+        if player.wear_armor(wear_amt) {
+            events.push(CombatEvent::ItemDestroyed { name });
+        } else if let Some(b2) = &player.equipped.body {
+            events.push(CombatEvent::ItemDurabilityLost {
+                name,
+                durability: b2.durability,
+                max_durability: max_dur,
+            });
+        }
+    }
+}
+
 /// Resolve a player action against an enemy. Returns events and outcome.
 pub fn resolve_action(
     player: &mut Character,
@@ -338,6 +397,7 @@ pub fn resolve_action(
             enemy.hp = (enemy.hp - damage).max(0);
             player.total_damage_dealt += damage;
             events.push(CombatEvent::PlayerAttack { damage, is_crit });
+            push_weapon_wear(player, seed, &mut events);
         }
 
         CombatAction::HeavyAttack => {
@@ -403,6 +463,7 @@ pub fn resolve_action(
                 player.total_damage_dealt += damage;
                 events.push(CombatEvent::PlayerAttack { damage, is_crit });
             }
+            push_weapon_wear(player, seed, &mut events);
         }
 
         CombatAction::Defend => {
@@ -533,8 +594,27 @@ pub fn resolve_action(
         }
 
         CombatAction::UseItem(idx) => {
-            if let Some(item) = player.use_item(idx) {
-                // Items used in combat: apply stat modifiers and/or heal
+            // Check if the item at this inventory slot is equippable.
+            let is_equippable = player.inventory.get(idx)
+                .and_then(|i| i.equip_slot())
+                .is_some();
+
+            if is_equippable {
+                // Equip the item — stat mods become active passively.
+                if let Some(equipped_name) = player.equip_from_inventory(idx) {
+                    // Determine which slot it ended up in.
+                    let slot_label = player.equipped.all_equipped()
+                        .iter()
+                        .find(|(_, i)| i.name == equipped_name)
+                        .map(|(s, _)| s.label())
+                        .unwrap_or("?");
+                    events.push(CombatEvent::ItemEquipped {
+                        name: equipped_name,
+                        slot: slot_label.trim().to_string(),
+                    });
+                }
+            } else if let Some(item) = player.use_item(idx) {
+                // Non-equippable: consume as before (potion / chaos object).
                 let mut heal_amount = 0i64;
                 for modifier in &item.stat_modifiers {
                     match modifier.stat.to_lowercase().as_str() {
@@ -549,15 +629,14 @@ pub fn resolve_action(
                             player.max_hp =
                                 (50 + player.stats.vitality * 3 + player.stats.force).max(1);
                         }
-                        "mana" => player.stats.mana += modifier.value,
-                        "cunning" => player.stats.cunning += modifier.value,
+                        "mana"      => player.stats.mana      += modifier.value,
+                        "cunning"   => player.stats.cunning   += modifier.value,
                         "precision" => player.stats.precision += modifier.value,
-                        "entropy" => player.stats.entropy += modifier.value,
-                        "luck" => player.stats.luck += modifier.value,
+                        "entropy"   => player.stats.entropy   += modifier.value,
+                        "luck"      => player.stats.luck      += modifier.value,
                         _ => {}
                     }
                 }
-                // Weapons deal damage; non-weapons heal
                 if item.is_weapon {
                     let weapon_dmg = item.damage_or_defense.abs().max(1);
                     enemy.hp = (enemy.hp - weapon_dmg).max(0);
@@ -571,12 +650,12 @@ pub fn resolve_action(
                         item.damage_or_defense.abs().max(0) / 5 + heal_amount.max(0),
                     );
                     if base_heal > 0 {
-                        player.heal_scaled(base_heal); // anti-heal scaling applies to potions
+                        player.heal_scaled(base_heal);
                         events.push(CombatEvent::PlayerHealed { amount: base_heal });
                     }
                 }
                 events.push(CombatEvent::ChaosEvent {
-                    description: format!("Used {}! ({})", item.name, item.special_effect),
+                    description: format!("Consumed {}! ({})", item.name, item.special_effect),
                 });
             } else {
                 events.push(CombatEvent::ChaosEvent {
@@ -657,6 +736,8 @@ pub fn resolve_action(
             });
         } else {
             let (hit_part, _actual, injury) = player.take_damage_to_part(enemy_dmg, enemy_seed);
+            // Wear armor on any hit taken
+            push_armor_wear(player, enemy_seed, &mut events);
             // Announce hit location
             let injury_str = injury
                 .map(|i| format!(" [{} {}]", i.name(), hit_part.name()))

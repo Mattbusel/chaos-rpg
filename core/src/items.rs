@@ -195,6 +195,29 @@ impl Rarity {
     }
 }
 
+// ─── Equipment Slot ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum EquipSlot {
+    Weapon,
+    Body,
+    Ring1,
+    Ring2,
+    Amulet,
+}
+
+impl EquipSlot {
+    pub fn label(self) -> &'static str {
+        match self {
+            EquipSlot::Weapon => "Weapon",
+            EquipSlot::Body   => "Body  ",
+            EquipSlot::Ring1  => "Ring 1",
+            EquipSlot::Ring2  => "Ring 2",
+            EquipSlot::Amulet => "Amulet",
+        }
+    }
+}
+
 // ─── Stat Modifier ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -362,7 +385,18 @@ pub struct Item {
     /// Charges remaining (0 = no charges / unlimited). Imbue op grants these.
     #[serde(default)]
     pub charges: u8,
+    /// Current durability (0 = destroyed). Decreases with use in combat.
+    #[serde(default = "default_durability")]
+    pub durability: u8,
+    /// Maximum durability (set at generation, restored by Repair).
+    #[serde(default = "default_durability")]
+    pub max_durability: u8,
+    /// Lore flavor text, shown below the stat block.
+    #[serde(default)]
+    pub flavor_text: String,
 }
+
+fn default_durability() -> u8 { 100 }
 
 impl Item {
     pub fn generate(seed: u64) -> Self {
@@ -406,6 +440,7 @@ impl Item {
 
         let rarity = Rarity::from_magnitude(total_magnitude);
         let value = roll_stat(1, 10000, seed.wrapping_add(9999));
+        let flavor_text = crate::lore::items::rarity_flavor(rarity.name(), seed).to_string();
 
         // Sockets: 0-6 based on chaos roll; weapons/armor get more sockets
         let socket_roll = chaos_roll_verbose(seed as f64 * 1e-8 + 0.5, seed.wrapping_add(8888));
@@ -420,6 +455,10 @@ impl Item {
             (((link_roll.final_value + 1.0) * 0.5 * (socket_count - 1) as f64) as u8)
                 .min(socket_count.saturating_sub(1))
         };
+
+        // Durability: 50..100, chaos-rolled. Higher rarity items start sturdier.
+        let dur_roll = chaos_roll_verbose(seed as f64 * 3.14e-9, seed.wrapping_add(0xd0d0));
+        let max_durability = (50.0 + (dur_roll.final_value + 1.0) * 0.5 * 50.0).round() as u8;
 
         Item {
             name,
@@ -436,7 +475,64 @@ impl Item {
             engine_locks: Vec::new(),
             corruption: None,
             charges: 0,
+            durability: max_durability,
+            max_durability,
+            flavor_text,
         }
+    }
+
+    /// Which equipment slot this item occupies, if equippable.
+    pub fn equip_slot(&self) -> Option<EquipSlot> {
+        if self.is_weapon {
+            return Some(EquipSlot::Weapon);
+        }
+        match self.base_type.as_str() {
+            "Helm" | "Armor" | "Boots" | "Gloves" | "Cape" | "Shield" => Some(EquipSlot::Body),
+            "Ring" => Some(EquipSlot::Ring1), // caller promotes to Ring2 if Ring1 taken
+            "Amulet" | "Chaos Crystal" | "Prime Shard" | "Fractal Lens"
+            | "Null Field" | "Theorem" | "Singularity" => Some(EquipSlot::Amulet),
+            _ => None, // consumable / unobtainable base types
+        }
+    }
+
+    /// True when durability has reached zero.
+    pub fn is_broken(&self) -> bool {
+        self.durability == 0
+    }
+
+    /// ASCII durability bar e.g. `[████░░░░░░] 40/100`.
+    pub fn durability_bar(&self) -> String {
+        let filled = (self.durability as usize * 10 / 100usize.max(self.max_durability as usize)).min(10);
+        let color = if self.durability > self.max_durability * 3 / 4 {
+            "\x1b[32m"   // green
+        } else if self.durability > self.max_durability / 2 {
+            "\x1b[33m"   // yellow
+        } else if self.durability > self.max_durability / 4 {
+            "\x1b[91m"   // orange
+        } else {
+            "\x1b[31m"   // red
+        };
+        format!(
+            "{}[{}{}{}] {}/{}{}",
+            color,
+            "█".repeat(filled),
+            "░".repeat(10 - filled),
+            color,
+            self.durability,
+            self.max_durability,
+            "\x1b[0m"
+        )
+    }
+
+    /// Reduce durability by `amount`, clamping to 0. Returns true if now broken.
+    pub fn wear(&mut self, amount: u8) -> bool {
+        self.durability = self.durability.saturating_sub(amount);
+        self.durability == 0
+    }
+
+    /// Restore durability to max_durability (used by Repair at crafting bench).
+    pub fn repair_full(&mut self) {
+        self.durability = self.max_durability;
     }
 
     /// Generate a starting item biased toward the given class stat
@@ -582,6 +678,14 @@ impl Item {
                 width = 0
             ));
         }
+
+        // Durability bar
+        let dur_bar = self.durability_bar();
+        lines.push(format!(
+            "{}║  DUR: {}{:<width$}{}║{}",
+            rarity_color, dur_bar, "", reset,
+            width = 0 // bar already has fixed width
+        ));
 
         lines.push(format!("{}╚{}╝{}", rarity_color, "═".repeat(width), reset));
         lines

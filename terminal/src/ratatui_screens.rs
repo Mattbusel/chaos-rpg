@@ -586,9 +586,10 @@ pub fn draw_enemy_panel(f: &mut Frame, area: Rect, enemy: &Enemy, theme: ColorTh
     let mut lines: Vec<Line> = Vec::new();
 
     // Enemy name + tier header
+    lines.push(Line::raw(""));
     lines.push(Line::from(vec![
         Span::styled(
-            format!("[{}] ", enemy.tier.name()),
+            format!("  [{}] ", enemy.tier.name()),
             Style::default().fg(tier_color).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -598,14 +599,21 @@ pub fn draw_enemy_panel(f: &mut Frame, area: Rect, enemy: &Enemy, theme: ColorTh
     ]));
     lines.push(Line::raw(""));
 
-    // Sprite art
+    // Sprite art (indented)
     for line in sprite {
-        lines.push(Line::from(Span::styled(*line, Style::default().fg(tier_color))));
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(*line, Style::default().fg(tier_color)),
+        ]));
     }
     lines.push(Line::raw(""));
 
     // HP bar
     let bar_width = (area.width as usize).saturating_sub(12).max(8);
+    lines.push(Line::from(vec![
+        Span::raw("  "),
+        Span::styled("HP  ", Style::default().fg(Color::Red)),
+    ]));
     lines.push(smooth_bar(enemy.hp, enemy.max_hp, bar_width, hp_col));
 
     // Special ability
@@ -654,13 +662,14 @@ pub fn draw_player_panel(f: &mut Frame, area: Rect, player: &Character, theme: C
     let mut lines: Vec<Line> = Vec::new();
 
     // Name / class / level
+    lines.push(Line::raw(""));
     lines.push(Line::from(vec![
         Span::styled(
-            player.name.clone(),
+            format!("  {}", player.name),
             Style::default().fg(accent).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("  Lv.{}  {}", player.level, player.class.name()),
+            format!("   Lv.{}  {}", player.level, player.class.name()),
             Style::default().fg(Color::Gray),
         ),
     ]));
@@ -669,15 +678,16 @@ pub fn draw_player_panel(f: &mut Frame, area: Rect, player: &Character, theme: C
     // HP bar
     let hp_col = hp_color(player.current_hp as f64 / player.max_hp.max(1) as f64);
     let mut hp_line = smooth_bar(player.current_hp, player.max_hp, bar_width, hp_col);
-    hp_line.spans.insert(0, Span::styled("HP  ", Style::default().fg(Color::Green)));
+    hp_line.spans.insert(0, Span::styled("HP    ", Style::default().fg(Color::Green)));
     lines.push(hp_line);
+    lines.push(Line::raw(""));
 
     // Mana bar (derived from stats.mana, shown as a capacity meter)
     let mana_val = player.stats.mana.max(0);
     let mana_max = (mana_val + 50).max(50);
     let mp_col = if mana_val > mana_max / 2 { Color::Cyan } else { Color::Blue };
     let mut mp_line = smooth_bar(mana_val, mana_max, bar_width, mp_col);
-    mp_line.spans.insert(0, Span::styled("MANA", Style::default().fg(Color::Cyan)));
+    mp_line.spans.insert(0, Span::styled("MANA  ", Style::default().fg(Color::Cyan)));
     lines.push(mp_line);
 
     // Status effects
@@ -744,55 +754,64 @@ pub fn draw_action_bar(
 
     let mut lines: Vec<Line> = Vec::new();
 
-    // Basic actions
-    let actions = Line::from(vec![
-        Span::styled("[A] ", Style::default().fg(accent)),
-        Span::raw("Attack  "),
+    // Basic actions row
+    lines.push(Line::from(vec![
+        Span::styled("  [A] ", Style::default().fg(accent)),
+        Span::raw("Attack    "),
         Span::styled("[H] ", Style::default().fg(accent)),
-        Span::raw("Heavy  "),
+        Span::raw("Heavy Attack    "),
         Span::styled("[D] ", Style::default().fg(accent)),
-        Span::raw("Defend  "),
+        Span::raw("Defend    "),
         Span::styled("[T] ", Style::default().fg(accent)),
-        Span::raw("Taunt  "),
-        Span::styled("[F] ", Style::default().fg(accent)),
+        Span::raw("Taunt    "),
+        Span::styled("[F] ", Style::default().fg(Color::Red)),
         Span::raw("Flee"),
-    ]);
-    lines.push(actions);
+    ]));
+    lines.push(Line::raw(""));
 
-    // Spells
+    // Spells — up to 6, two per line
     if !player.known_spells.is_empty() {
-        let mut spell_spans = vec![Span::styled("Spells: ", Style::default().fg(Color::Cyan))];
-        for (i, spell) in player.known_spells.iter().take(4).enumerate() {
-            spell_spans.push(Span::styled(
+        let mut row: Vec<Span> = vec![Span::styled("  Spells  ", Style::default().fg(Color::Cyan))];
+        for (i, spell) in player.known_spells.iter().take(6).enumerate() {
+            if i > 0 && i % 3 == 0 {
+                lines.push(Line::from(std::mem::replace(&mut row, vec![Span::raw("            ")])));
+            }
+            row.push(Span::styled(
                 format!("[S{}] ", i + 1),
                 Style::default().fg(Color::LightCyan),
             ));
-            let truncated = if spell.name.len() > 14 {
-                format!("{}…", &spell.name[..13])
-            } else {
-                spell.name.clone()
-            };
-            spell_spans.push(Span::raw(format!("{}  ", truncated)));
+            let name: String = spell.name.chars().take(16).collect();
+            row.push(Span::styled(
+                format!("{:<17}", name),
+                Style::default().fg(Color::White),
+            ));
+            row.push(Span::styled(
+                format!("{:>3}mp    ", spell.mana_cost),
+                Style::default().fg(Color::DarkGray),
+            ));
         }
-        lines.push(Line::from(spell_spans));
+        if !row.is_empty() { lines.push(Line::from(row)); }
     }
 
-    // Items
+    // Items — up to 6
     if !player.inventory.is_empty() {
-        let mut item_spans = vec![Span::styled("Items:  ", Style::default().fg(Color::Yellow))];
-        for (i, item) in player.inventory.iter().take(4).enumerate() {
-            item_spans.push(Span::styled(
+        lines.push(Line::raw(""));
+        let mut row: Vec<Span> = vec![Span::styled("  Items   ", Style::default().fg(Color::Yellow))];
+        for (i, item) in player.inventory.iter().take(6).enumerate() {
+            if i > 0 && i % 3 == 0 {
+                lines.push(Line::from(std::mem::replace(&mut row, vec![Span::raw("            ")])));
+            }
+            row.push(Span::styled(
                 format!("[I{}] ", i + 1),
                 Style::default().fg(Color::LightYellow),
             ));
-            let truncated = if item.name.len() > 14 {
-                format!("{}…", &item.name[..13])
-            } else {
-                item.name.clone()
-            };
-            item_spans.push(Span::raw(format!("{}  ", truncated)));
+            let name: String = item.name.chars().take(16).collect();
+            row.push(Span::styled(
+                format!("{:<24}", name),
+                Style::default().fg(Color::White),
+            ));
         }
-        lines.push(Line::from(item_spans));
+        if !row.is_empty() { lines.push(Line::from(row)); }
     }
 
     let para = Paragraph::new(Text::from(lines)).block(
@@ -842,13 +861,13 @@ pub fn draw_combat_screen(f: &mut Frame, state: &CombatViewState) {
     let primary = theme_primary(theme);
     let accent = theme_accent(theme);
 
-    // Top-level split: header (3) | body | actions (5)
+    // Top-level split: header (3) | body | actions (9)
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
             Constraint::Min(10),
-            Constraint::Length(5),
+            Constraint::Length(9),
         ])
         .split(size);
 
@@ -1173,135 +1192,79 @@ pub fn draw_floor_nav(
     let primary = theme_primary(theme);
     let accent = theme_accent(theme);
 
+    // Three-column layout: status (left) | map (center) | inventory (right)
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+        .constraints([
+            Constraint::Percentage(28),
+            Constraint::Percentage(44),
+            Constraint::Percentage(28),
+        ])
         .split(size);
 
-    // Left: map + navigation help
-    let left_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(8), Constraint::Length(10)])
-        .split(chunks[0]);
-
-    // Minimap panel
-    let mut map_lines: Vec<Line> = Vec::new();
-    if is_cursed {
-        map_lines.push(Line::from(Span::styled(
-            "  ☠ CURSED FLOOR — ALL ENGINES INVERTED ☠",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )));
-        map_lines.push(Line::raw(""));
-    }
-    map_lines.push(Line::from(Span::styled(
-        format!("  Floor {}  —  {}/{} rooms", player.floor, rooms_done, floor_rooms),
-        Style::default().fg(accent),
-    )));
-    map_lines.push(Line::raw(""));
-    for map_line in minimap.lines() {
-        map_lines.push(Line::from(Span::styled(
-            format!("  {}", map_line),
-            Style::default().fg(Color::White),
-        )));
-    }
-    map_lines.push(Line::raw(""));
-    map_lines.push(Line::from(Span::styled(
-        "  [x]=Combat [*]=Treasure [$]=Shop [~]=Shrine",
-        Style::default().fg(Color::DarkGray),
-    )));
-    map_lines.push(Line::from(Span::styled(
-        "  [!]=Trap [B]=Boss [^]=Portal [ ]=Empty [?]=Rift",
-        Style::default().fg(Color::DarkGray),
-    )));
-
-    let map_para = Paragraph::new(Text::from(map_lines)).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(primary))
-            .title(Span::styled(" Floor Map ", Style::default().fg(primary))),
-    );
-    f.render_widget(map_para, left_chunks[0]);
-
-    // Navigation controls
-    let nav_lines = vec![
-        Line::from(vec![
-            Span::styled("[E]", Style::default().fg(accent)),
-            Span::raw(" Enter room    "),
-            Span::styled("[C]", Style::default().fg(accent)),
-            Span::raw(" Character"),
-        ]),
-        Line::from(vec![
-            Span::styled("[B]", Style::default().fg(accent)),
-            Span::raw(" Body chart    "),
-            Span::styled("[P]", Style::default().fg(accent)),
-            Span::raw(" Skill tree"),
-        ]),
-        Line::from(vec![
-            Span::styled("[F]", Style::default().fg(accent)),
-            Span::raw(" Factions      "),
-            Span::styled("[T]", Style::default().fg(accent)),
-            Span::raw(" Last trace"),
-        ]),
-        Line::from(vec![
-            Span::styled("[D]", Style::default().fg(Color::Cyan)),
-            Span::raw(" Descend  "),
-            Span::styled("[Q]", Style::default().fg(Color::Red)),
-            Span::raw(" Quit"),
-        ]),
-    ];
-    let nav_para = Paragraph::new(Text::from(nav_lines)).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(primary))
-            .title(Span::styled(" Navigate ", Style::default().fg(primary))),
-    );
-    f.render_widget(nav_para, left_chunks[1]);
-
-    // Right: player quick status
-    let bar_width = (chunks[1].width as usize).saturating_sub(16).max(8);
+    // ── Left: player quick status ─────────────────────────────────────────────
+    let bar_width = (chunks[0].width as usize).saturating_sub(10).max(8);
     let mut status_lines: Vec<Line> = Vec::new();
 
+    status_lines.push(Line::raw(""));
     status_lines.push(Line::from(vec![
-        Span::styled(player.name.clone(), Style::default().fg(accent).add_modifier(Modifier::BOLD)),
         Span::styled(
-            format!("  {}  Lv.{}", player.class.name(), player.level),
-            Style::default().fg(Color::Gray),
+            format!("  {}", player.name),
+            Style::default().fg(accent).add_modifier(Modifier::BOLD),
         ),
     ]));
+    status_lines.push(Line::from(Span::styled(
+        format!("  {}  Lv.{}", player.class.name(), player.level),
+        Style::default().fg(Color::Gray),
+    )));
     status_lines.push(Line::raw(""));
 
     let hp_col = hp_color(player.current_hp as f64 / player.max_hp.max(1) as f64);
     let mut hp = smooth_bar(player.current_hp, player.max_hp, bar_width, hp_col);
-    hp.spans.insert(0, Span::styled("HP  ", Style::default().fg(Color::Green)));
+    hp.spans.insert(0, Span::styled("HP    ", Style::default().fg(Color::Green)));
     status_lines.push(hp);
+    status_lines.push(Line::raw(""));
 
     let mana_v = player.stats.mana.max(0);
     let mana_mx = (mana_v + 50).max(50);
     let mp_col = if mana_v > 40 { Color::Cyan } else { Color::Blue };
     let mut mp = smooth_bar(mana_v, mana_mx, bar_width, mp_col);
-    mp.spans.insert(0, Span::styled("MANA", Style::default().fg(Color::Cyan)));
+    mp.spans.insert(0, Span::styled("MANA  ", Style::default().fg(Color::Cyan)));
     status_lines.push(mp);
-
     status_lines.push(Line::raw(""));
+
     status_lines.push(Line::from(vec![
-        Span::styled("Gold  ", Style::default().fg(Color::Yellow)),
+        Span::styled("  Gold   ", Style::default().fg(Color::Yellow)),
         Span::styled(format!("{}", player.gold), Style::default().fg(Color::LightYellow)),
+    ]));
+    status_lines.push(Line::from(vec![
         Span::styled("  Kills  ", Style::default().fg(Color::Gray)),
         Span::styled(format!("{}", player.kills), Style::default().fg(Color::Red)),
-        Span::styled("  XP  ", Style::default().fg(Color::Gray)),
+    ]));
+    status_lines.push(Line::from(vec![
+        Span::styled("  XP     ", Style::default().fg(Color::Gray)),
         Span::styled(format!("{}", player.xp), Style::default().fg(Color::Cyan)),
+    ]));
+    status_lines.push(Line::from(vec![
+        Span::styled("  Floor  ", Style::default().fg(Color::Gray)),
+        Span::styled(format!("{}", player.floor), Style::default().fg(accent)),
     ]));
 
     if player.corruption_stage() > 0 {
         status_lines.push(Line::raw(""));
         status_lines.push(Line::from(Span::styled(
-            format!("Corruption: {}  [Stage {}/8]", player.corruption_label(), player.corruption_stage()),
+            format!("  ☠ Corruption Stage {}/8", player.corruption_stage()),
+            Style::default().fg(Color::Red),
+        )));
+        status_lines.push(Line::from(Span::styled(
+            format!("  {}", player.corruption_label()),
             Style::default().fg(Color::Red),
         )));
     }
     if player.floor >= 50 && player.rooms_without_kill >= 3 {
+        status_lines.push(Line::raw(""));
         status_lines.push(Line::from(Span::styled(
-            format!("THE HUNGER: {} rooms without kill", player.rooms_without_kill),
+            format!("  ★ THE HUNGER: {} rooms", player.rooms_without_kill),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         )));
     }
@@ -1314,7 +1277,151 @@ pub fn draw_floor_nav(
                 .title(Span::styled(" Status ", Style::default().fg(primary))),
         )
         .wrap(Wrap { trim: false });
-    f.render_widget(status_para, chunks[1]);
+    f.render_widget(status_para, chunks[0]);
+
+    // ── Center: map + navigation help ─────────────────────────────────────────
+    let center_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(8), Constraint::Length(8)])
+        .split(chunks[1]);
+
+    // Minimap panel
+    let mut map_lines: Vec<Line> = Vec::new();
+    map_lines.push(Line::raw(""));
+    if is_cursed {
+        map_lines.push(Line::from(Span::styled(
+            "  ☠ CURSED FLOOR — ALL ENGINES INVERTED ☠",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )));
+        map_lines.push(Line::raw(""));
+    }
+    map_lines.push(Line::from(Span::styled(
+        format!("  Floor {}  —  {}/{} rooms cleared", player.floor, rooms_done, floor_rooms),
+        Style::default().fg(accent).add_modifier(Modifier::BOLD),
+    )));
+    map_lines.push(Line::raw(""));
+    for map_line in minimap.lines() {
+        map_lines.push(Line::from(Span::styled(
+            format!("    {}", map_line),
+            Style::default().fg(Color::White),
+        )));
+    }
+    map_lines.push(Line::raw(""));
+    map_lines.push(Line::from(Span::styled(
+        "  [x]=Combat  [*]=Treasure  [$]=Shop  [~]=Shrine",
+        Style::default().fg(Color::DarkGray),
+    )));
+    map_lines.push(Line::from(Span::styled(
+        "  [!]=Trap  [B]=Boss  [^]=Portal  [ ]=Empty  [?]=Rift",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let map_para = Paragraph::new(Text::from(map_lines)).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(primary))
+            .title(Span::styled(" Floor Map ", Style::default().fg(primary))),
+    );
+    f.render_widget(map_para, center_chunks[0]);
+
+    // Navigation controls
+    let nav_lines = vec![
+        Line::raw(""),
+        Line::from(vec![
+            Span::styled("  [E]", Style::default().fg(accent)),
+            Span::raw(" Enter room      "),
+            Span::styled("[C]", Style::default().fg(accent)),
+            Span::raw(" Character sheet"),
+        ]),
+        Line::from(vec![
+            Span::styled("  [B]", Style::default().fg(accent)),
+            Span::raw(" Bestiary        "),
+            Span::styled("[P]", Style::default().fg(accent)),
+            Span::raw(" Passive tree"),
+        ]),
+        Line::from(vec![
+            Span::styled("  [F]", Style::default().fg(accent)),
+            Span::raw(" Factions        "),
+            Span::styled("[T]", Style::default().fg(accent)),
+            Span::raw(" Last trace"),
+        ]),
+        Line::from(vec![
+            Span::styled("  [D]", Style::default().fg(Color::Cyan)),
+            Span::raw(" Descend floor   "),
+            Span::styled("[Q]", Style::default().fg(Color::Red)),
+            Span::raw(" Quit"),
+        ]),
+    ];
+    let nav_para = Paragraph::new(Text::from(nav_lines)).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(primary))
+            .title(Span::styled(" Navigate ", Style::default().fg(primary))),
+    );
+    f.render_widget(nav_para, center_chunks[1]);
+
+    // ── Right: spells + inventory quick view ──────────────────────────────────
+    let mut inv_lines: Vec<Line> = Vec::new();
+    inv_lines.push(Line::raw(""));
+    inv_lines.push(Line::from(Span::styled(
+        "  ─── Spells ───────────────",
+        Style::default().fg(Color::Cyan),
+    )));
+    inv_lines.push(Line::raw(""));
+    if player.known_spells.is_empty() {
+        inv_lines.push(Line::from(Span::styled(
+            "  (no spells known)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for (i, spell) in player.known_spells.iter().take(6).enumerate() {
+            let name: String = spell.name.chars().take(18).collect();
+            inv_lines.push(Line::from(vec![
+                Span::styled(format!("  [S{}] ", i + 1), Style::default().fg(Color::LightCyan)),
+                Span::styled(format!("{:<19}", name), Style::default().fg(Color::White)),
+                Span::styled(format!("{:>3}mp", spell.mana_cost), Style::default().fg(Color::DarkGray)),
+            ]));
+        }
+    }
+    inv_lines.push(Line::raw(""));
+    inv_lines.push(Line::from(Span::styled(
+        "  ─── Inventory ────────────",
+        Style::default().fg(Color::Yellow),
+    )));
+    inv_lines.push(Line::raw(""));
+    if player.inventory.is_empty() {
+        inv_lines.push(Line::from(Span::styled(
+            "  (empty)",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for (i, item) in player.inventory.iter().take(8).enumerate() {
+            let rarity_col = match item.rarity.name() {
+                "Common"    => Color::DarkGray,
+                "Uncommon"  => Color::White,
+                "Rare"      => Color::Green,
+                "Epic"      => Color::Blue,
+                "Legendary" => Color::Magenta,
+                "Mythical"  => Color::Yellow,
+                _           => Color::LightMagenta,
+            };
+            let name: String = item.name.chars().take(20).collect();
+            inv_lines.push(Line::from(vec![
+                Span::styled(format!("  [I{}] ", i + 1), Style::default().fg(Color::LightYellow)),
+                Span::styled(name, Style::default().fg(rarity_col)),
+            ]));
+        }
+    }
+
+    let inv_para = Paragraph::new(Text::from(inv_lines))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(primary))
+                .title(Span::styled(" Spells & Items ", Style::default().fg(primary))),
+        )
+        .wrap(Wrap { trim: false });
+    f.render_widget(inv_para, chunks[2]);
 }
 
 // ─── TITLE SCREEN ─────────────────────────────────────────────────────────────

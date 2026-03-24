@@ -70,3 +70,7 @@ pub mod combat_system;
 pub mod character_creator;
 pub mod dungeon_generator;
 pub mod loot_table;
+pub mod lore;
+pub mod character_lore;
+pub mod player_bestiary;
+pub mod codex_progress;

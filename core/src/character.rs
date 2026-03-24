@@ -800,6 +800,99 @@ impl Boon {
     }
 }
 
+// ─── EQUIPMENT SLOTS ─────────────────────────────────────────────────────────
+
+pub use crate::items::EquipSlot;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EquipmentSlots {
+    pub weapon: Option<crate::items::Item>,
+    pub body:   Option<crate::items::Item>,
+    pub ring1:  Option<crate::items::Item>,
+    pub ring2:  Option<crate::items::Item>,
+    pub amulet: Option<crate::items::Item>,
+}
+
+impl EquipmentSlots {
+    /// Stat bonus contributed by all currently equipped items.
+    pub fn stat_bonus(&self) -> StatBlock {
+        let mut bonus = StatBlock::zero();
+        for item in [&self.weapon, &self.body, &self.ring1, &self.ring2, &self.amulet]
+            .iter()
+            .filter_map(|s| s.as_ref())
+        {
+            for m in &item.stat_modifiers {
+                match m.stat.to_lowercase().as_str() {
+                    "vitality"  => bonus.vitality  += m.value,
+                    "force"     => bonus.force      += m.value,
+                    "mana"      => bonus.mana       += m.value,
+                    "cunning"   => bonus.cunning    += m.value,
+                    "precision" => bonus.precision  += m.value,
+                    "entropy"   => bonus.entropy    += m.value,
+                    "luck"      => bonus.luck       += m.value,
+                    _ => {}
+                }
+            }
+        }
+        bonus
+    }
+
+    /// Get the item in a given slot.
+    pub fn get(&self, slot: EquipSlot) -> Option<&crate::items::Item> {
+        match slot {
+            EquipSlot::Weapon => self.weapon.as_ref(),
+            EquipSlot::Body   => self.body.as_ref(),
+            EquipSlot::Ring1  => self.ring1.as_ref(),
+            EquipSlot::Ring2  => self.ring2.as_ref(),
+            EquipSlot::Amulet => self.amulet.as_ref(),
+        }
+    }
+
+    /// Get the item in a given slot (mutable).
+    pub fn get_mut(&mut self, slot: EquipSlot) -> Option<&mut crate::items::Item> {
+        match slot {
+            EquipSlot::Weapon => self.weapon.as_mut(),
+            EquipSlot::Body   => self.body.as_mut(),
+            EquipSlot::Ring1  => self.ring1.as_mut(),
+            EquipSlot::Ring2  => self.ring2.as_mut(),
+            EquipSlot::Amulet => self.amulet.as_mut(),
+        }
+    }
+
+    /// Take the item out of a slot (slot becomes empty).
+    pub fn take(&mut self, slot: EquipSlot) -> Option<crate::items::Item> {
+        match slot {
+            EquipSlot::Weapon => self.weapon.take(),
+            EquipSlot::Body   => self.body.take(),
+            EquipSlot::Ring1  => self.ring1.take(),
+            EquipSlot::Ring2  => self.ring2.take(),
+            EquipSlot::Amulet => self.amulet.take(),
+        }
+    }
+
+    /// Put an item into a slot, returning whatever was there before.
+    pub fn put(&mut self, slot: EquipSlot, item: crate::items::Item) -> Option<crate::items::Item> {
+        match slot {
+            EquipSlot::Weapon => self.weapon.replace(item),
+            EquipSlot::Body   => self.body.replace(item),
+            EquipSlot::Ring1  => self.ring1.replace(item),
+            EquipSlot::Ring2  => self.ring2.replace(item),
+            EquipSlot::Amulet => self.amulet.replace(item),
+        }
+    }
+
+    /// All filled slots as (slot, &item) pairs.
+    pub fn all_equipped(&self) -> Vec<(EquipSlot, &crate::items::Item)> {
+        let mut v = Vec::new();
+        if let Some(i) = &self.weapon { v.push((EquipSlot::Weapon, i)); }
+        if let Some(i) = &self.body   { v.push((EquipSlot::Body,   i)); }
+        if let Some(i) = &self.ring1  { v.push((EquipSlot::Ring1,  i)); }
+        if let Some(i) = &self.ring2  { v.push((EquipSlot::Ring2,  i)); }
+        if let Some(i) = &self.amulet { v.push((EquipSlot::Amulet, i)); }
+        v
+    }
+}
+
 // ─── CHARACTER ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -847,6 +940,15 @@ pub struct Character {
     // Per-run statistics tracker
     #[serde(default)]
     pub run_stats: RunStats,
+    // Equipment slots — items equipped here contribute passive stat bonuses
+    #[serde(default)]
+    pub equipped: EquipmentSlots,
+    // Player-authored lore for this character
+    #[serde(default)]
+    pub character_lore: crate::character_lore::CharacterLore,
+    // Narrative events tracked during the run (for auto-generated run narrative)
+    #[serde(default)]
+    pub narrative_events: Vec<crate::lore::narrative::NarrativeEvent>,
 }
 
 impl Character {
@@ -946,6 +1048,9 @@ impl Character {
             rooms_without_kill: 0,
             misery: MiseryState::new(),
             run_stats: RunStats::new(),
+            equipped: EquipmentSlots::default(),
+            character_lore: crate::character_lore::CharacterLore::default(),
+            narrative_events: Vec::new(),
         }
     }
 
@@ -1231,6 +1336,99 @@ impl Character {
         } else {
             None
         }
+    }
+
+    /// Equip an item from inventory slot `idx`.
+    /// Applies its stat modifiers to base stats. If the target slot was occupied,
+    /// the old item is pushed back to inventory (stat mods reversed).
+    /// Returns the name of what was equipped, or None if idx is out of range or
+    /// the item has no equip slot (caller should fall back to consumable use).
+    pub fn equip_from_inventory(&mut self, idx: usize) -> Option<String> {
+        let item = self.inventory.get(idx)?;
+        let mut slot = item.equip_slot()?;
+
+        // Ring promotion: if Ring1 is occupied, try Ring2
+        if slot == EquipSlot::Ring1 && self.equipped.ring1.is_some() {
+            slot = EquipSlot::Ring2;
+        }
+
+        let item = self.inventory.remove(idx);
+        let name = item.name.clone();
+
+        // Apply new item's stat mods
+        self.apply_item_stats(&item, 1);
+
+        // Displace old occupant back to inventory (reversing its mods)
+        if let Some(old) = self.equipped.put(slot, item) {
+            self.apply_item_stats(&old, -1);
+            self.inventory.push(old);
+        }
+
+        // Recalculate HP cap after equip (VIT/FOR may have changed)
+        self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+        Some(name)
+    }
+
+    /// Unequip the item in `slot`, reverse its stat mods, push to inventory.
+    pub fn unequip_slot(&mut self, slot: EquipSlot) -> bool {
+        if let Some(item) = self.equipped.take(slot) {
+            self.apply_item_stats(&item, -1);
+            self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+            self.inventory.push(item);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Apply (sign=+1) or reverse (sign=-1) stat_modifiers from an item.
+    fn apply_item_stats(&mut self, item: &crate::items::Item, sign: i64) {
+        for m in &item.stat_modifiers {
+            match m.stat.to_lowercase().as_str() {
+                "vitality"  => self.stats.vitality  += m.value * sign,
+                "force"     => self.stats.force      += m.value * sign,
+                "mana"      => self.stats.mana       += m.value * sign,
+                "cunning"   => self.stats.cunning    += m.value * sign,
+                "precision" => self.stats.precision  += m.value * sign,
+                "entropy"   => self.stats.entropy    += m.value * sign,
+                "luck"      => self.stats.luck       += m.value * sign,
+                _ => {}
+            }
+        }
+    }
+
+    /// Wear down the equipped weapon by `amount` durability.
+    /// Returns true if the weapon just broke (durability hit 0).
+    pub fn wear_weapon(&mut self, amount: u8) -> bool {
+        if let Some(w) = &mut self.equipped.weapon {
+            if w.wear(amount) {
+                // Broken: reverse stats and clear slot
+                let broken = self.equipped.weapon.take().unwrap();
+                self.apply_item_stats(&broken, -1);
+                self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Wear down the equipped body armor by `amount` durability.
+    /// Returns true if the armor just broke.
+    pub fn wear_armor(&mut self, amount: u8) -> bool {
+        if let Some(b) = &mut self.equipped.body {
+            if b.wear(amount) {
+                let broken = self.equipped.body.take().unwrap();
+                self.apply_item_stats(&broken, -1);
+                self.max_hp = (50 + self.stats.vitality * 3 + self.stats.force).max(1);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Reference to the equipped weapon, if any.
+    pub fn equipped_weapon(&self) -> Option<&crate::items::Item> {
+        self.equipped.weapon.as_ref()
     }
 
     pub fn heal(&mut self, amount: i64) {

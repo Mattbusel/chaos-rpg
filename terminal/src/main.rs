@@ -3,7 +3,7 @@ mod ratatui_screens;
 
 use chaos_rpg_audio::AudioSystem;
 use chaos_rpg_core::{
-    audio_events::AudioEvent,
+    audio_events::{AudioEvent, MusicVibe},
     bosses::{boss_name, random_unique_boss, run_unique_boss, BossOutcome},
     chaos_pipeline::chaos_roll_verbose,
     character::{Character, CharacterClass, Difficulty as GameDifficulty},
@@ -61,6 +61,15 @@ fn main() {
                 let scores = chaos_rpg_core::scoreboard::load_scores();
                 ui::show_scoreboard(&scores);
             }
+            GameMode::Bestiary => {
+                ui::show_bestiary();
+            }
+            GameMode::Codex => {
+                ui::show_codex();
+            }
+            GameMode::Achievements => {
+                ui::show_achievements();
+            }
             GameMode::Story | GameMode::Infinite | GameMode::DailySeed => {
                 run_game(mode);
             }
@@ -79,7 +88,13 @@ fn emit_audio(ev: AudioEvent) {
 }
 
 fn run_game(mode: GameMode) {
-    AUDIO.with(|a| *a.borrow_mut() = AudioSystem::try_new());
+    let cfg = chaos_rpg_core::chaos_config::ChaosConfig::load();
+    let vibe = MusicVibe::from_str(&cfg.audio.music_vibe);
+    AUDIO.with(|a| {
+        let sys = AudioSystem::try_new();
+        if let Some(ref s) = sys { s.set_vibe(vibe); }
+        *a.borrow_mut() = sys;
+    });
 
     let help = ui::prompt("  Show tutorial? [y/N] >");
     if help.eq_ignore_ascii_case("y") {
@@ -172,6 +187,11 @@ fn run_game(mode: GameMode) {
     } else {
         u32::MAX
     };
+    let mode_str = match mode {
+        GameMode::DailySeed => "Daily",
+        GameMode::Story => "Story",
+        _ => "Infinite",
+    };
     let daily_banner = if mode == GameMode::DailySeed {
         format!(
             "{}[DAILY RACE]{} Seed fixed for all players today.",
@@ -218,6 +238,11 @@ fn run_game(mode: GameMode) {
         ui::show_floor_header(player.floor, &mode);
         if !daily_banner.is_empty() {
             println!("  {}", daily_banner);
+            println!();
+        }
+        // Floor entry lore text (milestone floors and occasionally beyond floor 100)
+        if let Some(lore_text) = chaos_rpg_core::lore::events::floor_transition_flavor(player.floor, floor_seed) {
+            println!("  {}{}{}", ui::DIM, lore_text, ui::RESET);
             println!();
         }
 
@@ -311,6 +336,8 @@ fn run_game(mode: GameMode) {
                 ui::GREEN, ui::RESET, ui::CYAN, ui::RESET, ui::YELLOW, ui::RESET);
             println!("  {}[P]{} Skill tree   {}[F]{} Factions    {}[T]{} Last trace",
                 ui::MAGENTA, ui::RESET, ui::BRIGHT_CYAN, ui::RESET, ui::DIM, ui::RESET);
+            println!("  {}[I]{} Equipment    — view/equip/unequip items",
+                ui::GREEN, ui::RESET);
             if floor.rooms_remaining() == 0 {
                 println!(
                     "  {}[D] Descend to floor {}{}",
@@ -348,7 +375,12 @@ fn run_game(mode: GameMode) {
                 "c" => {
                     ui::clear_screen();
                     ui::show_character_sheet(&player);
-                    ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
+                    ui::show_character_lore_section(&player.character_lore);
+                    println!("  {}[L] Edit character lore  [ENTER] Continue{}", ui::DIM, ui::RESET);
+                    let cs_input = ui::prompt("  > ");
+                    if cs_input.trim().eq_ignore_ascii_case("l") {
+                        player.character_lore = ui::show_lore_editor(&player);
+                    }
                     continue 'rooms;
                 }
                 "b" => {
@@ -386,6 +418,10 @@ fn run_game(mode: GameMode) {
                     ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
                     continue 'rooms;
                 }
+                "i" => {
+                    ui::show_equipment_screen(&mut player);
+                    continue 'rooms;
+                }
                 "z" => {
                     let new_state = !ui::is_auto_mode();
                     ui::set_auto_mode(new_state);
@@ -407,7 +443,7 @@ fn run_game(mode: GameMode) {
                             println!("{}", line);
                         }
                         println!();
-                        end_game_score(&player);
+                        end_game_score(&player, true, mode_str);
                         return;
                     }
                     break 'rooms;
@@ -424,6 +460,7 @@ fn run_game(mode: GameMode) {
                         is_cursed_floor,
                         &nemesis_record,
                         &mut nemesis_spawned,
+                        mode_str,
                     );
 
                     // ── The Hunger: track rooms without a kill (floor 50+) ───
@@ -446,7 +483,7 @@ fn run_game(mode: GameMode) {
                                     println!("  {}THE HUNGER KILLS YOU.{}", ui::RED, ui::RESET);
                                     ui::show_game_over(&player);
                                     save_nemesis_on_death(&player, "THE HUNGER", player.floor, &mut nemesis_record);
-                                    end_game_score(&player);
+                                    end_game_score(&player, false, mode_str);
                                     return;
                                 }
                                 ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
@@ -462,7 +499,7 @@ fn run_game(mode: GameMode) {
                                 println!("{}", line);
                             }
                             println!();
-                            end_game_score(&player);
+                            end_game_score(&player, false, mode_str);
                             return;
                         }
                         RoomOutcome::PortalTaken => {
@@ -475,7 +512,7 @@ fn run_game(mode: GameMode) {
                                     println!("{}", line);
                                 }
                                 println!();
-                                end_game_score(&player);
+                                end_game_score(&player, true, mode_str);
                                 return;
                             }
                             break 'rooms;
@@ -546,6 +583,7 @@ fn handle_room(
     is_cursed: bool,
     nemesis_record: &Option<NemesisRecord>,
     nemesis_spawned: &mut bool,
+    mode_str: &str,
 ) -> RoomOutcome {
     match room.room_type {
         RoomType::Combat => {
@@ -557,7 +595,7 @@ fn handle_room(
                     let spawn_chance = if player.floor >= nemesis.floor_killed_at { 40 } else { 20 };
                     if player.floor >= 3 && spawn_roll < spawn_chance {
                         *nemesis_spawned = true;
-                        return do_nemesis_encounter(player, nemesis, seed, last_roll, is_cursed);
+                        return do_nemesis_encounter(player, nemesis, seed, last_roll, is_cursed, mode_str);
                     }
                 }
             }
@@ -583,7 +621,7 @@ fn handle_room(
                 println!("  {}⚠ STAT MIRROR: This enemy copied your {} ({}) as its HP!{}",
                     ui::RED, stat_name, stat_val, ui::RESET);
             }
-            do_combat_encounter(player, &mut enemy, seed, last_roll, false, is_cursed)
+            do_combat_encounter(player, &mut enemy, seed, last_roll, false, is_cursed, mode_str)
         }
 
         RoomType::Boss => {
@@ -595,7 +633,7 @@ fn handle_room(
             if use_unique {
                 if let Some(boss_id) = random_unique_boss(player.floor, seed) {
                     if is_gauntlet {
-                        return do_boss_gauntlet(player, seed, last_roll, is_cursed, Some(boss_id));
+                        return do_boss_gauntlet(player, seed, last_roll, is_cursed, Some(boss_id), mode_str);
                     }
                     return do_unique_boss_encounter(player, boss_id, seed, last_roll);
                 }
@@ -609,9 +647,9 @@ fn handle_room(
             enemy.gold_reward *= 3;
 
             if is_gauntlet {
-                do_boss_gauntlet(player, seed, last_roll, is_cursed, None)
+                do_boss_gauntlet(player, seed, last_roll, is_cursed, None, mode_str)
             } else {
-                do_combat_encounter(player, &mut enemy, seed, last_roll, true, is_cursed)
+                do_combat_encounter(player, &mut enemy, seed, last_roll, true, is_cursed, mode_str)
             }
         }
 
@@ -620,9 +658,14 @@ fn handle_room(
             let gold_bonus = (seed % 30 + 10) as i64 * player.floor as i64;
 
             println!("  {}* TREASURE ROOM *{}", ui::YELLOW, ui::RESET);
+            println!("  {}{}{}", ui::DIM, chaos_rpg_core::lore::world::treasure_room_flavor(seed), ui::RESET);
             println!();
             for line in item.display_box() {
                 println!("  {}", line);
+            }
+            // Show item flavor text
+            if !item.flavor_text.is_empty() {
+                println!("  {}  \u{201c}{}\u{201d}{}", ui::DIM, item.flavor_text, ui::RESET);
             }
             println!();
             println!("  {}You find {} gold!{}", ui::YELLOW, gold_bonus, ui::RESET);
@@ -1356,6 +1399,7 @@ fn do_nemesis_encounter(
     seed: u64,
     last_roll: &mut Option<chaos_rpg_core::chaos_pipeline::ChaosRollResult>,
     is_cursed: bool,
+    mode_str: &str,
 ) -> RoomOutcome {
     ui::clear_screen();
     println!("\n  {}☠  NEMESIS RETURNS  ☠{}", ui::RED, ui::RESET);
@@ -1377,7 +1421,7 @@ fn do_nemesis_encounter(
     nemesis_enemy.xp_reward *= 5;
     nemesis_enemy.gold_reward *= 3;
 
-    let result = do_combat_encounter(player, &mut nemesis_enemy, seed, last_roll, true, is_cursed);
+    let result = do_combat_encounter(player, &mut nemesis_enemy, seed, last_roll, true, is_cursed, mode_str);
     if matches!(result, RoomOutcome::Continue) {
         // Nemesis killed! Clear it.
         chaos_rpg_core::nemesis::clear_nemesis();
@@ -1406,6 +1450,7 @@ fn do_boss_gauntlet(
     last_roll: &mut Option<chaos_rpg_core::chaos_pipeline::ChaosRollResult>,
     is_cursed: bool,
     final_boss_id: Option<u8>,
+    mode_str: &str,
 ) -> RoomOutcome {
     ui::clear_screen();
     println!("\n  {}╔══════════════════════════════════╗{}", ui::RED, ui::RESET);
@@ -1421,7 +1466,7 @@ fn do_boss_gauntlet(
     e1.hp = (e1.hp as f64 * 2.0) as i64;
     e1.max_hp = e1.hp;
     println!("  {}GAUNTLET: Fight 1/3{}", ui::YELLOW, ui::RESET);
-    match do_combat_encounter(player, &mut e1, seed.wrapping_add(1), last_roll, false, is_cursed) {
+    match do_combat_encounter(player, &mut e1, seed.wrapping_add(1), last_roll, false, is_cursed, mode_str) {
         RoomOutcome::PlayerDied => return RoomOutcome::PlayerDied,
         _ => {}
     }
@@ -1432,7 +1477,7 @@ fn do_boss_gauntlet(
     e2.max_hp = e2.hp;
     e2.base_damage = (e2.base_damage as f64 * 1.5) as i64;
     println!("  {}GAUNTLET: Fight 2/3{}", ui::YELLOW, ui::RESET);
-    match do_combat_encounter(player, &mut e2, seed.wrapping_add(2), last_roll, false, is_cursed) {
+    match do_combat_encounter(player, &mut e2, seed.wrapping_add(2), last_roll, false, is_cursed, mode_str) {
         RoomOutcome::PlayerDied => return RoomOutcome::PlayerDied,
         _ => {}
     }
@@ -1451,7 +1496,7 @@ fn do_boss_gauntlet(
     boss.xp_reward *= 5;
     boss.gold_reward *= 5;
     println!("  {}Destiny roll: {:.3} — power multiplier: {:.2}x{}", ui::MAGENTA, destiny.final_value, power_mult, ui::RESET);
-    do_combat_encounter(player, &mut boss, seed.wrapping_add(3), last_roll, true, is_cursed)
+    do_combat_encounter(player, &mut boss, seed.wrapping_add(3), last_roll, true, is_cursed, mode_str)
 }
 
 fn do_combat_encounter(
@@ -1461,6 +1506,7 @@ fn do_combat_encounter(
     last_roll: &mut Option<chaos_rpg_core::chaos_pipeline::ChaosRollResult>,
     is_boss: bool,
     is_cursed: bool,
+    mode_str: &str,
 ) -> RoomOutcome {
     if is_boss {
         emit_audio(AudioEvent::BossEncounterStart { boss_tier: 1 });
@@ -1504,7 +1550,7 @@ fn do_combat_encounter(
                     for line in player.run_summary() {
                         println!("{}", line);
                     }
-                    end_game_score(player);
+                    end_game_score(player, false, mode_str);
                     return RoomOutcome::PlayerDied;
                 }
                 ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
@@ -1813,7 +1859,10 @@ fn events_to_enemy_outcome_str(
     "acted".to_string()
 }
 
-fn end_game_score(player: &Character) {
+fn end_game_score(player: &Character, won: bool, mode_str: &str) {
+    use chaos_rpg_core::lore::narrative::RunNarrative;
+    use chaos_rpg_core::run_history::{RunHistory, RunRecord};
+
     let tier = player.power_tier();
     let underdog = player.underdog_multiplier();
     let misery = player.misery.misery_index;
@@ -1870,7 +1919,7 @@ fn end_game_score(player: &Character) {
         kills: player.kills,
         score: player.score(),
         date: String::new(),
-        epitaph,
+        epitaph: epitaph.clone(),
     };
     let mut legacy = LegacyData::load();
     legacy.record_run(
@@ -1888,5 +1937,104 @@ fn end_game_score(player: &Character) {
     );
     legacy.save();
 
+    // ── Build and display run narrative ───────────────────────────────────────
+    let pos_stats: Vec<(String, i64)> = [
+        ("Vitality", player.stats.vitality),
+        ("Force", player.stats.force),
+        ("Mana", player.stats.mana),
+        ("Cunning", player.stats.cunning),
+        ("Precision", player.stats.precision),
+        ("Entropy", player.stats.entropy),
+        ("Luck", player.stats.luck),
+    ]
+    .iter()
+    .filter(|(_, v)| *v > 0)
+    .map(|(n, v)| (n.to_string(), *v))
+    .collect();
+
+    let neg_stats: Vec<(String, i64)> = [
+        ("Vitality", player.stats.vitality),
+        ("Force", player.stats.force),
+        ("Mana", player.stats.mana),
+        ("Cunning", player.stats.cunning),
+        ("Precision", player.stats.precision),
+        ("Entropy", player.stats.entropy),
+        ("Luck", player.stats.luck),
+    ]
+    .iter()
+    .filter(|(_, v)| *v < 0)
+    .map(|(n, v)| (n.to_string(), *v))
+    .collect();
+
+    let narrative = RunNarrative {
+        character_name: player.name.clone(),
+        character_class: player.class.to_string(),
+        character_background: player.background.name().to_string(),
+        difficulty: player.difficulty.name().to_string(),
+        game_mode: mode_str.to_string(),
+        destiny_roll_value: 0.0, // not persisted; narrative still reads from events
+        positive_stats: pos_stats,
+        negative_stats: neg_stats,
+        boon_name: player.boon.map(|b| b.name().to_string()),
+        final_floor: player.floor,
+        final_tier: tier.name().to_string(),
+        total_kills: player.kills as u64,
+        total_damage: player.total_damage_dealt,
+        events: player.narrative_events.clone(),
+        custom_origin: if player.character_lore.origin.is_empty() {
+            None
+        } else {
+            Some(player.character_lore.origin.clone())
+        },
+        epitaph: epitaph.clone(),
+        won,
+    };
+    let auto_narrative = narrative.generate();
+
+    // Save to run history
+    let record = RunRecord {
+        date: {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let secs = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            // Simple date string: seconds since epoch
+            secs.to_string()
+        },
+        name: player.name.clone(),
+        class: player.class.to_string(),
+        difficulty: player.difficulty.name().to_string(),
+        game_mode: mode_str.to_string(),
+        floor: player.floor,
+        level: player.level,
+        kills: player.kills as u64,
+        score: player.score(),
+        damage_dealt: player.total_damage_dealt,
+        damage_taken: player.total_damage_taken,
+        highest_hit: player.run_stats.highest_single_hit,
+        spells_cast: player.spells_cast,
+        items_used: player.items_used,
+        gold: player.gold,
+        misery_index: misery,
+        corruption: player.corruption,
+        power_tier: tier.name().to_string(),
+        cause_of_death: player.run_stats.cause_of_death.clone(),
+        seed: player.seed,
+        won,
+        epitaph,
+        auto_narrative: auto_narrative.clone(),
+        character_lore: if player.character_lore.origin.is_empty()
+            && player.character_lore.motivation.is_empty()
+        {
+            None
+        } else {
+            Some(player.character_lore.clone())
+        },
+    };
+    let mut history = RunHistory::load();
+    history.push(record);
+
     ui::show_scoreboard(&scores);
+    ui::show_run_narrative(&auto_narrative);
 }

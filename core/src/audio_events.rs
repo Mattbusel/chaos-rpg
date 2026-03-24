@@ -106,6 +106,55 @@ pub enum AudioEvent {
 
 // ── Music state ───────────────────────────────────────────────────────────────
 
+/// Music vibe preset — controls which generator and volume profile is used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MusicVibe {
+    /// Gentle evolving ambient — soft pads, pentatonic notes, builds and breathes.
+    #[default]
+    Chill,
+    /// Original system — unchanged classic audio.
+    Classic,
+    /// Bass drone only — just a quiet sub-frequency hum, nothing else.
+    Minimal,
+    /// No music, only SFX.
+    Off,
+}
+
+impl MusicVibe {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Chill   => "Chill  (Evolving Ambient)",
+            Self::Classic => "Classic",
+            Self::Minimal => "Minimal (Drone Only)",
+            Self::Off     => "Off",
+        }
+    }
+    pub fn cycle(self) -> Self {
+        match self {
+            Self::Chill   => Self::Classic,
+            Self::Classic => Self::Minimal,
+            Self::Minimal => Self::Off,
+            Self::Off     => Self::Chill,
+        }
+    }
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "classic" => Self::Classic,
+            "minimal" => Self::Minimal,
+            "off"     => Self::Off,
+            _         => Self::Chill,
+        }
+    }
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Chill   => "chill",
+            Self::Classic => "classic",
+            Self::Minimal => "minimal",
+            Self::Off     => "off",
+        }
+    }
+}
+
 /// High-level music state that the music system transitions between.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MusicState {

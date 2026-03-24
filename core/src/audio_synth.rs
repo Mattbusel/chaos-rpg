@@ -726,35 +726,35 @@ pub fn music_combat_loop(seed: u64) -> Vec<f32> {
     let mut rng = Lcg::new(seed ^ 0xdead_beef);
     let mut out = vec![0.0f32; n];
 
-    // Driving bass pulse at 4 beats per loop
+    // Bass pulse — Triangle is warmer than Square/Saw
     let bass_freq = 110.0f32;
     let beat_period = dur / 4.0;
     for beat in 0..4usize {
         let start = (beat as f32 * beat_period * SAMPLE_RATE as f32) as usize;
-        let nd = beat_period * 0.6;
-        let adsr = Adsr { attack: 0.01, decay: 0.05, sustain: 0.5, release: nd - 0.06 };
+        let nd = beat_period * 0.55;
+        let adsr = Adsr { attack: 0.02, decay: 0.06, sustain: 0.35, release: nd - 0.08 };
         let mut phase = 0.0f32;
         for i in 0..generate(nd) {
             let t = i as f32 / SAMPLE_RATE as f32;
-            let s = oscillator(Waveform::Square { duty: 0.4 }, bass_freq, phase) * 0.35
-                  + oscillator(Waveform::Saw, bass_freq * 2.0, phase) * 0.2;
+            let s = oscillator(Waveform::Triangle, bass_freq, phase) * 0.28
+                  + oscillator(Waveform::Sine, bass_freq * 2.0, phase) * 0.12;
             phase = advance_phase(phase, bass_freq);
             let idx = start + i;
             if idx < n { out[idx] += s * adsr.amplitude(t, nd); }
         }
     }
 
-    // Chaos texture — random high freq stabs
-    for _ in 0..6 {
+    // Softer texture — quiet sine stabs instead of harsh saw
+    for _ in 0..4 {
         let off = rng.next_f32() * dur;
-        let freq = 300.0 + rng.next_f32() * 700.0;
+        let freq = 220.0 + rng.next_f32() * 330.0; // lower, less shrill
         let start = (off * SAMPLE_RATE as f32) as usize;
-        let nd = 0.05;
-        let adsr = Adsr { attack: 0.002, decay: 0.02, sustain: 0.2, release: 0.028 };
+        let nd = 0.07;
+        let adsr = Adsr { attack: 0.01, decay: 0.03, sustain: 0.2, release: 0.03 };
         let mut phase = 0.0f32;
         for i in 0..generate(nd) {
             let t = i as f32 / SAMPLE_RATE as f32;
-            let s = oscillator(Waveform::Saw, freq, phase) * 0.15;
+            let s = oscillator(Waveform::Sine, freq, phase) * 0.10;
             phase = advance_phase(phase, freq);
             let idx = start + i;
             if idx < n { out[idx] += s * adsr.amplitude(t, nd); }
@@ -771,44 +771,42 @@ pub fn music_boss_loop(seed: u64) -> Vec<f32> {
     let mut out = vec![0.0f32; n];
     let mut lp = Lowpass::new(800.0);
 
-    // Heavy sub bass
+    // Heavy sub bass — Triangle instead of Square (softer harmonic profile)
     let sub = 55.0f32;
     let mut bp = 0.0f32;
     for i in 0..n {
-        let s = oscillator(Waveform::Square { duty: 0.5 }, sub, bp) * 0.4;
+        let s = oscillator(Waveform::Triangle, sub, bp) * 0.28;
         bp = advance_phase(bp, sub);
         out[i] += lp.process(s);
     }
 
-    // Distorted mid layer
+    // Mid layer — Sine + slow LFO tremolo instead of raw Saw
     let mid_freq = 220.0f32;
     let mut mp = 0.0f32;
     for i in 0..n {
         let t = i as f32 / SAMPLE_RATE as f32;
-        let s = oscillator(Waveform::Saw, mid_freq, mp) * 0.25
-              * (0.6 + 0.4 * (t * std::f32::consts::TAU * 1.5).sin());
+        let tremolo = 0.7 + 0.3 * (t * std::f32::consts::TAU * 1.5).sin();
+        let s = oscillator(Waveform::Sine, mid_freq, mp) * 0.18 * tremolo;
         mp = advance_phase(mp, mid_freq);
         out[i] += s;
     }
 
-    // Percussive noise bursts
+    // Percussive noise bursts — quieter
     let beat_period = dur / 6.0;
     for beat in 0..6usize {
         let start = (beat as f32 * beat_period * SAMPLE_RATE as f32) as usize;
         let nd = 0.04;
-        let adsr = Adsr { attack: 0.002, decay: 0.015, sustain: 0.2, release: 0.023 };
+        let adsr = Adsr { attack: 0.002, decay: 0.015, sustain: 0.15, release: 0.023 };
         let mut phase = 0.0f32;
         for i in 0..generate(nd) {
             let t = i as f32 / SAMPLE_RATE as f32;
-            let s = oscillator(Waveform::Noise, 150.0 + rng.next_f32() * 100.0, phase) * 0.4;
-            phase = advance_phase(phase, 150.0);
+            let s = oscillator(Waveform::Noise, 120.0 + rng.next_f32() * 60.0, phase) * 0.22;
+            phase = advance_phase(phase, 120.0);
             let idx = start + i;
             if idx < n { out[idx] += s * adsr.amplitude(t, nd); }
         }
     }
-
-    // Bitcrush slightly for that corrupted feel
-    bitcrush(&mut out, 10, 1);
+    // No bitcrush — was too harsh
     out
 }
 
@@ -841,7 +839,7 @@ pub fn music_menu_loop() -> Vec<f32> {
     out
 }
 
-/// Generate cursed floor ambient loop (~3 seconds, dissonant).
+/// Generate cursed floor ambient loop (~3 seconds, dissonant but not clipping).
 pub fn music_cursed_loop(seed: u64) -> Vec<f32> {
     let dur = 3.0f32;
     let n = generate(dur);
@@ -854,27 +852,296 @@ pub fn music_cursed_loop(seed: u64) -> Vec<f32> {
     let dissonant = base * (2.0f32).powf(6.0 / 12.0); // tritone
     let mut p1 = 0.0f32;
     let mut p2 = 0.0f32;
-    let adsr = Adsr { attack: 0.5, decay: 0.5, sustain: 0.6, release: dur - 1.0 };
+    let adsr = Adsr { attack: 0.5, decay: 0.5, sustain: 0.5, release: dur - 1.0 };
     for i in 0..n {
         let t = i as f32 / SAMPLE_RATE as f32;
-        let s = oscillator(Waveform::Sine, dissonant, p1) * 0.2
-              + oscillator(Waveform::Saw, base * 0.5, p2) * 0.15;
+        let s = oscillator(Waveform::Sine, dissonant, p1) * 0.14
+              + oscillator(Waveform::Triangle, base * 0.5, p2) * 0.10;
         p1 = advance_phase(p1, dissonant);
         p2 = advance_phase(p2, base * 0.5);
         out[i] += s * adsr.amplitude(t, dur);
     }
 
-    // Random glitches
-    for _ in 0..4 {
+    // Subtle glitches — attenuate rather than invert (no clipping)
+    for _ in 0..3 {
         let pos = (rng.next_f32() * n as f32) as usize;
-        let len = (rng.next_f32() * 0.02 * SAMPLE_RATE as f32) as usize;
+        let len = (rng.next_f32() * 0.015 * SAMPLE_RATE as f32) as usize;
         for j in pos..(pos + len).min(n) {
-            out[j] *= -1.5;
+            out[j] *= 0.2; // quiet dropout rather than invert-clip
         }
     }
 
-    // Heavy bitcrush
-    bitcrush(&mut out, 7, 2);
+    // Light bitcrush for texture (was 7 bits / rate 2 — now 12 bits / rate 1)
+    bitcrush(&mut out, 12, 1);
+    // Final clamp to prevent any residual clipping
+    for s in &mut out { *s = s.clamp(-1.0, 1.0); }
     out
 }
 
+// ── CHILL MUSIC VARIANTS ──────────────────────────────────────────────────────
+// Longer loops with baked-in evolution: starts sparse, builds, breathes back.
+// All amplitudes deliberately lower than Classic — designed for background play.
+
+fn pentatonic_scale(root: f32) -> [f32; 5] {
+    // Major pentatonic: root, M2, M3, P5, M6
+    [root, root * 1.122, root * 1.260, root * 1.498, root * 1.682]
+}
+
+/// 16-second evolving ambient exploration loop (Chill vibe).
+/// Phases: 0=bare drone → 1=+pad → 2=+melody → 3=breathe back.
+pub fn music_exploration_chill(seed: u64) -> Vec<f32> {
+    let phase_dur = 4.0f32;
+    let n_total = generate(phase_dur * 4.0);
+    let mut out = vec![0.0f32; n_total];
+    let mut rng = Lcg::new(seed);
+
+    let roots = [55.0f32, 61.74, 65.41, 73.42]; // A1 B1 C2 D2
+    let bass_root = roots[(rng.next_u64() % 4) as usize];
+    let scale = pentatonic_scale(bass_root * 2.0);
+    let mut lp = Lowpass::new(500.0);
+
+    for phase in 0u32..4 {
+        let start = (phase as f32 * phase_dur * SAMPLE_RATE as f32) as usize;
+        let n = generate(phase_dur);
+        // Volume envelope: sparse → full → spare
+        let vol = [0.55f32, 0.75, 1.0, 0.65][phase as usize];
+
+        // Bass drone — always present, gentle sine breathing
+        {
+            let mut bp = 0.0f32;
+            for i in 0..n {
+                let t = i as f32 / SAMPLE_RATE as f32;
+                let breath = 0.75 + 0.25 * (t * std::f32::consts::TAU * 0.25).sin();
+                let s = oscillator(Waveform::Sine, bass_root, bp) * 0.20 * breath * vol;
+                bp = advance_phase(bp, bass_root);
+                let idx = start + i;
+                if idx < n_total { out[idx] += s; }
+            }
+        }
+
+        // Soft pad (5th above bass) — phase 1+
+        if phase >= 1 {
+            let pad_freq = bass_root * 3.0; // octave + fifth
+            let adsr = Adsr { attack: 0.9, decay: 0.6, sustain: 0.35, release: phase_dur - 1.5 };
+            let mut pp = 0.0f32;
+            for i in 0..n {
+                let t = i as f32 / SAMPLE_RATE as f32;
+                let s = (oscillator(Waveform::Sine, pad_freq, pp) * 0.55
+                       + oscillator(Waveform::Triangle, pad_freq * 1.498, pp) * 0.25)
+                       * 0.09 * vol * adsr.amplitude(t, phase_dur);
+                pp = advance_phase(pp, pad_freq);
+                let idx = start + i;
+                if idx < n_total { out[idx] += s; }
+            }
+        }
+
+        // Sparse pentatonic melody — phase 2 only (peak density)
+        if phase == 2 {
+            let note_offsets = [0.3f32, 1.0, 1.9, 2.7, 3.4];
+            for &note_t in &note_offsets {
+                let fidx = (rng.next_u64() % 5) as usize;
+                let freq = scale[fidx];
+                let ns = start + (note_t * SAMPLE_RATE as f32) as usize;
+                let nd = 0.55f32;
+                let adsr = Adsr { attack: 0.06, decay: 0.14, sustain: 0.28, release: 0.35 };
+                let mut np = 0.0f32;
+                for i in 0..generate(nd) {
+                    let t = i as f32 / SAMPLE_RATE as f32;
+                    let s = oscillator(Waveform::Sine, freq, np) * 0.12 * vol
+                          * adsr.amplitude(t, nd);
+                    np = advance_phase(np, freq);
+                    let idx = ns + i;
+                    if idx < n_total { out[idx] += s; }
+                }
+            }
+        }
+
+        // Very quiet filtered noise texture — only at peak
+        if phase == 2 {
+            let mut np = 0.0f32;
+            for i in 0..n {
+                let raw = oscillator(Waveform::Noise, 160.0, np) * 0.018;
+                np = advance_phase(np, 160.0);
+                let idx = start + i;
+                if idx < n_total { out[idx] += lp.process(raw); }
+            }
+        }
+    }
+
+    let mut hp = Highpass::new(35.0);
+    for s in &mut out { *s = hp.process(*s).clamp(-1.0, 1.0); }
+    out
+}
+
+/// 8-second evolving combat loop (Chill vibe).
+/// Phase 0: gentle triangle pulse. Phase 1: adds light pentatonic arpeggio.
+pub fn music_combat_chill(seed: u64) -> Vec<f32> {
+    let phase_dur = 4.0f32;
+    let n_total = generate(phase_dur * 2.0);
+    let mut out = vec![0.0f32; n_total];
+    let mut rng = Lcg::new(seed ^ 0xC0BA_2000);
+
+    let bass_freq = 110.0f32;
+
+    for phase in 0u32..2 {
+        let start = (phase as f32 * phase_dur * SAMPLE_RATE as f32) as usize;
+        let n = generate(phase_dur);
+        let vol = if phase == 0 { 0.75f32 } else { 1.0 };
+
+        // Triangle bass pulse — 4 beats per phase
+        let beat_period = phase_dur / 4.0;
+        for beat in 0..4usize {
+            let bs = start + (beat as f32 * beat_period * SAMPLE_RATE as f32) as usize;
+            let nd = beat_period * 0.52;
+            let adsr = Adsr { attack: 0.03, decay: 0.07, sustain: 0.28, release: nd - 0.10 };
+            let mut pp = 0.0f32;
+            for i in 0..generate(nd) {
+                let t = i as f32 / SAMPLE_RATE as f32;
+                let s = oscillator(Waveform::Triangle, bass_freq, pp) * 0.22 * vol
+                      + oscillator(Waveform::Sine, bass_freq * 2.0, pp) * 0.09 * vol;
+                pp = advance_phase(pp, bass_freq);
+                let idx = bs + i;
+                if idx < n_total { out[idx] += s * adsr.amplitude(t, nd); }
+            }
+        }
+
+        // Phase 1: gentle ascending arpeggio
+        if phase == 1 {
+            let root = 220.0f32;
+            let arpegg = [root, root * 1.26, root * 1.498, root * 2.0];
+            let note_dur = 0.18f32;
+            for (k, &freq) in arpegg.iter().enumerate() {
+                for rep in 0..4usize {
+                    let note_t = k as f32 * 0.22 + rep as f32 * 1.0;
+                    if note_t + note_dur > phase_dur { continue; }
+                    let ns = start + (note_t * SAMPLE_RATE as f32) as usize;
+                    let adsr = Adsr { attack: 0.02, decay: 0.05, sustain: 0.25, release: 0.11 };
+                    let mut np = 0.0f32;
+                    for i in 0..generate(note_dur) {
+                        let t = i as f32 / SAMPLE_RATE as f32;
+                        let s = oscillator(Waveform::Sine, freq, np) * 0.09 * adsr.amplitude(t, note_dur);
+                        np = advance_phase(np, freq);
+                        let idx = ns + i;
+                        if idx < n_total { out[idx] += s; }
+                    }
+                }
+            }
+            // Off-beat hi-freq tick for rhythm
+            for beat in 0..4usize {
+                let tick_t = (beat as f32 + 0.5) * beat_period;
+                if tick_t >= phase_dur { continue; }
+                let ts = start + (tick_t * SAMPLE_RATE as f32) as usize;
+                let nd = 0.03f32;
+                let adsr = Adsr { attack: 0.002, decay: 0.01, sustain: 0.1, release: 0.018 };
+                let mut tp = 0.0f32;
+                for i in 0..generate(nd) {
+                    let t = i as f32 / SAMPLE_RATE as f32;
+                    let s = oscillator(Waveform::Triangle, 880.0, tp) * 0.06 * adsr.amplitude(t, nd);
+                    tp = advance_phase(tp, 880.0);
+                    let idx = ts + i;
+                    if idx < n_total { out[idx] += s; }
+                }
+            }
+        }
+        let _ = (n, rng.next_f32()); // suppress unused warnings
+    }
+
+    for s in &mut out { *s = s.clamp(-1.0, 1.0); }
+    out
+}
+
+/// 12-second boss loop (Chill vibe). Tense but clean — no bitcrush, no harsh waves.
+pub fn music_boss_chill(seed: u64) -> Vec<f32> {
+    let dur = 12.0f32;
+    let n = generate(dur);
+    let mut out = vec![0.0f32; n];
+    let mut rng = Lcg::new(seed ^ 0xB055_C222);
+    let mut lp = Lowpass::new(280.0);
+
+    // Pulsing sub bass — sine, breathes every 1.5s
+    let sub = 55.0f32;
+    let mut bp = 0.0f32;
+    for i in 0..n {
+        let t = i as f32 / SAMPLE_RATE as f32;
+        let pulse = (0.5 + 0.5 * (t * std::f32::consts::TAU / 1.5).sin()).powi(2);
+        let raw = oscillator(Waveform::Sine, sub, bp) * 0.24 * pulse;
+        bp = advance_phase(bp, sub);
+        out[i] += lp.process(raw);
+    }
+
+    // Ominous minor chord that slowly swells in
+    let root = 110.0f32;
+    let chord = [root, root * 1.189, root * 1.498]; // natural minor triad
+    for (ci, &freq) in chord.iter().enumerate() {
+        let attack_offset = ci as f32 * 0.8;
+        let adsr = Adsr {
+            attack: 1.5 + attack_offset,
+            decay: 0.8,
+            sustain: 0.4,
+            release: dur - 2.3 - attack_offset,
+        };
+        let mut pp = 0.0f32;
+        for i in 0..n {
+            let t = i as f32 / SAMPLE_RATE as f32;
+            let s = oscillator(Waveform::Sine, freq, pp) * 0.09 * adsr.amplitude(t, dur);
+            pp = advance_phase(pp, freq);
+            out[i] += s;
+        }
+    }
+
+    // Sparse irregular taps (tension markers)
+    let tap_times = [0.8f32, 2.5, 4.2, 6.0, 7.8, 9.5, 11.1];
+    for &tt in &tap_times {
+        let ns = (tt * SAMPLE_RATE as f32) as usize;
+        let nd = 0.05f32;
+        let adsr = Adsr { attack: 0.002, decay: 0.018, sustain: 0.08, release: 0.030 };
+        let freq = 70.0 + rng.next_f32() * 35.0;
+        let mut pp = 0.0f32;
+        for i in 0..generate(nd) {
+            let t = i as f32 / SAMPLE_RATE as f32;
+            let s = oscillator(Waveform::Noise, freq, pp) * 0.16 * adsr.amplitude(t, nd);
+            pp = advance_phase(pp, freq);
+            let idx = ns + i;
+            if idx < n { out[idx] += s; }
+        }
+    }
+
+    // Rising tension arpeggio (builds over the 12 seconds)
+    let arp = [220.0f32, 261.63, 311.13, 349.23, 415.30, 493.88];
+    for (k, &freq) in arp.iter().enumerate() {
+        let tt = 1.5 + k as f32 * 1.6;
+        if tt >= dur { break; }
+        let ns = (tt * SAMPLE_RATE as f32) as usize;
+        let nd = 0.50f32;
+        let vol = 0.05 + k as f32 * 0.008;
+        let adsr = Adsr { attack: 0.06, decay: 0.12, sustain: 0.35, release: 0.32 };
+        let mut pp = 0.0f32;
+        for i in 0..generate(nd) {
+            let t = i as f32 / SAMPLE_RATE as f32;
+            let s = oscillator(Waveform::Triangle, freq, pp) * vol * adsr.amplitude(t, nd);
+            pp = advance_phase(pp, freq);
+            let idx = ns + i;
+            if idx < n { out[idx] += s; }
+        }
+    }
+
+    for s in &mut out { *s = s.clamp(-1.0, 1.0); }
+    out
+}
+
+/// 8-second minimal bass drone (Minimal vibe). Just a quiet sub hum.
+pub fn music_minimal_drone(seed: u64) -> Vec<f32> {
+    let dur = 8.0f32;
+    let n = generate(dur);
+    let roots = [55.0f32, 61.74, 65.41, 73.42];
+    let freq = roots[(seed as usize) % 4];
+    let mut lp = Lowpass::new(350.0);
+    let mut bp = 0.0f32;
+    (0..n).map(|i| {
+        let t = i as f32 / SAMPLE_RATE as f32;
+        let breath = 0.80 + 0.20 * (t * std::f32::consts::TAU * 0.125).sin();
+        let raw = oscillator(Waveform::Sine, freq, bp) * 0.15 * breath;
+        bp = advance_phase(bp, freq);
+        lp.process(raw).clamp(-1.0, 1.0)
+    }).collect()
+}

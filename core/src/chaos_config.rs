@@ -26,6 +26,27 @@ use serde::{Deserialize, Serialize};
 fn default_one() -> f64 { 1.0 }
 fn default_true() -> bool { true }
 fn default_url() -> String { "https://chaos-rpg-leaderboard.mfletcherdev.workers.dev".to_string() }
+fn default_music_vibe() -> String { "chill".to_string() }
+fn default_volume() -> f64 { 1.0 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AudioConfig {
+    /// Music vibe preset: "chill" (default), "classic", "minimal", "off"
+    #[serde(default = "default_music_vibe")]
+    pub music_vibe: String,
+    /// Master music volume multiplier (0.0–2.0, default 1.0)
+    #[serde(default = "default_volume")]
+    pub music_volume: f64,
+    /// Master SFX volume multiplier (0.0–2.0, default 1.0)
+    #[serde(default = "default_volume")]
+    pub sfx_volume: f64,
+}
+
+impl Default for AudioConfig {
+    fn default() -> Self {
+        Self { music_vibe: default_music_vibe(), music_volume: 1.0, sfx_volume: 1.0 }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayConfig {
@@ -111,6 +132,8 @@ impl Default for MetaConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChaosConfig {
     #[serde(default)]
+    pub audio: AudioConfig,
+    #[serde(default)]
     pub display: DisplayConfig,
     #[serde(default)]
     pub gameplay: GameplayConfig,
@@ -147,6 +170,14 @@ impl ChaosConfig {
         let example = r#"# CHAOS RPG — mod configuration
 # Place this file next to chaos-rpg-graphical.exe and edit to taste.
 # Restart the game to apply changes.
+
+[audio]
+# Music vibe: chill (default) | classic | minimal | off
+music_vibe = "chill"
+# Master music volume (0.0 = silent, 1.0 = default, 2.0 = double)
+music_volume = 1.0
+# Master SFX volume (0.0 = silent, 1.0 = default)
+sfx_volume = 1.0
 
 [display]
 # Multiply particle drift speed (1.0 = default, 2.0 = double speed)

@@ -26,6 +26,12 @@ pub struct RunRecord {
     pub seed:          u64,
     pub won:           bool,
     pub epitaph:       String,
+    /// Auto-generated narrative prose for this run (built on run end).
+    #[serde(default)]
+    pub auto_narrative: String,
+    /// Player-authored character lore snapshot at run end.
+    #[serde(default)]
+    pub character_lore: Option<crate::character_lore::CharacterLore>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

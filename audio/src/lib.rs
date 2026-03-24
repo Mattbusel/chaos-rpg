@@ -8,7 +8,7 @@ mod music_system;
 pub use sound_bank::SoundBank;
 pub use music_system::MusicSystem;
 
-use chaos_rpg_core::audio_events::{AudioEvent, MusicState};
+use chaos_rpg_core::audio_events::{AudioEvent, MusicState, MusicVibe};
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 
@@ -20,6 +20,7 @@ pub struct AudioSystem {
 enum AudioMsg {
     Sfx(AudioEvent),
     SetMusicState(MusicState),
+    SetVibe(MusicVibe),
     Stop,
 }
 
@@ -42,6 +43,7 @@ impl AudioSystem {
                 match msg {
                     AudioMsg::Sfx(ev) => bank.play(&stream_handle, &ev),
                     AudioMsg::SetMusicState(state) => music.transition_to(state, &stream_handle, &bank),
+                    AudioMsg::SetVibe(vibe) => music.set_vibe(vibe, &stream_handle, &bank),
                     AudioMsg::Stop => break,
                 }
             }
@@ -75,6 +77,11 @@ impl AudioSystem {
     /// Explicitly set music state without triggering a SFX.
     pub fn set_music_state(&self, state: MusicState) {
         let _ = self.tx.send(AudioMsg::SetMusicState(state));
+    }
+
+    /// Change the music vibe preset (takes effect immediately, restarts current track).
+    pub fn set_vibe(&self, vibe: MusicVibe) {
+        let _ = self.tx.send(AudioMsg::SetVibe(vibe));
     }
 }
 

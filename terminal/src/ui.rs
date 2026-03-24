@@ -102,6 +102,9 @@ pub enum GameMode {
     Infinite,
     DailySeed,
     Scoreboard,
+    Bestiary,
+    Codex,
+    Achievements,
     Quit,
 }
 
@@ -330,11 +333,23 @@ pub fn show_title() {
         c, RESET, YELLOW, RESET, c, RESET
     );
     println!(
+        "{}║{}  {}[B]{} Bestiary        — entities encountered in The Proof  {}║{}",
+        c, RESET, MAGENTA, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}[X]{} Codex           — lore of The Proof (unlockable)     {}║{}",
+        c, RESET, CYAN, RESET, c, RESET
+    );
+    println!(
+        "{}║{}  {}[A]{} Achievements    — see what you've unlocked           {}║{}",
+        c, RESET, BRIGHT_CYAN, RESET, c, RESET
+    );
+    println!(
         "{}║{}  {}[H]{} Help / Tutorial — the 10 algorithms explained       {}║{}",
         c, RESET, YELLOW, RESET, c, RESET
     );
     println!(
-        "{}║{}  {}[X]{} Exit            — the chaos subsides                {}║{}",
+        "{}║{}  {}[Q]{} Exit            — the chaos subsides                {}║{}",
         c, RESET, RED, RESET, c, RESET
     );
     println!(
@@ -352,12 +367,15 @@ pub fn select_mode() -> GameMode {
             "I" | "2" => return GameMode::Infinite,
             "D" | "3" => return GameMode::DailySeed,
             "S" | "4" => return GameMode::Scoreboard,
+            "B" => return GameMode::Bestiary,
+            "X" | "5" => return GameMode::Codex,
+            "A" => return GameMode::Achievements,
             "H" | "?" => {
                 show_help();
                 show_title();
             }
-            "X" | "Q" | "EXIT" | "QUIT" => return GameMode::Quit,
-            _ => println!("  {}Unknown — type N, I, D, S, H, or X{}", DIM, RESET),
+            "Q" | "EXIT" | "QUIT" => return GameMode::Quit,
+            _ => println!("  {}Unknown — type N, I, D, S, B, X, A, H, or Q{}", DIM, RESET),
         }
     }
 }
@@ -976,13 +994,57 @@ pub fn show_combat_menu(player: &Character, enemy: &chaos_rpg_core::enemy::Enemy
 
     println!("  {}╠{}╣{}", c, bar, RESET);
 
+    // Equipment panel
+    {
+        use chaos_rpg_core::character::EquipSlot;
+        let slots = [
+            (EquipSlot::Weapon, "WPN"),
+            (EquipSlot::Body,   "BOD"),
+            (EquipSlot::Ring1,  "RNG"),
+            (EquipSlot::Ring2,  "RN2"),
+            (EquipSlot::Amulet, "AMU"),
+        ];
+        println!("  {}║  {}Equipped:{}", c, DIM, RESET);
+        for (slot, label) in &slots {
+            if let Some(item) = player.equipped.get(*slot) {
+                // Durability bar (compact: 6 chars)
+                let pct = item.durability as f64 / item.max_durability.max(1) as f64;
+                let filled = (pct * 6.0) as usize;
+                let dur_col = if pct > 0.75 { GREEN }
+                    else if pct > 0.50 { YELLOW }
+                    else if pct > 0.25 { "\x1b[91m" }  // orange
+                    else { RED };
+                let dur_bar = format!("{}[{}{}{}]{}",
+                    dur_col,
+                    "█".repeat(filled),
+                    "░".repeat(6 - filled),
+                    dur_col,
+                    RESET
+                );
+                let name = &item.name[..item.name.len().min(22)];
+                println!(
+                    "  {}║    {}{}{} {} {}{:<22}{}{}║{}",
+                    c, DIM, label, RESET, dur_bar,
+                    item.rarity.color_code(), name, RESET, c, RESET
+                );
+            } else {
+                println!(
+                    "  {}║    {}{}{} {}[empty]{:<30}{}║{}",
+                    c, DIM, label, RESET, DIM, "", RESET, RESET
+                );
+            }
+        }
+    }
+
+    println!("  {}╠{}╣{}", c, bar, RESET);
+
     // Action menu
     println!(
         "  {}║  {}[A]{} Attack    {}[H]{} Heavy    {}[D]{} Defend    {}[F]{} Flee    {}║{}",
         c, GREEN, RESET, YELLOW, RESET, CYAN, RESET, RED, RESET, c, RESET
     );
     println!(
-        "  {}║  {}[T]{} Taunt     {}[S]{} Spell    {}[I]{} Item     {}[?]{} Trace   {}║{}",
+        "  {}║  {}[T]{} Taunt     {}[S]{} Spell    {}[I]{} Equip/Use {}[?]{} Trace  {}║{}",
         c, MAGENTA, RESET, BRIGHT_CYAN, RESET, GREEN, RESET, DIM, RESET, c, RESET
     );
 
@@ -1003,16 +1065,18 @@ pub fn show_combat_menu(player: &Character, enemy: &chaos_rpg_core::enemy::Enemy
     }
 
     if !player.inventory.is_empty() {
-        println!("  {}║  {}Items:{}", c, DIM, RESET);
+        println!("  {}║  {}Inventory (I# to equip/use):{}", c, DIM, RESET);
         for (i, item) in player.inventory.iter().enumerate().take(4) {
-            let name = &item.name[..item.name.len().min(28)];
+            let name = &item.name[..item.name.len().min(22)];
+            let tag = if item.equip_slot().is_some() { "[EQP]" } else { "[USE]" };
             println!(
-                "  {}║    [I{}] {}{:<32}{}║{}",
+                "  {}║    [I{}] {}{} {}{:<22}{}{}║{}",
                 c,
                 i + 1,
-                item.rarity.color_code(),
+                DIM, tag, RESET,
                 name,
                 c,
+                RESET,
                 RESET
             );
         }
@@ -1051,7 +1115,8 @@ pub fn read_combat_action() -> chaos_rpg_core::combat::CombatAction {
                 println!("  {}[T]{} Taunt       — draw enemy attack, boosts next strike", MAGENTA, RESET);
                 println!("  {}[F]{} Flee        — attempt escape (LCK-based, leg injuries penalize)", RED, RESET);
                 println!("  {}[S1-S9]{} Spell   — cast a known spell by number", BRIGHT_CYAN, RESET);
-                println!("  {}[I1-I9]{} Item    — use inventory item by number", GREEN, RESET);
+                println!("  {}[I1-I9]{} Item    — equip [EQP] items or consume [USE] items", GREEN, RESET);
+                println!("  {}Note:{} equipped items wear down with use; repair at crafting bench", DIM, RESET);
                 println!("  {}Note:{} engine trace shows automatically after each action.", DIM, RESET);
                 println!();
             }
@@ -1062,6 +1127,26 @@ pub fn read_combat_action() -> chaos_rpg_core::combat::CombatAction {
 
 pub fn display_combat_events(events: &[chaos_rpg_core::combat::CombatEvent]) {
     for event in events {
+        use chaos_rpg_core::combat::CombatEvent;
+        // Special rendering for new durability events
+        match event {
+            CombatEvent::ItemEquipped { name, slot } => {
+                println!("  {}⚙  Equipped: {} → {} slot{}", GREEN, name, slot, RESET);
+                continue;
+            }
+            CombatEvent::ItemDurabilityLost { name, durability, max_durability } => {
+                let pct = *durability as f64 / (*max_durability).max(1) as f64;
+                let col = if pct > 0.5 { YELLOW } else { RED };
+                println!("  {}◈  {} durability {}/{}{}", col, name, durability, max_durability, RESET);
+                continue;
+            }
+            CombatEvent::ItemDestroyed { name } => {
+                println!("  {}💥 {} SHATTERED! Item lost forever.{}", RED, name, RESET);
+                continue;
+            }
+            _ => {}
+        }
+
         let line = event.to_display_string();
         let color = if line.contains("CRITICAL") || line.contains("CRIT") {
             YELLOW
@@ -1085,6 +1170,123 @@ pub fn display_combat_events(events: &[chaos_rpg_core::combat::CombatEvent]) {
 }
 
 // ─── FACTION REP DISPLAY ──────────────────────────────────────────────────────
+
+/// Full equipment management screen (out-of-combat).
+/// Shows 5 equip slots + inventory. Player can equip (e#) or unequip (u<slot>).
+pub fn show_equipment_screen(player: &mut chaos_rpg_core::character::Character) {
+    use chaos_rpg_core::character::EquipSlot;
+    let c = t_primary();
+    let w = 54usize;
+    let bar = "═".repeat(w);
+    loop {
+        clear_screen();
+        println!();
+        println!("  {}╔{}╗{}", c, bar, RESET);
+        println!("  {}║  ⚙  EQUIPMENT MANAGER{:<32}║{}", c, "", RESET);
+        println!("  {}╠{}╣{}", c, bar, RESET);
+
+        // Equipped slots
+        let slots = [
+            (EquipSlot::Weapon, "Weapon"),
+            (EquipSlot::Body,   "Body  "),
+            (EquipSlot::Ring1,  "Ring 1"),
+            (EquipSlot::Ring2,  "Ring 2"),
+            (EquipSlot::Amulet, "Amulet"),
+        ];
+        println!("  {}║  {}Equipped Items:{}{:<38}{}║{}", c, DIM, RESET, "", c, RESET);
+        for (slot, label) in &slots {
+            let slot_key = match slot {
+                EquipSlot::Weapon => "w",
+                EquipSlot::Body   => "b",
+                EquipSlot::Ring1  => "r",
+                EquipSlot::Ring2  => "n",
+                EquipSlot::Amulet => "a",
+            };
+            if let Some(item) = player.equipped.get(*slot) {
+                let pct = item.durability as f64 / item.max_durability.max(1) as f64;
+                let filled = (pct * 8.0) as usize;
+                let dur_col = if pct > 0.75 { GREEN }
+                    else if pct > 0.50 { YELLOW }
+                    else if pct > 0.25 { "\x1b[91m" }
+                    else { RED };
+                let bar_str = format!("{}[{}{}{}]{}",
+                    dur_col, "█".repeat(filled), "░".repeat(8 - filled), dur_col, RESET);
+                let name = &item.name[..item.name.len().min(20)];
+                println!("  {}║  [u{}] {}{}{} {} {}{:<20}{}{}║{}",
+                    c, slot_key, DIM, label, RESET, bar_str,
+                    item.rarity.color_code(), name, RESET, c, RESET);
+            } else {
+                println!("  {}║  [--] {}{}{} {}[empty]{:<33}{}║{}",
+                    c, DIM, label, RESET, DIM, "", RESET, RESET);
+            }
+        }
+        println!("  {}╠{}╣{}", c, bar, RESET);
+
+        // Inventory
+        println!("  {}║  {}Inventory (e# to equip):{}{:<29}{}║{}", c, DIM, RESET, "", c, RESET);
+        if player.inventory.is_empty() {
+            println!("  {}║    {}(empty){:<44}{}║{}", c, DIM, "", RESET, RESET);
+        }
+        for (i, item) in player.inventory.iter().enumerate().take(8) {
+            let tag = if item.equip_slot().is_some() { GREEN } else { DIM };
+            let kind = if item.equip_slot().is_some() { "[EQP]" } else { "[USE]" };
+            let pct = item.durability as f64 / item.max_durability.max(1) as f64;
+            let dur_col = if pct > 0.75 { GREEN }
+                else if pct > 0.50 { YELLOW }
+                else if pct > 0.25 { "\x1b[91m" }
+                else { RED };
+            let dur_str = format!("{}{}/{}{}",
+                dur_col, item.durability, item.max_durability, RESET);
+            let name = &item.name[..item.name.len().min(18)];
+            println!("  {}║  [e{}] {}{}{} {}{:<18}{} DUR:{}{}║{}",
+                c, i + 1,
+                tag, kind, RESET,
+                item.rarity.color_code(), name, RESET,
+                dur_str, c, RESET);
+        }
+        println!("  {}╠{}╣{}", c, bar, RESET);
+        println!("  {}║  {}e# = equip item   u<w/b/r/n/a> = unequip slot{:<5}{}║{}",
+            c, DIM, "", RESET, RESET);
+        println!("  {}║  {}[Enter] to exit equipment screen{:<21}{}║{}",
+            c, DIM, "", RESET, RESET);
+        println!("  {}╚{}╝{}", c, bar, RESET);
+
+        let input = prompt("  Equipment > ").to_lowercase();
+        let input = input.trim();
+
+        if input.is_empty() || input == "q" || input == "exit" {
+            break;
+        }
+
+        if let Some(rest) = input.strip_prefix('e') {
+            if let Ok(idx) = rest.parse::<usize>() {
+                let real_idx = idx.saturating_sub(1);
+                match player.equip_from_inventory(real_idx) {
+                    Some(name) => println!("  {}Equipped: {}{}", GREEN, name, RESET),
+                    None => println!("  {}Nothing to equip at slot {} (item may have no equip slot){}", DIM, idx, RESET),
+                }
+                press_enter(&format!("  {}[ENTER]...{}", DIM, RESET));
+            }
+        } else if let Some(rest) = input.strip_prefix('u') {
+            let slot = match rest.trim() {
+                "w" => Some(EquipSlot::Weapon),
+                "b" => Some(EquipSlot::Body),
+                "r" => Some(EquipSlot::Ring1),
+                "n" => Some(EquipSlot::Ring2),
+                "a" => Some(EquipSlot::Amulet),
+                _   => None,
+            };
+            if let Some(s) = slot {
+                if player.unequip_slot(s) {
+                    println!("  {}Unequipped.{}", GREEN, RESET);
+                } else {
+                    println!("  {}Slot was already empty.{}", DIM, RESET);
+                }
+                press_enter(&format!("  {}[ENTER]...{}", DIM, RESET));
+            }
+        }
+    }
+}
 
 pub fn show_faction_rep(player: &chaos_rpg_core::character::Character) {
     use chaos_rpg_core::factions::{Faction, vendor_greeting};
@@ -1630,4 +1832,562 @@ fn passive_apply_stat(player: &mut Character, stat: &str, value: i64) {
         "luck" => player.stats.luck += value,
         _ => {}
     }
+}
+
+// ─── BESTIARY SCREEN ──────────────────────────────────────────────────────────
+
+pub fn show_bestiary() {
+    use chaos_rpg_core::player_bestiary::PlayerBestiary;
+    use chaos_rpg_core::lore::enemies::{enemy_lore, generic_enemy_lore};
+    use chaos_rpg_core::lore::bosses::boss_lore;
+
+    clear_screen();
+    let c = t_primary();
+    let bestiary = PlayerBestiary::load();
+    let records = bestiary.sorted_for_display();
+
+    println!();
+    println!("  {}╔══════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║  BESTIARY — ENTITIES OF THE PROOF                    ║{}", c, RESET);
+    println!("  {}╠══════════════════════════════════════════════════════╣{}", c, RESET);
+    println!(
+        "  {}║{}  Encountered: {:<5}  Killed: {:<5}                        {}║{}",
+        c, RESET,
+        bestiary.total_encountered(),
+        bestiary.total_killed(),
+        c, RESET
+    );
+    println!("  {}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+
+    if records.is_empty() {
+        println!("  {}No entities encountered yet. Enter The Proof.{}", DIM, RESET);
+        println!();
+        press_enter(&format!("  {}[ENTER] Return{}", DIM, RESET));
+        return;
+    }
+
+    // Paginate through entries
+    let per_page = 8usize;
+    let mut page = 0usize;
+    let total_pages = (records.len() + per_page - 1) / per_page;
+
+    loop {
+        clear_screen();
+        println!();
+        println!("  {}BESTIARY{}  — Page {}/{}", c, RESET, page + 1, total_pages);
+        println!();
+
+        let start = page * per_page;
+        let end = (start + per_page).min(records.len());
+
+        for rec in &records[start..end] {
+            let boss_marker = if rec.is_boss { format!("{}[BOSS]{} ", MAGENTA, RESET) } else { String::new() };
+            let lore_marker = if rec.lore_unlocked { "" } else { " [LOCKED]" };
+            println!(
+                "  {}{}{}{} — fought: {}  killed: {}  died to: {}{}",
+                boss_marker,
+                YELLOW,
+                rec.name,
+                RESET,
+                rec.times_fought,
+                rec.times_killed,
+                rec.times_killed_player,
+                lore_marker,
+            );
+            println!(
+                "      HP range: {}  Damage range: {}",
+                rec.hp_range_display(),
+                rec.damage_range_display(),
+            );
+
+            if rec.lore_unlocked {
+                let lore_text = if rec.is_boss {
+                    boss_lore(&rec.name)
+                        .map(|b| b.full_entry)
+                        .unwrap_or("A boss that defies classification.")
+                } else {
+                    enemy_lore(&rec.name)
+                        .map(|e| e.description)
+                        .unwrap_or_else(|| {
+                            // Use a seed derived from the name for consistent generic lore
+                            let seed: u64 = rec.name.bytes().fold(0u64, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u64));
+                            generic_enemy_lore(seed)
+                        })
+                };
+                println!("      {}{}{}",DIM, lore_text, RESET);
+
+                if rec.is_boss && rec.strategy_unlocked {
+                    if let Some(boss) = boss_lore(&rec.name) {
+                        println!("      {}STRATEGY: {}{}", CYAN, boss.strategy_hint, RESET);
+                    }
+                }
+            }
+            println!();
+        }
+
+        println!("  {}[N]ext  [P]rev  [Q]uit{}", DIM, RESET);
+        let input = prompt("  >");
+        match input.to_uppercase().as_str() {
+            "N" if page + 1 < total_pages => page += 1,
+            "P" if page > 0 => page -= 1,
+            "Q" | "" => break,
+            _ => {}
+        }
+    }
+}
+
+// ─── CODEX SCREEN ─────────────────────────────────────────────────────────────
+
+pub fn show_codex() {
+    use chaos_rpg_core::codex_progress::CodexProgress;
+    use chaos_rpg_core::lore::codex::{CodexCategory, CODEX_ENTRIES};
+    use chaos_rpg_core::lore::fragments::FRAGMENTS;
+
+    clear_screen();
+    let c = t_primary();
+    let progress = CodexProgress::load();
+
+    println!();
+    println!("  {}╔══════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║  CODEX — KNOWLEDGE OF THE PROOF                      ║{}", c, RESET);
+    println!("  {}╠══════════════════════════════════════════════════════╣{}", c, RESET);
+    println!(
+        "  {}║{}  Entries: {}/{}  Fragments: {}/{}                          {}║{}",
+        c, RESET,
+        progress.unlocked_count(),
+        progress.total_count(),
+        progress.fragment_unlocked_count(),
+        progress.total_fragment_count(),
+        c, RESET
+    );
+    println!("  {}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+
+    let categories = [
+        CodexCategory::TheProof,
+        CodexCategory::TheEpochs,
+        CodexCategory::TheEngines,
+        CodexCategory::TheFactions,
+        CodexCategory::TheMathematician,
+        CodexCategory::Materials,
+        CodexCategory::Phenomena,
+        CodexCategory::Theories,
+    ];
+
+    // Category picker
+    loop {
+        clear_screen();
+        println!();
+        println!("  {}CODEX — SELECT CATEGORY{}", c, RESET);
+        println!();
+        for (i, cat) in categories.iter().enumerate() {
+            let unlocked = progress.unlocked_in_category(*cat).len();
+            let total = CODEX_ENTRIES.iter().filter(|e| e.category == *cat).count();
+            println!(
+                "  {}[{}]{} {} — {}/{}",
+                YELLOW, i + 1, RESET,
+                cat.display_name(),
+                unlocked,
+                total
+            );
+        }
+        let frag_count = progress.fragment_unlocked_count();
+        println!(
+            "  {}[F]{} Mathematician's Fragments — {}/{}",
+            MAGENTA, RESET,
+            frag_count,
+            FRAGMENTS.len()
+        );
+        println!();
+        println!("  {}[Q] Back{}", DIM, RESET);
+
+        let input = prompt("  >");
+        match input.to_uppercase().as_str() {
+            "Q" | "" => return,
+            "F" => show_codex_fragments(&progress),
+            s => {
+                if let Ok(n) = s.parse::<usize>() {
+                    if n >= 1 && n <= categories.len() {
+                        show_codex_category(&progress, categories[n - 1]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn show_codex_category(
+    progress: &chaos_rpg_core::codex_progress::CodexProgress,
+    cat: chaos_rpg_core::lore::codex::CodexCategory,
+) {
+    let c = t_primary();
+    let unlocked = progress.unlocked_in_category(cat);
+    let locked = progress.locked_in_category(cat);
+
+    let per_page = 3usize;
+    let all_entries: Vec<_> = unlocked.iter().map(|e| (true, *e))
+        .chain(locked.iter().map(|e| (false, *e)))
+        .collect();
+    let total_pages = (all_entries.len() + per_page - 1).max(1) / per_page;
+    let mut page = 0usize;
+
+    loop {
+        clear_screen();
+        println!();
+        println!("  {}CODEX — {}{}  (Page {}/{})", c, cat.display_name(), RESET, page + 1, total_pages);
+        println!();
+
+        if all_entries.is_empty() {
+            println!("  {}No entries in this category yet.{}", DIM, RESET);
+        } else {
+            let start = page * per_page;
+            let end = (start + per_page).min(all_entries.len());
+            for (is_unlocked, entry) in &all_entries[start..end] {
+                if *is_unlocked {
+                    println!("  {}{}{}",YELLOW, entry.title, RESET);
+                    println!();
+                    // Word-wrap the body at ~70 chars
+                    for line in word_wrap(entry.body, 68) {
+                        println!("  {}", line);
+                    }
+                } else {
+                    println!("  {}{}  [???]{}", DIM, entry.title, RESET);
+                    println!("  {}Unlock: {}{}", DIM, entry.unlock_hint, RESET);
+                }
+                println!();
+            }
+        }
+
+        println!("  {}[N]ext  [P]rev  [Q]uit{}", DIM, RESET);
+        let input = prompt("  >");
+        match input.to_uppercase().as_str() {
+            "N" if page + 1 < total_pages => page += 1,
+            "P" if page > 0 => page -= 1,
+            "Q" | "" => break,
+            _ => {}
+        }
+    }
+}
+
+fn show_codex_fragments(progress: &chaos_rpg_core::codex_progress::CodexProgress) {
+    let c = t_primary();
+    let unlocked = progress.unlocked_fragments_sorted();
+    let total = chaos_rpg_core::lore::fragments::FRAGMENTS.len();
+
+    clear_screen();
+    println!();
+    println!("  {}THE MATHEMATICIAN'S FRAGMENTS — {}/{}{}",MAGENTA, unlocked.len(), total, RESET);
+    println!();
+
+    if unlocked.is_empty() {
+        println!("  {}No fragments found. They are waiting at the edges of The Proof.{}", DIM, RESET);
+    } else {
+        for frag in &unlocked {
+            println!("  {}{}{}",YELLOW, frag.title, RESET);
+            println!();
+            for line in word_wrap(frag.text, 68) {
+                println!("  {}", line);
+            }
+            println!("  {}[Unlocked by: {}]{}", DIM, frag.unlock_condition, RESET);
+            println!();
+        }
+        // Show locked hints
+        for frag in chaos_rpg_core::lore::fragments::FRAGMENTS {
+            if !progress.fragment_unlocked(frag.id) {
+                println!("  {}Fragment {} — [???]  Unlock: {}{}", DIM, frag.id, frag.unlock_condition, RESET);
+            }
+        }
+    }
+    println!();
+    press_enter(&format!("  {}[ENTER] Back{}", DIM, RESET));
+}
+
+// ─── ACHIEVEMENTS SCREEN ──────────────────────────────────────────────────────
+
+pub fn show_achievements() {
+    use chaos_rpg_core::achievements::{AchievementRarity, AchievementStore};
+
+    let store = AchievementStore::load();
+    let all = &store.achievements;
+
+    // 0 = all, 1 = unlocked, 2 = locked
+    let mut filter: u8 = 0;
+    let mut page: usize = 0;
+    let per_page = 12usize;
+
+    loop {
+        let filtered: Vec<&chaos_rpg_core::achievements::Achievement> = all
+            .iter()
+            .filter(|a| match filter {
+                1 => a.unlocked,
+                2 => !a.unlocked,
+                _ => true,
+            })
+            .collect();
+
+        // Sort: unlocked first (by rarity desc), then locked (by rarity desc)
+        let rarity_order = |r: &AchievementRarity| match r {
+            AchievementRarity::Omega     => 6,
+            AchievementRarity::Mythic    => 5,
+            AchievementRarity::Legendary => 4,
+            AchievementRarity::Epic      => 3,
+            AchievementRarity::Rare      => 2,
+            AchievementRarity::Uncommon  => 1,
+            AchievementRarity::Common    => 0,
+        };
+        let mut sorted: Vec<&chaos_rpg_core::achievements::Achievement> = filtered.clone();
+        sorted.sort_by(|a, b| {
+            match (a.unlocked, b.unlocked) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => rarity_order(&b.rarity).cmp(&rarity_order(&a.rarity)),
+            }
+        });
+
+        let total = sorted.len();
+        let total_pages = ((total + per_page - 1) / per_page).max(1);
+        if page >= total_pages { page = total_pages - 1; }
+
+        let unlocked_count = all.iter().filter(|a| a.unlocked).count();
+        let total_count = all.len();
+
+        clear_screen();
+        let c = t_primary();
+        println!();
+        println!("  {}╔══════════════════════════════════════════════════════╗{}", c, RESET);
+        println!("  {}║  ACHIEVEMENTS                                        ║{}", c, RESET);
+        println!("  {}╠══════════════════════════════════════════════════════╣{}", c, RESET);
+
+        // Progress bar (20 chars wide)
+        let filled = if total_count > 0 { unlocked_count * 20 / total_count } else { 0 };
+        let bar: String = (0..20).map(|i| if i < filled { '█' } else { '░' }).collect();
+        println!(
+            "  {}║{}  Progress: {}{}{}  {}/{} unlocked{}  Page {}/{}{}  {}║{}",
+            c, RESET,
+            BRIGHT_GREEN, bar, RESET,
+            unlocked_count, total_count,
+            RESET,
+            page + 1, total_pages,
+            RESET,
+            c, RESET
+        );
+
+        // Filter tabs
+        let (fa, fu, fl) = match filter {
+            1 => (DIM, BRIGHT_CYAN, DIM),
+            2 => (DIM, DIM, BRIGHT_CYAN),
+            _ => (BRIGHT_CYAN, DIM, DIM),
+        };
+        println!(
+            "  {}║{}  Filter: {}[A]ll{}  {}[U]nlocked{}  {}[L]ocked{}                      {}║{}",
+            c, RESET, fa, RESET, fu, RESET, fl, RESET, c, RESET
+        );
+        println!("  {}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+        println!();
+
+        if sorted.is_empty() {
+            println!("  {}Nothing to show with this filter.{}", DIM, RESET);
+        } else {
+            let start = page * per_page;
+            let end = (start + per_page).min(sorted.len());
+            for ach in &sorted[start..end] {
+                if ach.unlocked {
+                    let (rarity_color, badge) = match ach.rarity {
+                        AchievementRarity::Common    => (WHITE,          "CMN"),
+                        AchievementRarity::Uncommon  => (GREEN,          "UNC"),
+                        AchievementRarity::Rare      => (CYAN,           "RAR"),
+                        AchievementRarity::Epic      => (MAGENTA,        "EPC"),
+                        AchievementRarity::Legendary => (YELLOW,         "LEG"),
+                        AchievementRarity::Mythic    => (BRIGHT_MAGENTA, "MYT"),
+                        AchievementRarity::Omega     => (BRIGHT_RED,     " Ω "),
+                    };
+                    println!(
+                        "  {}★{} {}[{}]{} {}{}{}",
+                        YELLOW, RESET,
+                        rarity_color, badge, RESET,
+                        BOLD, ach.name, RESET
+                    );
+                    println!("      {}{}{}", DIM, ach.description, RESET);
+                    if !ach.unlock_date.is_empty() {
+                        println!("      {}Unlocked: {}{}", DIM, ach.unlock_date, RESET);
+                    }
+                } else {
+                    println!(
+                        "  {}○{} {}[???]{} {}{}{}",
+                        DIM, RESET,
+                        DIM, RESET,
+                        DIM, ach.name, RESET
+                    );
+                    println!("      {}Locked — complete the challenge to reveal...{}", DIM, RESET);
+                }
+                println!();
+            }
+        }
+
+        println!(
+            "  {}[N]ext  [P]rev  [A]ll/[U]nlocked/[L]ocked  [Q]uit{}",
+            DIM, RESET
+        );
+        let input = prompt("  >");
+        match input.to_uppercase().as_str() {
+            "N" if page + 1 < total_pages => page += 1,
+            "P" if page > 0 => page -= 1,
+            "A" => { filter = 0; page = 0; }
+            "U" => { filter = 1; page = 0; }
+            "L" => { filter = 2; page = 0; }
+            "Q" | "" => break,
+            _ => {}
+        }
+    }
+}
+
+// ─── LORE EDITOR SCREEN ───────────────────────────────────────────────────────
+
+/// Opens the lore editor for the given character. Returns the updated CharacterLore.
+pub fn show_lore_editor(player: &Character) -> chaos_rpg_core::character_lore::CharacterLore {
+    use chaos_rpg_core::character_lore::{CharacterLore, LoreEditorState, LoreField};
+    use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+    use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+
+    let mut state = LoreEditorState::new(player.character_lore.clone());
+
+    enable_raw_mode().ok();
+
+    loop {
+        // Render
+        let _ = execute!(
+            io::stdout(),
+            terminal::Clear(ClearType::All),
+            cursor::MoveTo(0, 0)
+        );
+        let c = t_primary();
+        println!();
+        println!("  {}╔══════════════════════════════════════════════════════╗{}", c, RESET);
+        println!("  {}║  LORE EDITOR — {:<38}║{}", c, format!("{} the {}", player.name, player.class.name()), RESET);
+        println!("  {}╠══════════════════════════════════════════════════════╣{}", c, RESET);
+        println!("  {}║  Tab/Shift-Tab: switch field  Esc: save & exit       ║{}", c, RESET);
+        println!("  {}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+        println!();
+
+        for field in LoreField::ALL {
+            let is_active = *field == state.active_field;
+            let label_color = if is_active { YELLOW } else { DIM };
+            let text = field.get(&state.lore);
+            let char_count = text.chars().count();
+            let max = field.max_len();
+            println!(
+                "  {}{} ({}/{}){}",
+                label_color, field.label(), char_count, max, RESET
+            );
+            if is_active {
+                println!("  {}{}{}▌{}", CYAN, text, BRIGHT_CYAN, RESET);
+            } else {
+                let display = if text.is_empty() {
+                    format!("{}(empty){}", DIM, RESET)
+                } else {
+                    let truncated: String = text.chars().take(70).collect();
+                    let ellipsis = if text.chars().count() > 70 { "…" } else { "" };
+                    format!("{}{}{}", DIM, truncated + ellipsis, RESET)
+                };
+                println!("  {}", display);
+            }
+            println!("  {}{}{}",DIM, field.hint(), RESET);
+            println!();
+        }
+
+        let _ = io::stdout().flush();
+
+        // Input handling
+        if let Ok(Event::Key(key)) = event::read() {
+            match (key.code, key.modifiers) {
+                (KeyCode::Esc, _) => break,
+                (KeyCode::Tab, KeyModifiers::SHIFT) => state.prev_field(),
+                (KeyCode::Tab, _) => state.next_field(),
+                (KeyCode::BackTab, _) => state.prev_field(),
+                (KeyCode::Backspace, _) => state.pop_char(),
+                (KeyCode::Char(ch), _) => {
+                    if ch == '\t' {
+                        state.next_field();
+                    } else {
+                        state.push_char(ch);
+                    }
+                }
+                (KeyCode::Enter, _) => state.push_char('\n'),
+                _ => {}
+            }
+        }
+    }
+
+    disable_raw_mode().ok();
+    state.lore.clamp_lengths();
+    state.lore
+}
+
+/// Display player-authored lore below the character sheet.
+pub fn show_character_lore_section(lore: &chaos_rpg_core::character_lore::CharacterLore) {
+    if lore.is_empty() {
+        return;
+    }
+    let c = t_primary();
+    println!("  {}── Character Lore ──────────────────────────────────{}", DIM, RESET);
+    if !lore.origin.is_empty() {
+        println!("  {}Origin:{} {}", c, RESET, lore.origin);
+    }
+    if !lore.motivation.is_empty() {
+        println!("  {}Motivation:{} {}", c, RESET, lore.motivation);
+    }
+    if !lore.personality.is_empty() {
+        println!("  {}Personality:{} {}", c, RESET, lore.personality);
+    }
+    if !lore.notes.is_empty() {
+        println!("  {}Notes:{} {}", c, RESET, lore.notes);
+    }
+    println!();
+}
+
+/// Show auto-generated run narrative.
+pub fn show_run_narrative(narrative: &str) {
+    if narrative.is_empty() {
+        return;
+    }
+    let c = t_primary();
+    println!();
+    println!("  {}╔══════════════════════════════════════════════════════╗{}", c, RESET);
+    println!("  {}║  RUN NARRATIVE                                        ║{}", c, RESET);
+    println!("  {}╚══════════════════════════════════════════════════════╝{}", c, RESET);
+    println!();
+    for para in narrative.split("\n\n") {
+        for line in word_wrap(para, 70) {
+            println!("  {}", line);
+        }
+        println!();
+    }
+}
+
+/// Word-wrap helper — splits text at max_width columns.
+fn word_wrap(text: &str, max_width: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    for paragraph in text.split('\n') {
+        let words: Vec<&str> = paragraph.split_whitespace().collect();
+        let mut current = String::new();
+        for word in words {
+            if current.is_empty() {
+                current.push_str(word);
+            } else if current.len() + 1 + word.len() <= max_width {
+                current.push(' ');
+                current.push_str(word);
+            } else {
+                lines.push(current.clone());
+                current = word.to_string();
+            }
+        }
+        if !current.is_empty() {
+            lines.push(current);
+        }
+        if paragraph.is_empty() {
+            lines.push(String::new());
+        }
+    }
+    lines
 }
