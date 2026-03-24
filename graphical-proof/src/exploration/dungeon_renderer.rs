@@ -8,7 +8,7 @@ use crate::state::GameState;
 use crate::theme::{Theme, THEMES};
 use crate::dungeon_bridge::{
     DungeonBridge, RenderTile, TileBridge, TileGrid, TileVisibility,
-    MinimapData, MinimapEntry, RoomInfo, BridgeItemKind,
+    BridgeItemKind,
 };
 use crate::ui_render;
 use super::{color_lerp, rgb, rgb_a, dim};
@@ -300,7 +300,7 @@ fn tile_visual(
         }
         TileBridge::Void => {
             // Edge particles: sparse dots at tile edges
-            let edge_dot = ((time * 0.5 + h * 10.0).sin() > 0.85);
+            let edge_dot = (time * 0.5 + h * 10.0).sin() > 0.85;
             if edge_dot {
                 let c = rgb_a(80, 40, 120, 0.3);
                 TileVisual { ch: '\u{00B7}', color: c, emission: 0.1, z: -3.0 }
@@ -723,7 +723,7 @@ impl DungeonRenderer {
                     }
                     TileBridge::Water => {
                         // Occasional ripple dot
-                        let ripple = ((self.time * 1.2 + tx as f32 * 2.7 + ty as f32 * 1.3).sin());
+                        let ripple = (self.time * 1.2 + tx as f32 * 2.7 + ty as f32 * 1.3).sin();
                         if ripple > 0.92 {
                             let screen_x = (tx as f32 - self.camera_x) * tile_scale;
                             let screen_y = -(ty as f32 - self.camera_y) * tile_scale;

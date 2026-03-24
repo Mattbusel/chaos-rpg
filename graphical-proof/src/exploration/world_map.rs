@@ -6,9 +6,8 @@
 use proof_engine::prelude::*;
 use crate::state::GameState;
 use crate::theme::{Theme, THEMES};
-use crate::dungeon_bridge::DungeonBridge;
 use crate::ui_render;
-use super::{color_lerp, rgb, rgb_a, dim};
+use super::{color_lerp, rgb, rgb_a};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // FLOOR DESCRIPTORS

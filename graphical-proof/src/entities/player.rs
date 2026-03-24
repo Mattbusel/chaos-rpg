@@ -2,11 +2,34 @@
 //!
 //! Each `CharacterClass` gets a visually distinct glyph formation with
 //! class-specific symbols, color palettes, idle animations, and HP-linked
-//! cohesion dynamics. All rendering goes through `engine.spawn_glyph()`.
+//! cohesion dynamics.
+//!
+//! ## Rendering modes
+//!
+//! * **Immediate-mode** — `render_player()` / `render_player_full()` spawn glyphs
+//!   every frame via `engine.spawn_glyph()`. This is the primary render path.
+//! * **Formation-backed** — `build_player_entity()` returns an `AmorphousEntity`
+//!   whose formation / chars / colors describe the shape declaratively.
+//!
+//! ## Visual features
+//!
+//! * 6 archetype profiles (Warrior, Mage, Rogue, Cleric, Necromancer, Berserker)
+//!   mapped from all 12 `CharacterClass` variants.
+//! * Unique idle animation per archetype (breathing + class-specific).
+//! * Combat stance, cast pose, hurt recoil, death dissolution.
+//! * Equipment visualization: weapon glyph changes, armor density scales.
+//! * Status effect overlays: burning, frozen, poisoned, blessed.
+//! * HP-based cohesion: tight at full HP, drifting/wobbling near death.
+//! * Level-up flash: formation tightens, new glyph added.
+//! * Movement lean: trailing glyphs follow with spring physics.
 
 use proof_engine::prelude::*;
 use chaos_rpg_core::character::CharacterClass;
-use std::f32::consts::TAU;
+use std::f32::consts::{PI, TAU};
+
+use super::formations::{
+    self, ClassArchetype, FormationShape, PlayerAnimState,
+};
 
 // ── Public entry point ───────────────────────────────────────────────────────
 
