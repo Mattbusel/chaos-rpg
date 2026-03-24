@@ -34,7 +34,8 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
-    ui_render::heading_centered(engine, "SELECT GAME MODE", 4.5, theme.heading);
+    // -Y = top, +Y = bottom
+    ui_render::heading_centered(engine, "SELECT GAME MODE", -4.5, theme.heading);
 
     let modes = [
         ("[1] Story Mode", "10 floors. Beat the final boss."),
@@ -44,12 +45,12 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
     for (i, (name, desc)) in modes.iter().enumerate() {
         let selected = i == state.mode_cursor;
-        let y = 2.5 - i as f32 * 1.8;
+        let y = -2.0 + i as f32 * 1.8;
         let color = if selected { theme.selected } else { theme.primary };
         let prefix = if selected { "> " } else { "  " };
         ui_render::text(engine, &format!("{}{}", prefix, name), -4.5, y, color, 0.45, if selected { 0.8 } else { 0.4 });
-        ui_render::small(engine, desc, -3.5, y - 0.6, theme.dim);
+        ui_render::small(engine, desc, -3.5, y + 0.6, theme.dim);
     }
 
-    ui_render::small(engine, "Enter/Space to select | Esc back", -4.5, -5.0, theme.muted);
+    ui_render::small(engine, "Enter/Space to select | Esc back", -4.5, 5.0, theme.muted);
 }

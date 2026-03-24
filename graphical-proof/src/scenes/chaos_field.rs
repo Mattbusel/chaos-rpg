@@ -289,7 +289,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
 
         let ab = 0.15 + corruption * 0.3; // accent blend
         let col = base_color * (1.0 - ab) + accent * ab;
-        let a = (brightness * 0.08 + pulse_brightness(t, x) + rift_boost) * mods.alpha;
+        let a = (brightness * 0.03 + pulse_brightness(t, x) * 0.3 + rift_boost * 0.5) * mods.alpha;
 
         engine.spawn_glyph(Glyph {
             character: ch,
@@ -327,7 +327,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         };
 
         let col = base_color * 0.9 + accent * 0.1;
-        let a = (brightness * 0.05 + pulse_brightness(t, x) * 0.7 + rift_boost * 0.5) * mods.alpha;
+        let a = (brightness * 0.02 + pulse_brightness(t, x) * 0.2 + rift_boost * 0.3) * mods.alpha;
 
         engine.spawn_glyph(Glyph {
             character: ch,
@@ -357,7 +357,7 @@ pub fn update(state: &GameState, engine: &mut ProofEngine, _dt: f32) {
         y = wrap(y, VIEW_Y * 1.2);
 
         let ch = NEAR_CHARS[i % NEAR_CHARS.len()];
-        let a = (brightness * 0.03 + pulse_brightness(t, x) * 0.4 + rift_boost * 0.3) * mods.alpha;
+        let a = (brightness * 0.01 + pulse_brightness(t, x) * 0.15 + rift_boost * 0.2) * mods.alpha;
 
         // Deep corruption flicker
         let flicker = if corruption > 0.7 && hf(seed + state.frame * 3) < (corruption - 0.7) * 0.3 {
