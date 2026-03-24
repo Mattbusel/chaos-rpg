@@ -29,9 +29,11 @@ pub mod dialogue_system;
 pub mod mod_system;
 pub mod replay_system;
 pub mod save_upgrade;
+pub mod debug_tools;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
+use debug_tools::DebugToolsManager;
 
 // ── ProofGame implementation ─────────────────────────────────────────────────
 
@@ -39,6 +41,7 @@ struct ChaosRpgGame {
     state: GameState,
     music_bridge: music_bridge::MusicBridge,
     anim_bridge: anim_bridge::AnimBridge,
+    debug_tools: DebugToolsManager,
 }
 
 impl ProofGame for ChaosRpgGame {
@@ -62,8 +65,14 @@ impl ProofGame for ChaosRpgGame {
     }
 
     fn update(&mut self, engine: &mut ProofEngine, dt: f32) {
+        // Handle debug tool input BEFORE game input (F-keys, console, etc.)
+        let debug_consumed = self.debug_tools.handle_input(engine);
+
         // Tick visual timers
         self.state.tick_timers(dt);
+
+        // Update debug tools (execute pending commands, tick overlays)
+        self.debug_tools.update(dt, &mut self.state, engine);
 
         // Update music vibe based on current screen
         audio_bridge::update_music_vibe(&self.state, engine);
@@ -171,6 +180,9 @@ impl ProofGame for ChaosRpgGame {
         if self.state.hit_shake > 0.0 {
             engine.add_trauma(self.state.hit_shake * dt * 2.0);
         }
+
+        // Render debug overlay on top of everything
+        self.debug_tools.submit_to_engine(engine);
     }
 
     fn on_resize(&mut self, _engine: &mut ProofEngine, width: u32, height: u32) {
@@ -233,6 +245,7 @@ fn main() {
         state: GameState::new(),
         music_bridge: music_bridge::MusicBridge::init(),
         anim_bridge: anim_bridge::AnimBridge::init(),
+        debug_tools: DebugToolsManager::new(),
     };
     ProofEngine::run_game(game);
 }
