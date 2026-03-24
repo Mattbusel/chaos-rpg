@@ -32,6 +32,9 @@ pub mod save_upgrade;
 pub mod debug_tools;
 pub mod ui_render;
 pub mod gpu_chaos;
+pub mod combat_visuals;
+pub mod combat_hud;
+pub mod exploration;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
