@@ -55,9 +55,17 @@ impl ProofGame for ChaosRpgGame {
                 screens::title::update(&mut self.state, engine, dt);
                 screens::title::render(&self.state, engine);
             }
+            AppScreen::ModeSelect => {
+                screens::mode_select::update(&mut self.state, engine, dt);
+                screens::mode_select::render(&self.state, engine);
+            }
             AppScreen::CharacterCreation => {
                 screens::character_creation::update(&mut self.state, engine, dt);
                 screens::character_creation::render(&self.state, engine);
+            }
+            AppScreen::BoonSelect => {
+                screens::boon_select::update(&mut self.state, engine, dt);
+                screens::boon_select::render(&self.state, engine);
             }
             AppScreen::Combat => {
                 screens::combat::update(&mut self.state, engine, dt);
@@ -67,13 +75,76 @@ impl ProofGame for ChaosRpgGame {
                 screens::floor_nav::update(&mut self.state, engine, dt);
                 screens::floor_nav::render(&self.state, engine);
             }
+            AppScreen::RoomView => {
+                screens::room_view::update(&mut self.state, engine, dt);
+                screens::room_view::render(&self.state, engine);
+            }
+            AppScreen::Shop => {
+                screens::shop::update(&mut self.state, engine, dt);
+                screens::shop::render(&self.state, engine);
+            }
             AppScreen::CharacterSheet | AppScreen::BodyChart => {
                 screens::character_sheet::update(&mut self.state, engine, dt);
                 screens::character_sheet::render(&self.state, engine);
             }
-            // All other screens get a minimal fallback for now
-            _ => {
-                render_fallback_screen(&self.state, engine);
+            AppScreen::GameOver => {
+                screens::game_over::update(&mut self.state, engine, dt);
+                screens::game_over::render(&self.state, engine);
+            }
+            AppScreen::Victory => {
+                screens::victory::update(&mut self.state, engine, dt);
+                screens::victory::render(&self.state, engine);
+            }
+            // Meta screens use generic placeholder
+            AppScreen::Crafting => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::FloorNav);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "CRAFTING BENCH", "Select an item and operation.");
+            }
+            AppScreen::PassiveTree => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::FloorNav);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "PASSIVE TREE", "820+ nodes across 8 class rings.");
+            }
+            AppScreen::Achievements => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "ACHIEVEMENTS", "181 achievements to unlock.");
+            }
+            AppScreen::RunHistory => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "RUN HISTORY", "Your past runs, newest first.");
+            }
+            AppScreen::DailyLeaderboard => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "DAILY LEADERBOARD", "Today's seeded challenge rankings.");
+            }
+            AppScreen::Bestiary => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "BESTIARY", "Enemies encountered across all runs.");
+            }
+            AppScreen::Codex => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "CODEX", "Lore fragments and world knowledge.");
+            }
+            AppScreen::Settings => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "SETTINGS", "Music vibe, theme, accessibility.");
+            }
+            AppScreen::Tutorial => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "TUTORIAL", "Learn the chaos math behind everything.");
+            }
+            AppScreen::Scoreboard => {
+                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
+                screens::generic::render_placeholder(&self.state, engine,
+                    "HALL OF CHAOS", "The greatest and most wretched runs.");
             }
         }
 

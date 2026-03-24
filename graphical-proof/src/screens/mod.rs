@@ -4,7 +4,14 @@
 //! on `GameState` and `ProofEngine`.
 
 pub mod title;
+pub mod mode_select;
+pub mod character_creation;
+pub mod boon_select;
 pub mod combat;
 pub mod floor_nav;
-pub mod character_creation;
+pub mod room_view;
+pub mod shop;
 pub mod character_sheet;
+pub mod game_over;
+pub mod victory;
+pub mod generic;
