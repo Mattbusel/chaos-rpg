@@ -27,6 +27,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     let key_c = engine.input.just_pressed(Key::C);
     let key_n = engine.input.just_pressed(Key::N);
     let key_q = engine.input.just_pressed(Key::Q) || engine.input.just_pressed(Key::Escape);
+    let key_z = engine.input.just_pressed(Key::Z);
     let key_up = engine.input.just_pressed(Key::Up) || engine.input.just_pressed(Key::W);
     let key_down = engine.input.just_pressed(Key::Down) || engine.input.just_pressed(Key::S);
 
@@ -39,6 +40,23 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     // Enter current room — uses full game logic (nemesis, gauntlets, bosses, all room types)
     if key_e {
         crate::game_logic::enter_room(state);
+
+        // Audio bridge: emit appropriate music vibe on room entry
+        if state.screen == AppScreen::Combat {
+            if state.is_boss_fight {
+                engine.emit_audio(AudioEvent::SetMusicVibe(
+                    proof_engine::audio::MusicVibe::BossFight,
+                ));
+            } else {
+                engine.emit_audio(AudioEvent::SetMusicVibe(
+                    proof_engine::audio::MusicVibe::Combat,
+                ));
+            }
+        } else if state.screen == AppScreen::Shop {
+            engine.emit_audio(AudioEvent::SetMusicVibe(
+                proof_engine::audio::MusicVibe::Exploration,
+            ));
+        }
     }
 
     // Descend — only if all rooms cleared, checks victory, hunger, generates new floor
@@ -51,6 +69,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     if key_c { state.screen = AppScreen::CharacterSheet; }
     if key_n { state.screen = AppScreen::PassiveTree; }
     if key_q { state.screen = AppScreen::Title; }
+    if key_z { state.auto_mode = !state.auto_mode; state.auto_last_action = state.frame; }
 }
 
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
@@ -125,4 +144,9 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     // Controls
     ui_render::small(engine, "[E/Enter] Enter room  [D] Descend", -8.0, -4.0, theme.muted);
     ui_render::small(engine, "[C] Character  [N] Passives  [Esc] Quit", -8.0, -4.5, theme.muted);
+    let auto_hint = if state.auto_mode { "[Z] Stop Auto-Pilot" } else { "[Z] Auto-Pilot" };
+    ui_render::small(engine, auto_hint, -8.0, -5.0, theme.dim);
+
+    // Render auto-play indicator if active
+    crate::auto_play::render_indicator(state, engine);
 }

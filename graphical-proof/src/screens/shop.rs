@@ -37,6 +37,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
                     let (bought, cost) = state.shop_items.remove(state.shop_cursor);
                     player.gold -= cost;
                     player.inventory.push(bought);
+                    crate::audio_bridge::on_item_pickup(engine);
                     if state.shop_cursor >= state.shop_items.len() && state.shop_cursor > 0 {
                         state.shop_cursor -= 1;
                     }

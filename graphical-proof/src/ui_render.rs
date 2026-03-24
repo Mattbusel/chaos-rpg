@@ -36,16 +36,20 @@ pub fn text(engine: &mut ProofEngine, s: &str, x: f32, y: f32, color: Vec4, scal
 /// Positions are snapped to reduce sub-pixel blur.
 pub fn text_z(engine: &mut ProofEngine, s: &str, x: f32, y: f32, z: f32, color: Vec4, scale: f32, emission: f32) {
     let sp = spacing(scale);
-    // Snap base position to reduce sub-pixel blur
     let snap = |v: f32| -> f32 { (v * 20.0).round() / 20.0 };
-    for (i, ch) in s.chars().enumerate() {
+    // Clip: visible area is roughly ±8.7x, ±5.4y
+    let max_chars = ((8.7 - x) / sp).max(0.0) as usize;
+    for (i, ch) in s.chars().take(max_chars + 1).enumerate() {
         if ch == ' ' { continue; }
+        let gx = snap(x + i as f32 * sp);
+        let gy = snap(-y);
+        if gx < -9.0 || gx > 9.0 || gy < -6.0 || gy > 6.0 { continue; }
         engine.spawn_glyph(Glyph {
             character: ch,
-            position: Vec3::new(snap(x + i as f32 * sp), snap(-y), z),
+            position: Vec3::new(gx, gy, z),
             scale: Vec2::splat(scale),
             color,
-            emission: emission.min(0.3), // cap emission to prevent bloom bleed on text
+            emission: emission.min(0.3),
             layer: RenderLayer::UI,
             ..Default::default()
         });

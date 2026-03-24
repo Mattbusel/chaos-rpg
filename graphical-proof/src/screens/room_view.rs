@@ -17,6 +17,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
             if let Some(ref mut player) = state.player {
                 player.inventory.push(item);
             }
+            crate::audio_bridge::on_item_pickup(engine);
         }
         if state.room_event.portal_available {
             // Portal skips 3 floors

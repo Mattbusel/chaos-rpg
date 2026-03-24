@@ -5,6 +5,7 @@
 //! boss overlays, and an action bar with mana-aware spell highlighting.
 
 use proof_engine::prelude::*;
+use proof_engine::audio::MusicVibe;
 use crate::state::{AppScreen, GameState};
 use crate::theme::THEMES;
 use crate::ui_render;
@@ -1466,34 +1467,137 @@ fn render_chaos_viz(state: &GameState, engine: &mut ProofEngine) {
         return;
     }
     let theme = &THEMES[state.theme_idx % THEMES.len()];
+    let t = state.frame as f32 * 0.016;
 
-    // Panel background hint
-    ui_render::small(engine, "=== Chaos Engine Trace ===", -4.0, 2.5, theme.accent);
+    // ── Dark backing panel covering most of the screen ──
+    ui_render::panel_bg(
+        engine, -8.0, 5.0, 16.0, 10.0,
+        Vec4::new(0.0, 0.0, 0.05, 0.92), 0.3,
+    );
+    ui_render::box_double(
+        engine, -8.0, 5.0, 16.0, 10.0,
+        Vec4::new(0.3, 0.2, 0.8, 0.9), 0.3, 0.4,
+    );
 
-    if let Some(ref combat) = state.combat_state {
-        if let Some(ref roll) = combat.last_roll {
-            let mut vy = 2.0;
-            // Show engine chain
-            for (i, step) in roll.chain.iter().enumerate().take(8) {
-                let step_str = format!(
-                    "{}. {} -> {:.4}",
-                    i + 1,
-                    step.engine_name,
-                    step.output
-                );
-                let color = if step.output > 0.7 {
-                    theme.success
-                } else if step.output > 0.3 {
-                    theme.primary
-                } else {
-                    theme.danger
-                };
-                ui_render::small(engine, &step_str, -4.0, vy, color);
-                vy -= 0.35;
-            }
-            let final_str = format!("Final: {:.4}", roll.final_value);
-            ui_render::small(engine, &final_str, -4.0, vy - 0.1, theme.heading);
+    // ── Title with close hint ──
+    let title_pulse = (t * 2.0).sin() * 0.1 + 0.9;
+    let title_color = Vec4::new(
+        theme.accent.x * title_pulse,
+        theme.accent.y * title_pulse,
+        theme.accent.z * title_pulse,
+        1.0,
+    );
+    ui_render::text_centered(engine, "CHAOS ENGINE VISUALIZER", 4.5, title_color, 0.45, 0.7);
+    ui_render::text(engine, "[V] Close", 4.5, 4.5, theme.dim, 0.25, 0.3);
+
+    // ── Separator ──
+    ui_render::separator(engine, -7.5, 4.0, 15.0, theme.border, 0.25);
+
+    // Use state.last_roll (set after every combat action)
+    if let Some(ref roll) = state.last_roll {
+        // ── Final value and verdict ──
+        let verdict = if roll.is_critical() {
+            "CRITICAL"
+        } else if roll.is_catastrophe() {
+            "CATASTROPHE"
+        } else if roll.final_value > 0.3 {
+            "CLEAN HIT"
+        } else if roll.final_value > -0.3 {
+            "WEAK"
+        } else {
+            "MISS"
+        };
+
+        let verdict_color = if roll.is_critical() {
+            Vec4::new(1.0, 0.9, 0.2, 1.0)
+        } else if roll.is_catastrophe() {
+            Vec4::new(1.0, 0.0, 0.3, 1.0)
+        } else if roll.final_value > 0.3 {
+            theme.success
+        } else if roll.final_value > -0.3 {
+            theme.warn
+        } else {
+            theme.danger
+        };
+
+        let final_str = format!("Final Value: {:+.4}   {}", roll.final_value, verdict);
+        ui_render::text(engine, &final_str, -7.0, 3.5, verdict_color, 0.35, 0.6);
+
+        // ── Progress bar: maps final_value from [-1,1] to [0,1] ──
+        let bar_ratio = ((roll.final_value + 1.0) / 2.0).clamp(0.0, 1.0) as f32;
+        ui_render::bar(
+            engine, -7.0, 2.9, 14.0, bar_ratio,
+            verdict_color, theme.muted, 0.3,
+        );
+        // Bar labels
+        ui_render::text(engine, "-1.0", -7.0, 2.5, theme.dim, 0.2, 0.2);
+        ui_render::text(engine, "0.0", -0.3, 2.5, theme.dim, 0.2, 0.2);
+        ui_render::text(engine, "+1.0", 6.0, 2.5, theme.dim, 0.2, 0.2);
+
+        // ── Separator before table ──
+        ui_render::separator(engine, -7.5, 2.1, 15.0, theme.border, 0.25);
+
+        // ── Chain steps table header ──
+        ui_render::text(engine, " #  Engine Name          Input     Output    Delta", -7.0, 1.7, theme.accent, 0.25, 0.5);
+        ui_render::separator(engine, -7.5, 1.4, 15.0, theme.dim, 0.2);
+
+        // ── Chain steps rows ──
+        let mut vy: f32 = 1.0;
+        for (i, step) in roll.chain.iter().enumerate().take(12) {
+            let delta = step.output - step.input;
+            let delta_sign = if delta >= 0.0 { "+" } else { "" };
+
+            let row_str = format!(
+                "{:2}. {:<20} {:+.4}   {:+.4}   {}{:.4}",
+                i + 1,
+                step.engine_name,
+                step.input,
+                step.output,
+                delta_sign,
+                delta,
+            );
+
+            // Color code: green for positive delta, red for negative
+            let row_color = if delta > 0.05 {
+                theme.success
+            } else if delta < -0.05 {
+                theme.danger
+            } else {
+                theme.primary
+            };
+
+            ui_render::text(engine, &row_str, -7.0, vy, row_color, 0.25, 0.4);
+            vy -= 0.35;
         }
+
+        // If more steps than displayed
+        if roll.chain.len() > 12 {
+            let more = format!("  ... +{} more steps", roll.chain.len() - 12);
+            ui_render::text(engine, &more, -7.0, vy, theme.dim, 0.22, 0.2);
+            vy -= 0.35;
+        }
+
+        // ── Game value ──
+        let game_str = format!("Game Value (mapped): {}", roll.game_value);
+        ui_render::text(engine, &game_str, -7.0, vy - 0.2, theme.heading, 0.3, 0.5);
+    } else {
+        // No roll yet
+        ui_render::text_centered(
+            engine,
+            "No chaos roll yet.",
+            1.5,
+            theme.dim,
+            0.4,
+            0.4,
+        );
+        ui_render::text_centered(
+            engine,
+            "Make a combat action to see the chaos pipeline trace.",
+            0.5,
+            theme.muted,
+            0.3,
+            0.3,
+        );
     }
 }
 
@@ -1648,14 +1752,75 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
                 }
             }
 
+            // ── Chaos trace in combat log ──
+            // After each action resolves, append the chaos chain to the log
+            if let Some(ref roll) = state.last_roll {
+                for step in &roll.chain {
+                    let delta = step.output - step.input;
+                    state.combat_log.push(format!(
+                        "[{}] {:.2} -> {:.2} ({:+.2})",
+                        step.engine_name, step.input, step.output, delta,
+                    ));
+                }
+                let verdict = if roll.is_critical() {
+                    "CRITICAL"
+                } else if roll.is_catastrophe() {
+                    "CATASTROPHE"
+                } else if roll.final_value > 0.3 {
+                    "CLEAN HIT"
+                } else if roll.final_value > -0.3 {
+                    "WEAK"
+                } else {
+                    "MISS"
+                };
+                state.combat_log.push(format!(
+                    "Final: {:+.3} {}",
+                    roll.final_value, verdict,
+                ));
+            }
+
+            // ── Audio bridge: emit SFX for combat action ──
+            {
+                let action_type = state.last_action_type;
+                let dmg = events.iter().filter_map(|e| match e {
+                    chaos_rpg_core::combat::CombatEvent::PlayerAttack { damage, .. } => Some(*damage),
+                    chaos_rpg_core::combat::CombatEvent::SpellCast { damage, .. } => Some(*damage),
+                    _ => None,
+                }).sum::<i64>();
+                let is_crit = state.last_roll.as_ref().map(|r| r.is_critical()).unwrap_or(false);
+                crate::audio_bridge::on_combat_action(engine, action_type, dmg, is_crit);
+            }
+
             match outcome {
                 CombatOutcome::Ongoing => {}
                 CombatOutcome::PlayerWon { xp, gold } => {
+                    // Audio: enemy death SFX
+                    crate::audio_bridge::on_enemy_death(engine, state.is_boss_fight);
+
                     // Full game logic: XP, gold, loot, level up, gauntlet, nemesis
+                    let level_before = state.player.as_ref().map(|p| p.level).unwrap_or(0);
                     crate::game_logic::on_combat_victory(state, xp, gold);
+
+                    // Audio: level up check
+                    let level_after = state.player.as_ref().map(|p| p.level).unwrap_or(0);
+                    if level_after > level_before {
+                        crate::audio_bridge::on_level_up(engine);
+                    }
+
+                    // Audio: victory vibe
+                    engine.emit_audio(AudioEvent::SetMusicVibe(
+                        MusicVibe::Victory,
+                    ));
+
                     engine.add_trauma(0.6);
                 }
                 CombatOutcome::PlayerDied => {
+                    // Audio: player death SFX + death vibe
+                    crate::audio_bridge::on_player_death(engine);
+                    engine.emit_audio(AudioEvent::SetMusicVibe(
+                        MusicVibe::Death,
+                    ));
+
                     // Full game logic: nemesis promotion, score saving, death screen
                     crate::game_logic::on_player_death(state);
                     engine.add_trauma(0.8);
@@ -1720,6 +1885,9 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
     // 14. Boss overlay — always last
     crate::effects::boss_visuals::render_boss_overlay(state, engine);
+
+    // 15. Auto-play indicator
+    crate::auto_play::render_indicator(state, engine);
 
     // combat_visuals and combat_hud disabled — their content duplicates
     // what combat.rs already renders, causing overlapping unreadable text.

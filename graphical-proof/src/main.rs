@@ -68,6 +68,8 @@ pub mod combat_hud;
 pub mod exploration;
 #[allow(unused)]
 pub mod game_logic;
+#[allow(unused)]
+pub mod auto_play;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
@@ -152,6 +154,9 @@ impl ProofGame for ChaosRpgGame {
             self.chaos_compute.update(dt * chaos_brightness); // slower at lower brightness
             self.chaos_compute.render_at_brightness(engine, chaos_brightness);
         }
+
+        // Auto-play tick — BEFORE screen match so it can inject actions
+        auto_play::tick(&mut self.state, engine);
 
         // Screen-specific update + render
         match self.state.screen {
