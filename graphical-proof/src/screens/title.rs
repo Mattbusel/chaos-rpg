@@ -73,6 +73,17 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
 pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
 
+    // DEBUG: Single large R at center to test mirroring
+    engine.spawn_glyph(Glyph {
+        character: 'R',
+        position: Vec3::new(0.0, 0.0, 0.0),
+        scale: Vec2::splat(3.0),
+        color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+        emission: 1.0,
+        layer: RenderLayer::UI,
+        ..Default::default()
+    });
+
     // Logo
     ui_render::title(engine, "CHAOS RPG", 3.5, theme.heading);
 
