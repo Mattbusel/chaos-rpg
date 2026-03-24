@@ -100,56 +100,45 @@ impl ProofGame for ChaosRpgGame {
                 screens::victory::update(&mut self.state, engine, dt);
                 screens::victory::render(&self.state, engine);
             }
-            // Meta screens use generic placeholder
             AppScreen::Crafting => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::FloorNav);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "CRAFTING BENCH", "Select an item and operation.");
+                screens::crafting::update(&mut self.state, engine, dt);
+                screens::crafting::render(&self.state, engine);
             }
             AppScreen::PassiveTree => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::FloorNav);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "PASSIVE TREE", "820+ nodes across 8 class rings.");
+                screens::passive_tree::update(&mut self.state, engine, dt);
+                screens::passive_tree::render(&self.state, engine);
             }
             AppScreen::Achievements => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "ACHIEVEMENTS", "181 achievements to unlock.");
+                screens::achievements::update(&mut self.state, engine, dt);
+                screens::achievements::render(&self.state, engine);
             }
             AppScreen::RunHistory => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "RUN HISTORY", "Your past runs, newest first.");
+                screens::run_history::update(&mut self.state, engine, dt);
+                screens::run_history::render(&self.state, engine);
             }
             AppScreen::DailyLeaderboard => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "DAILY LEADERBOARD", "Today's seeded challenge rankings.");
+                screens::daily_leaderboard::update(&mut self.state, engine, dt);
+                screens::daily_leaderboard::render(&self.state, engine);
             }
             AppScreen::Bestiary => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "BESTIARY", "Enemies encountered across all runs.");
+                screens::bestiary::update(&mut self.state, engine, dt);
+                screens::bestiary::render(&self.state, engine);
             }
             AppScreen::Codex => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "CODEX", "Lore fragments and world knowledge.");
+                screens::codex::update(&mut self.state, engine, dt);
+                screens::codex::render(&self.state, engine);
             }
             AppScreen::Settings => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "SETTINGS", "Music vibe, theme, accessibility.");
+                screens::settings::update(&mut self.state, engine, dt);
+                screens::settings::render(&self.state, engine);
             }
             AppScreen::Tutorial => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "TUTORIAL", "Learn the chaos math behind everything.");
+                screens::tutorial::update(&mut self.state, engine, dt);
+                screens::tutorial::render(&self.state, engine);
             }
             AppScreen::Scoreboard => {
-                screens::generic::handle_back(&mut self.state, engine, AppScreen::Title);
-                screens::generic::render_placeholder(&self.state, engine,
-                    "HALL OF CHAOS", "The greatest and most wretched runs.");
+                screens::scoreboard::update(&mut self.state, engine, dt);
+                screens::scoreboard::render(&self.state, engine);
             }
         }
 
