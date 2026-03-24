@@ -41,12 +41,12 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 | File | Description |
 |------|-------------|
-| `chaos-rpg-graphical-windows.exe` | Fullscreen OpenGL window, animated UI, 5 color themes. **Recommended.** |
-| `chaos-rpg-terminal-windows.exe` | Runs in any Windows terminal. No GPU required. |
-| `CHAOS-RPG-v1.0-windows.zip` | Both versions + data files in one zip. |
+| `chaos-rpg-v2.0.0-windows.zip` | **Everything in one zip.** Proof Engine + legacy frontend + config. |
+| `chaos-rpg-proof.exe` | **Proof Engine frontend — the new one. Recommended.** |
+| `chaos-rpg-graphical.exe` | Legacy bracket-lib frontend (fallback). |
 
-3. Double-click to run - no installation needed
-4. If Windows Defender blocks it: click **More info** then **Run anyway** (the game is safe, full source is public here)
+3. Double-click `chaos-rpg-proof.exe` to run
+4. If Windows Defender blocks it: click **More info** then **Run anyway** (full source is public here)
 
 ### Option B: itch.io
 
@@ -54,8 +54,9 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 ### Which version should I run?
 
-- **chaos-rpg-graphical** - Fullscreen 160×80 OpenGL window, animated UI, 5 color themes. Recommended.
-- **chaos-rpg** - Runs in any terminal. Works over SSH. No GPU required.
+- **chaos-rpg-proof** — **The Proof Engine frontend.** Custom 221K-line mathematical rendering engine. PBR lighting, shader graph, particle physics, 3D boss visuals, weather, procedural music, terrain. **This is the one.**
+- **chaos-rpg-graphical** — Legacy bracket-lib frontend. Simpler but stable.
+- **chaos-rpg-terminal** — Runs in any terminal. Works over SSH. No GPU required.
 
 ---
 
@@ -67,9 +68,9 @@ Requires Rust 1.75+ from [rustup.rs](https://rustup.rs).
 git clone https://github.com/Mattbusel/chaos-rpg
 cd chaos-rpg
 
-cargo run --release -p chaos-rpg            # terminal frontend
-cargo run --release -p chaos-rpg-graphical  # graphical frontend
-cargo build --release --workspace           # build everything
+cargo run --release -p chaos-rpg-proof      # Proof Engine frontend (recommended)
+cargo run --release -p chaos-rpg-graphical  # legacy bracket-lib frontend
+cargo run --release -p chaos-rpg-terminal   # terminal frontend
 ```
 
 **Seeded runs:**
@@ -126,22 +127,36 @@ Every attack, heal, flee attempt, loot roll, enemy stat, and world event uses th
 
 ---
 
-## Two Frontends, One Game
+## Three Frontends, One Game
 
-Both frontends share the same core library (`chaos-rpg-core`). All game logic, saves, and scoreboards are identical.
+All frontends share the same core library (`chaos-rpg-core`). 34,800 lines of game logic, zero duplication.
+
+### Proof Engine Frontend (NEW — recommended)
+
+**Powered by [Proof Engine](https://github.com/Mattbusel/proof-engine)** — a custom 221,000+ line mathematical rendering engine built from scratch in Rust. 15,000 lines of frontend code across 54 files.
+
+- **PBR Lighting**: per-room presets (combat red, shrine blue, boss spotlight), per-entity point lights, attack/crit/spell flash lights, status effect lights (burn flicker, freeze steady, poison pulse, stun strobe), floor-depth ambient scaling (warm → cold → void)
+- **Shader Graph**: 5 per-theme presets (VOID chromatic+vignette, BLOOD contrast+red, EMERALD CRT+green, SOLAR warm+bloom, GLACIAL desat+blue), floor-depth visual degradation (clean → grain → distortion → VHS), corruption glitch effects, 6 boss-specific shader overrides (Null progressive strip, Paradox hue inversion, Algorithm glitch storm)
+- **12 Boss Visuals**: Mirror symmetry line, Accountant gold coins, Fibonacci Hydra golden spiral, Eigenstate form flicker, Taxman gold drain, Null progressive blackout, Ouroboros cycle ring, Collatz live sequence, Committee vote indicators, Recursion stack bar, Paradox reality inversion, Algorithm Reborn 3-phase chaos takeover
+- **Cinematics**: 5-phase death sequence, 3-phase victory celebration, 12 unique boss entrance sequences, floor transitions, level-up gold pillar, achievement unlocks (Common→Omega), misery milestones, corruption milestones, nemesis reveal
+- **Weather**: digital rain (floors 1-10), compute pulses (11-25), static noise (26-50), ash storms (51-75), electrical storms with lightning (76-99), void snow (100+), boss overrides
+- **AI Systems**: 6 steering archetypes, behavior trees (Accountant, Committee), GOAP (Algorithm Reborn), utility AI with logistic scoring
+- **Terrain**: isometric noise-based floor map, room-type elevation, epoch-specific glyph sets
+- **Economy**: supply/demand pricing, faction treasuries, reputation discounts
+- **Dialogue**: Archivist reputation-reactive greetings, boss combat dialogue, Mathematician Fragment codex trees with typewriter and emotion tints
+- **Modding**: script hooks (11 event types), mod.toml manifests, hot-reload
+- **Replay**: automatic recording, playback with speed control, ghost runs
+- **5 Save Slots**: visual state persistence, cloud sync ready
+- **Debug Tools**: profiler, field visualizer, inspector, console with 20+ commands
+
+### Legacy Graphical (bracket-lib OpenGL)
+- Fullscreen OpenGL window at **160×80 tiles**
+- Animated HP/MP bars, 5 color themes, chaos field background
+- Included as a fallback for systems without full OpenGL support
 
 ### Terminal (ratatui)
 - Runs in any terminal emulator (80×24 minimum)
-- Multi-panel TUI with real-time chaos engine trace panel during combat
-- Full color, keyboard driven
-- Works over SSH
-- Press **`[A]`** on the title screen for the full Achievements browser
-
-### Graphical (bracket-lib OpenGL)
-- Fullscreen OpenGL window at **160×80 tiles** (12×12px each) - every screen uses the full canvas
-- Animated HP/MP gradient bars, double-line panel borders, pulsing status effects
-- Five visual themes, selectable with **`[T]`** on the title screen
-- Split-panel layouts on every screen (character sheet, game over, run history, bestiary, etc.)
+- Full color, keyboard driven, works over SSH
 
 | Theme | Vibe |
 |-------|------|
@@ -473,67 +488,55 @@ player_name = ""
 
 ## Project Structure
 
+**86,000+ lines of Rust** across 5 crates. Powered by **[Proof Engine](https://github.com/Mattbusel/proof-engine)** (221,000+ lines).
+
 ```
 chaos-rpg/
-├── core/                      # chaos-rpg-core - all game logic (library crate)
+├── core/                         # chaos-rpg-core — all game logic (34,800 lines)
 │   └── src/
-│       ├── character.rs           stat rolling, leveling, class passives, 8 backgrounds
-│       ├── combat.rs              round resolution, action dispatch
-│       ├── chaos_pipeline.rs      Lorenz → Mandelbrot → Bifurcation chain
-│       ├── enemy.rs               enemy generation, floor scaling, floor abilities
-│       ├── bosses.rs              12 unique bosses with custom mechanics
-│       ├── items.rs               item system, rarities, stat modifiers, charges
-│       ├── spells.rs              spell library, mana costs, damage formulas
-│       ├── power_tier.rs          40-tier power table with animated render effects
-│       ├── misery_system.rs       Misery Index, Spite, Defiance, Cosmic Joke
-│       ├── run_stats.rs           per-run statistics tracker and report card
-│       ├── legacy_system.rs       achievements, graveyard, Hall of Misery
-│       ├── achievement_system.rs  175 achievements, 7 rarity tiers, check hooks
-│       ├── achievements.rs        achievement definitions and unlock conditions
-│       ├── run_history.rs         scrollable per-run history log
-│       ├── chaos_config.rs        chaos_config.toml loader with audio/display/gameplay sections
-│       ├── daily_leaderboard.rs   local store + HTTP submit/fetch via ureq
-│       ├── passive_tree.rs        ~820-node passive skill tree
-│       ├── player_bestiary.rs     persistent enemy encounter records
-│       ├── codex_progress.rs      codex entry unlock tracking
-│       ├── character_lore.rs      per-character narrative generation
-│       ├── lore/                  world lore, enemy lore, item lore, narrative fragments
-│       ├── scoreboard.rs          score serialization, leaderboard logic
-│       ├── world.rs               floor generation, room type distribution
-│       ├── npcs.rs                shop NPC, faction agents
-│       ├── nemesis.rs             nemesis promotion, persistence
-│       ├── skill_checks.rs        chaos-based skill resolution
-│       ├── magic_system.rs        extended magic subsystem
-│       └── relationship_system.rs faction reputation, party morale
+│       ├── character.rs              12 classes, 8 backgrounds, stat rolling, passives
+│       ├── combat.rs                 round resolution, chaos-powered damage
+│       ├── chaos_pipeline.rs         10-engine mathematical chain
+│       ├── bosses.rs                 12 unique bosses with custom mechanics
+│       ├── passive_tree.rs           ~820-node skill tree
+│       ├── misery_system.rs          Misery Index, Spite, Defiance
+│       ├── achievement_system.rs     175 achievements, 7 rarity tiers
+│       └── ... (77 source files)
 │
-├── terminal/                  # chaos-rpg - terminal frontend (ratatui TUI)
+├── graphical-proof/              # chaos-rpg-proof — PROOF ENGINE FRONTEND (15,000 lines)
 │   └── src/
-│       ├── main.rs                game loop, input, state machine, audio vibe init
-│       ├── ui.rs                  panel rendering, color helpers, achievements screen
-│       └── ratatui_screens.rs     per-screen draw functions
+│       ├── main.rs                   ProofGame impl, game loop, screen dispatch
+│       ├── state.rs                  150+ field game state
+│       ├── theme.rs                  5 themes with engine shader properties
+│       ├── lighting.rs               PBR room/combat/boss/floor lighting
+│       ├── shader_presets.rs         theme/floor/corruption/boss/status compositing
+│       ├── cinematics.rs             boss entrances, death/victory, milestones
+│       ├── enemy_ai.rs               steering, behavior trees, GOAP, utility AI
+│       ├── weather_system.rs         10 weather types, floor-reactive
+│       ├── terrain_map.rs            isometric noise terrain, room elevation
+│       ├── game_economy.rs           supply/demand, faction treasuries
+│       ├── dialogue_system.rs        Archivist, boss, NPC, codex dialogues
+│       ├── mod_system.rs             mod loader, 11 hooks, hot-reload
+│       ├── replay_system.rs          recording, playback, ghost runs
+│       ├── save_upgrade.rs           5 slots, visual snapshots, cloud sync
+│       ├── effects/boss_visuals.rs   12 unique boss visual overlays
+│       ├── scenes/chaos_field.rs     2000+ glyph mathematical background
+│       ├── screens/                  19 fully implemented screens
+│       └── ... (54 source files)
 │
-├── graphical/                 # chaos-rpg-graphical - OpenGL frontend (bracket-lib)
-│   └── src/
-│       ├── main.rs                160x80 game loop, all screen draw functions
-│       ├── renderer.rs            box drawing, bars, stat lines, minimap
-│       ├── theme.rs               5 color themes with lerp helpers
-│       ├── sprites.rs             ASCII art sprite library
-│       └── visual_config.rs       visual timing constants, FAST_MODE support
+├── graphical/                    # chaos-rpg-graphical — legacy bracket-lib (11,900 lines)
+├── terminal/                     # chaos-rpg-terminal — ratatui TUI (6,000 lines)
+├── audio/                        # chaos-rpg-audio — procedural synthesis (370 lines)
+├── web/                          # web frontend — macroquad (470 lines)
 │
-├── audio/                     # chaos-rpg-audio - procedural audio (rodio)
-│   └── src/
-│       ├── lib.rs                 AudioSystem, event dispatch, vibe selection
-│       ├── synth.rs               oscillators, ADSR, filters
-│       └── events.rs              AudioEvent enum, MusicVibe enum
+├── proof-engine/                 # THE ENGINE — 221,000+ lines, 249 files
+│   └── (separate repo: github.com/Mattbusel/proof-engine)
 │
-├── server/                    # Cloudflare Worker - global daily leaderboard
-│   ├── worker.js                  KV-backed leaderboard: POST /submit, GET /scores
-│   └── wrangler.toml              deployment config
+├── dist/                         # Release packages
+│   └── chaos-rpg-v2.0.0-windows.zip
 │
-└── docs/
-    ├── GETTING_STARTED.md     New player guide
-    ├── MECHANICS.md           Deep mechanics reference
-    └── BOSSES.md              All 12 bosses documented
+├── server/                       # Cloudflare Worker leaderboard
+└── docs/                         # Guides, mechanics, boss docs
 ```
 
 ---
