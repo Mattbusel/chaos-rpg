@@ -79,6 +79,9 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     // Tagline
     ui_render::text_centered(engine, theme.tagline, 1.8, theme.dim, 0.25, 0.25);
 
+    // Menu panel with border
+    ui_render::panel(engine, -4.5, 0.6, 9.0, 5.5, theme.border, theme.panel, 0.35);
+
     // Menu items with number keys
     let items = [
         "[1] Continue", "[2] New Run", "[3] Tutorial", "[4] Achievements",
@@ -89,10 +92,12 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
         let selected = idx == state.selected_menu;
         let color = if selected { theme.selected } else { theme.primary };
         let emission = if selected { 0.8 } else { 0.3 };
-        let prefix = if selected { "> " } else { "  " };
-        let line = format!("{}{}", prefix, label);
         let y = 0.0 - idx as f32 * 0.55;
-        ui_render::text(engine, &line, -3.0, y, color, 0.4, emission);
+
+        if selected {
+            ui_render::cursor_arrow(engine, -3.8, y, theme.accent, 0.35, state.frame);
+        }
+        ui_render::text(engine, label, -3.0, y, color, 0.4, emission);
     }
 
     // Theme indicator
@@ -100,16 +105,4 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
     // Input hint
     ui_render::small(engine, "Arrow keys + Enter/Space to select", -4.0, -5.4, theme.muted);
-
-    // Debug: show last pressed keys
-    let pressed_keys: Vec<&str> = [
-        (engine.input.is_pressed(Key::Enter), "ENTER"),
-        (engine.input.is_pressed(Key::Space), "SPACE"),
-        (engine.input.is_pressed(Key::Up), "UP"),
-        (engine.input.is_pressed(Key::Down), "DOWN"),
-    ].iter().filter(|(p, _)| *p).map(|(_, n)| *n).collect();
-    if !pressed_keys.is_empty() {
-        let debug_text = format!("Keys: {}", pressed_keys.join(" "));
-        ui_render::small(engine, &debug_text, -3.0, 5.0, theme.accent);
-    }
 }

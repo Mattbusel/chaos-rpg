@@ -62,8 +62,9 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     let theme = &THEMES[state.theme_idx % THEMES.len()];
     let frame = state.frame;
 
-    // Header
-    ui_render::heading_centered(engine, "THE ARCHIVIST'S SHOP", 4.8, theme.heading);
+    // Main panel
+    ui_render::panel_titled(engine, " THE ARCHIVIST'S SHOP ",
+        -8.5, 5.0, 17.0, 10.5, theme.border, theme.panel, theme.heading, 0.3);
 
     // Animated merchant
     let bob = ((frame as f32 * 0.06).sin() * 0.15).abs();
@@ -117,6 +118,7 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
     ui_render::text(engine, &format!("{}[H] Heal - {}g", heal_prefix, state.shop_heal_cost), list_x, y, heal_color, 0.3, heal_em);
 
     // Item preview (right panel)
+    ui_render::box_single(engine, 1.5, 2.2, 7.0, 5.5, theme.border, 0.25, 0.2);
     if state.shop_cursor < state.shop_items.len() {
         let (ref item, price) = state.shop_items[state.shop_cursor];
         let px = 2.0;
