@@ -21,6 +21,10 @@ pub mod cinematics;
 pub mod physics_bridge;
 pub mod dungeon_bridge;
 pub mod boss_bridge;
+pub mod enemy_ai;
+pub mod weather_system;
+pub mod terrain_map;
+pub mod game_economy;
 
 use state::{AppScreen, GameState};
 use theme::THEMES;
