@@ -51,6 +51,8 @@ pub mod dialogue_system;
 #[allow(unused)]
 pub mod mod_system;
 #[allow(unused)]
+pub mod audio_reactive;
+#[allow(unused)]
 pub mod replay_system;
 #[allow(unused)]
 pub mod save_upgrade;
