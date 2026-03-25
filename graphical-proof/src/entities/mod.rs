@@ -32,7 +32,9 @@
 pub mod formations;
 pub mod player;
 pub mod enemies;
+pub mod soft_entity;
 
 // Re-export primary entry points for convenience.
 pub use player::render_player;
 pub use enemies::{render_enemy, EnemyTier};
+pub use soft_entity::{SoftEntity, SoftEntityManager, SoftEntityId, SoftEntityEvent};

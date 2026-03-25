@@ -11,3 +11,5 @@ pub mod environmental;
 pub mod transitions;
 pub mod particle_presets;
 pub mod screen_effects;
+pub mod fluid_arena;
+pub mod debris;
