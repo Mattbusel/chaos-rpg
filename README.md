@@ -2,7 +2,9 @@
 
 > *Where Math Goes To Die*
 
-A roguelike where **every outcome** is produced by chaining real mathematical algorithms together. Character stats, enemy behavior, damage, healing, loot, skill checks, world generation - all of it flows through the same chaos pipeline. The same class can produce wildly different characters on every run. You can roll a deity or a corpse. Both are mathematically valid.
+A Rust roguelike where **every outcome** is produced by chaining real mathematical algorithms together. Character stats, enemy behavior, damage, healing, loot, skill checks, world generation - all of it flows through the same chaos pipeline. The same class can produce wildly different characters on every run. You can roll a deity or a corpse. Both are mathematically valid.
+
+It ships three frontends over one shared game core: a terminal UI (ratatui), a classic tile renderer (bracket-lib), and a new one built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a math-driven rendering engine by the same author. Seeded runs are fully reproducible, and the per-roll math trace is visible in game.
 
 ---
 
@@ -16,15 +18,15 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 <table>
 <tr>
-<td><img src="docs/screenshots/title-void.png" width="420" alt="Title screen — VOID PROTOCOL theme"/><br/><sub>Title screen · VOID PROTOCOL theme · grouped Play / Progress / Settings menu</sub></td>
-<td><img src="docs/screenshots/title-emerald.png" width="420" alt="Title screen — EMERALD ENGINE theme"/><br/><sub>Title screen · EMERALD ENGINE theme · chaos field background</sub></td>
+<td><img src="docs/screenshots/title-void.png" width="420" alt="Title screen: VOID PROTOCOL theme"/><br/><sub>Title screen · VOID PROTOCOL theme · grouped Play / Progress / Settings menu</sub></td>
+<td><img src="docs/screenshots/title-emerald.png" width="420" alt="Title screen: EMERALD ENGINE theme"/><br/><sub>Title screen · EMERALD ENGINE theme · chaos field background</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/character-sheet.png" width="420" alt="Character sheet — Stats tab"/><br/><sub>Character sheet · Stats tab · animated stat bars, run info, faction standings</sub></td>
-<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body condition — 13-part injury system"/><br/><sub>Body condition · 13-part system · injuries cascade into MATH.ABSENT</sub></td>
+<td><img src="docs/screenshots/character-sheet.png" width="420" alt="Character sheet: Stats tab"/><br/><sub>Character sheet · Stats tab · animated stat bars, run info, faction standings</sub></td>
+<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body condition: 13-part injury system"/><br/><sub>Body condition · 13-part system · injuries cascade into MATH.ABSENT</sub></td>
 </tr>
 <tr>
-<td colspan="2"><img src="docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death — dual-panel layout · damage dealt, final events, full combat log</sub></td>
+<td colspan="2"><img src="docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death: dual-panel layout · damage dealt, final events, full combat log</sub></td>
 </tr>
 </table>
 
@@ -41,8 +43,10 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 | File | Description |
 |------|-------------|
-| `chaos-rpg-graphical.exe` | **Stable release.** Polished bracket-lib OpenGL frontend. Full-featured, battle-tested. **Recommended for playing.** |
-| `chaos-rpg-proof.exe` | **Early preview.** Built on a custom 283K-line mathematical rendering engine. Work in progress — rough but functional. |
+| `chaos-rpg-graphical.exe` | **Stable.** bracket-lib OpenGL frontend, all features. **Recommended for playing.** |
+| `chaos-rpg-proof.exe` | **Early preview.** The Proof Engine frontend. Work in progress, rough but functional. |
+| `chaos-rpg.exe` | Terminal frontend. |
+| `chaos-rpg-windows.zip` | Bundle of the above. |
 
 3. Double-click to run
 4. If Windows SmartScreen blocks it: click **More info** then **Run anyway** (full source is public here)
@@ -53,10 +57,9 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 ### Which version should I run?
 
-- **chaos-rpg-graphical** — The stable, polished frontend. Full visual effects, 5 themes, all features. **Play this one.**
-- **chaos-rpg-proof** — **Early preview** of the next-generation frontend built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a custom 283K-line mathematical rendering engine. All game mechanics work (combat, bosses, crafting, achievements), but visuals are still being refined. Includes chaos engine visualizer (V key), auto-pilot (Z key), and animated chaos field background. This is a technology preview — expect rough edges.
-- **chaos-rpg-graphical** — Legacy bracket-lib frontend. Simpler but stable.
-- **chaos-rpg-terminal** — Runs in any terminal. Works over SSH. No GPU required.
+- **chaos-rpg-graphical**: the stable bracket-lib frontend. Full visual effects, 5 themes, all features. **Play this one.**
+- **chaos-rpg-proof**: early preview of the frontend built on [Proof Engine](https://github.com/Mattbusel/proof-engine). All game mechanics work (combat, bosses, crafting, achievements), but visuals are still being refined. Includes the chaos engine visualizer (V key), auto-pilot (Z key), and an animated chaos field background. Expect rough edges.
+- **chaos-rpg** (terminal): runs in any terminal, works over SSH, no GPU required.
 
 ---
 
@@ -64,13 +67,16 @@ A roguelike where **every outcome** is produced by chaining real mathematical al
 
 Requires Rust 1.75+ from [rustup.rs](https://rustup.rs).
 
+The `graphical-proof` crate depends on Proof Engine by relative path (`../../proof-engine`), and because it is a workspace member the whole workspace needs it. Clone both repositories side by side:
+
 ```bash
+git clone https://github.com/Mattbusel/proof-engine
 git clone https://github.com/Mattbusel/chaos-rpg
 cd chaos-rpg
 
-cargo run --release -p chaos-rpg-proof      # Proof Engine frontend (recommended)
-cargo run --release -p chaos-rpg-graphical  # legacy bracket-lib frontend
-cargo run --release -p chaos-rpg-terminal   # terminal frontend
+cargo run --release -p chaos-rpg-graphical  # bracket-lib frontend (stable)
+cargo run --release -p chaos-rpg-proof      # Proof Engine frontend (preview)
+cargo run --release -p chaos-rpg            # terminal frontend
 ```
 
 **Seeded runs:**
@@ -131,9 +137,9 @@ Every attack, heal, flee attempt, loot roll, enemy stat, and world event uses th
 
 All frontends share the same core library (`chaos-rpg-core`). 34,800 lines of game logic, zero duplication.
 
-### Proof Engine Frontend (NEW — recommended)
+### Proof Engine frontend (preview)
 
-**Powered by [Proof Engine](https://github.com/Mattbusel/proof-engine)** — a custom 221,000+ line mathematical rendering engine built from scratch in Rust. 15,000 lines of frontend code across 54 files.
+Built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust. About 15,000 lines of frontend code across 54 files.
 
 - **PBR Lighting**: per-room presets (combat red, shrine blue, boss spotlight), per-entity point lights, attack/crit/spell flash lights, status effect lights (burn flicker, freeze steady, poison pulse, stun strobe), floor-depth ambient scaling (warm → cold → void)
 - **Shader Graph**: 5 per-theme presets (VOID chromatic+vignette, BLOOD contrast+red, EMERALD CRT+green, SOLAR warm+bloom, GLACIAL desat+blue), floor-depth visual degradation (clean → grain → distortion → VHS), corruption glitch effects, 6 boss-specific shader overrides (Null progressive strip, Paradox hue inversion, Algorithm glitch storm)
@@ -149,10 +155,10 @@ All frontends share the same core library (`chaos-rpg-core`). 34,800 lines of ga
 - **5 Save Slots**: visual state persistence, cloud sync ready
 - **Debug Tools**: profiler, field visualizer, inspector, console with 20+ commands
 
-### Legacy Graphical (bracket-lib OpenGL)
+### Graphical (bracket-lib OpenGL)
 - Fullscreen OpenGL window at **160×80 tiles**
 - Animated HP/MP bars, 5 color themes, chaos field background
-- Included as a fallback for systems without full OpenGL support
+- The stable, recommended way to play
 
 ### Terminal (ratatui)
 - Runs in any terminal emulator (80×24 minimum)
@@ -488,11 +494,11 @@ player_name = ""
 
 ## Project Structure
 
-**86,000+ lines of Rust** across 5 crates. Powered by **[Proof Engine](https://github.com/Mattbusel/proof-engine)** (221,000+ lines).
+A Cargo workspace of six crates (`core`, `audio`, `terminal`, `graphical`, `graphical-proof`, `web`). The Proof Engine frontend pulls in **[Proof Engine](https://github.com/Mattbusel/proof-engine)** from a sibling checkout.
 
 ```
 chaos-rpg/
-├── core/                         # chaos-rpg-core — all game logic (34,800 lines)
+├── core/                         # chaos-rpg-core: all game logic (34,800 lines)
 │   └── src/
 │       ├── character.rs              12 classes, 8 backgrounds, stat rolling, passives
 │       ├── combat.rs                 round resolution, chaos-powered damage
@@ -503,7 +509,7 @@ chaos-rpg/
 │       ├── achievement_system.rs     175 achievements, 7 rarity tiers
 │       └── ... (77 source files)
 │
-├── graphical-proof/              # chaos-rpg-proof — PROOF ENGINE FRONTEND (15,000 lines)
+├── graphical-proof/              # chaos-rpg-proof: PROOF ENGINE FRONTEND (15,000 lines)
 │   └── src/
 │       ├── main.rs                   ProofGame impl, game loop, screen dispatch
 │       ├── state.rs                  150+ field game state
@@ -524,16 +530,13 @@ chaos-rpg/
 │       ├── screens/                  19 fully implemented screens
 │       └── ... (54 source files)
 │
-├── graphical/                    # chaos-rpg-graphical — legacy bracket-lib (11,900 lines)
-├── terminal/                     # chaos-rpg-terminal — ratatui TUI (6,000 lines)
-├── audio/                        # chaos-rpg-audio — procedural synthesis (370 lines)
-├── web/                          # web frontend — macroquad (470 lines)
+├── graphical/                    # chaos-rpg-graphical: bracket-lib frontend (11,900 lines)
+├── terminal/                     # chaos-rpg-terminal: ratatui TUI (6,000 lines)
+├── audio/                        # chaos-rpg-audio: procedural synthesis (370 lines)
+├── web/                          # web frontend: macroquad (470 lines)
 │
-├── proof-engine/                 # THE ENGINE — 221,000+ lines, 249 files
-│   └── (separate repo: github.com/Mattbusel/proof-engine)
-│
-├── dist/                         # Release packages
-│   └── chaos-rpg-v2.0.0-windows.zip
+├── src/                          # older single-crate version of the game (not a workspace member)
+├── dist/                         # older release builds committed to the repo
 │
 ├── server/                       # Cloudflare Worker leaderboard
 └── docs/                         # Guides, mechanics, boss docs
