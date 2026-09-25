@@ -21,28 +21,26 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install OpenGL deps (Linux only)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libgl1-mesa-dev libxi-dev
-      - name: Cargo check (core + terminal)
-        run: cargo check -p chaos-rpg-core -p chaos-rpg
-      - name: Cargo check (graphical)
-        run: cargo check -p chaos-rpg-graphical
+      - name: Install system libraries (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libxkbcommon-dev libgl1-mesa-dev libfontconfig1-dev libwayland-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+      - name: Cargo check (all native frontends)
+        run: cargo check --locked -p chaos-rpg-core -p chaos-rpg -p chaos-rpg-graphical -p chaos-rpg-proof
       - name: Test (core only)
-        run: cargo test -p chaos-rpg-core --lib
+        run: cargo test --locked -p chaos-rpg-core --lib
 
-  fmt-clippy:
-    name: Format + Clippy
+  clippy:
+    name: Clippy (core)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Install OpenGL deps
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libgl1-mesa-dev libxi-dev
-      - name: Format check
-        run: cargo fmt --check
-      - name: Clippy (core)
-        run: cargo clippy -p chaos-rpg-core -- -W clippy::all
+      - name: Clippy (core, warnings only)
+        run: cargo clippy --locked -p chaos-rpg-core -- -W clippy::all

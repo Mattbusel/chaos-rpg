@@ -398,6 +398,7 @@ impl ArenaFluid {
         let density = SPELL_INJECT_DENSITY * intensity;
         let ox = self.origin.x;
         let oy = self.origin.y;
+        let cell_size = self.cell_size;
 
         let layer = self.layer_mut(fluid_type);
         layer.inject(world_pos.x, world_pos.y, density, ox, oy);
@@ -406,11 +407,11 @@ impl ArenaFluid {
         match fluid_type {
             FluidType::Fire => {
                 // Fire spreads upward velocity
-                layer.inject(world_pos.x, world_pos.y + self.cell_size, density * 0.5, ox, oy);
+                layer.inject(world_pos.x, world_pos.y + cell_size, density * 0.5, ox, oy);
             }
             FluidType::Ice => {
                 // Ice spreads in a small cross
-                let cs = self.cell_size;
+                let cs = cell_size;
                 for &(dx, dy) in &[(cs, 0.0), (-cs, 0.0), (0.0, cs), (0.0, -cs)] {
                     layer.inject(world_pos.x + dx, world_pos.y + dy, density * 0.3, ox, oy);
                 }
@@ -437,15 +438,16 @@ impl ArenaFluid {
         let density = SPELL_INJECT_DENSITY * intensity * 0.8;
         let ox = self.origin.x;
         let oy = self.origin.y;
+        let (cell_size, time) = (self.cell_size, self.time);
         let layer = self.layer_mut(FluidType::Holy);
 
         // Inject in expanding ring
-        let radius = (self.time * HOLY_RADIATE_SPEED) % 8.0;
+        let radius = (time * HOLY_RADIATE_SPEED) % 8.0;
         let steps = 16;
         for i in 0..steps {
             let angle = (i as f32 / steps as f32) * std::f32::consts::TAU;
-            let wx = center.x + angle.cos() * radius * self.cell_size;
-            let wy = center.y + angle.sin() * radius * self.cell_size;
+            let wx = center.x + angle.cos() * radius * cell_size;
+            let wy = center.y + angle.sin() * radius * cell_size;
             layer.inject(wx, wy, density * 0.3, ox, oy);
         }
     }
@@ -454,10 +456,11 @@ impl ArenaFluid {
     pub fn inject_bleed(&mut self, entity_pos: Vec2) {
         let ox = self.origin.x;
         let oy = self.origin.y;
+        let cell_size = self.cell_size;
         let layer = self.layer_mut(FluidType::Blood);
         layer.inject(entity_pos.x, entity_pos.y, BLEED_INJECT_DENSITY, ox, oy);
         // Blood drips downward
-        layer.inject(entity_pos.x, entity_pos.y - self.cell_size, BLEED_INJECT_DENSITY * 0.3, ox, oy);
+        layer.inject(entity_pos.x, entity_pos.y - cell_size, BLEED_INJECT_DENSITY * 0.3, ox, oy);
     }
 
     /// Inject dark fluid (creeping shadow).
@@ -480,6 +483,7 @@ impl ArenaFluid {
     pub fn inject_boss_heal_flow(&mut self, from: Vec2, to: Vec2, intensity: f32) {
         let ox = self.origin.x;
         let oy = self.origin.y;
+        let (cell_size, width, height) = (self.cell_size, self.width, self.height);
         let layer = self.layer_mut(FluidType::Holy);
 
         // Inject along a line from damage zone to boss
@@ -492,10 +496,10 @@ impl ArenaFluid {
 
             // Add velocity toward the boss
             let vel_dir = dir.normalize_or_zero();
-            let gx = ((p.x - ox) / self.cell_size).round() as i32;
-            let gy = ((p.y - oy) / self.cell_size).round() as i32;
-            let gx = gx.clamp(1, self.width as i32 - 2) as usize;
-            let gy = gy.clamp(1, self.height as i32 - 2) as usize;
+            let gx = ((p.x - ox) / cell_size).round() as i32;
+            let gy = ((p.y - oy) / cell_size).round() as i32;
+            let gx = gx.clamp(1, width as i32 - 2) as usize;
+            let gy = gy.clamp(1, height as i32 - 2) as usize;
             layer.grid.add_velocity(gx, gy, vel_dir.x * 5.0, vel_dir.y * 5.0);
         }
     }

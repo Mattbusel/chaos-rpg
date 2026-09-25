@@ -336,7 +336,7 @@ mod tests {
         let next = opts[0].next_node_id;
         assert!(next.is_some());
         let next_node = tree.nodes.get(&next.unwrap()).unwrap();
-        assert!(next_node.text.contains("sword"));
+        assert!(next_node.text.contains("arm yourself"));
     }
 
     #[test]

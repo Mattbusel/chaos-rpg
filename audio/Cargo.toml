@@ -3,9 +3,15 @@ name = "chaos-rpg-audio"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+description = "Procedural audio synthesis for CHAOS RPG"
+repository.workspace = true
+homepage.workspace = true
+readme = "../README.md"
+keywords = ["game", "roguelike", "rpg", "chaos", "math"]
+categories = ["games"]
 
 [dependencies]
-chaos-rpg-core = { path = "../core" }
+chaos-rpg-core = { path = "../core", version = "2.2.0" }
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
 
 [features]

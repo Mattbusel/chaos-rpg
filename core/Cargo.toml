@@ -3,7 +3,12 @@ name = "chaos-rpg-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Core game logic for CHAOS RPG — math engines, combat, characters, items, and world generation"
+repository.workspace = true
+homepage.workspace = true
+readme = "../README.md"
+keywords = ["game", "roguelike", "rpg", "chaos", "math"]
+categories = ["games"]
+description = "Core game logic for CHAOS RPG: math engines, combat, characters, items, and world generation"
 
 [dependencies]
 serde.workspace = true

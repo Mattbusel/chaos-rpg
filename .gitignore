@@ -7,10 +7,15 @@
 
 #/target
 *.exe
-!dist/*.exe
 *.pdb
 .DS_Store
 Thumbs.db
 chaos_rpg_scores.json
 *.exe
 dist/*.zip
+
+# Release binaries are built by .github/workflows/release.yml and attached to GitHub Releases.
+# Older builds stay in git history; new ones are never committed.
+dist/*.exe
+dist/*.zip
+dist/**/*.exe

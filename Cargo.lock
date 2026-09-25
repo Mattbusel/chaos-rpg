@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg"
-version = "0.1.0"
+version = "2.2.0"
 dependencies = [
  "chaos-rpg-audio",
  "chaos-rpg-core",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-audio"
-version = "0.1.0"
+version = "2.2.0"
 dependencies = [
  "chaos-rpg-core",
  "rodio",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-core"
-version = "0.1.0"
+version = "2.2.0"
 dependencies = [
  "rand",
  "serde",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-graphical"
-version = "0.1.0"
+version = "2.2.0"
 dependencies = [
  "bracket-lib",
  "chaos-rpg-audio",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-proof"
-version = "0.1.0"
+version = "2.2.0"
 dependencies = [
  "chaos-rpg-core",
  "glam 0.25.0",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-web"
-version = "0.1.0"
+version = "2.2.0"
 dependencies = [
  "chaos-rpg-core",
  "macroquad",
@@ -1385,9 +1385,9 @@ dependencies = [
 
 [[package]]
 name = "glow"
-version = "0.13.1"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd348e04c43b32574f2de31c8bb397d96c9fcfa1371bd4ca6d8bdc464ab121b1"
+checksum = "c5e5ea60d70410161c8bf5da3fdfeaa1c72ed2c15f8bbb9d19fe3a4fad085f08"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -2902,14 +2902,17 @@ dependencies = [
 
 [[package]]
 name = "proof-engine"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad2dbb06ad5e2cb6955b3f018f5c44846992e1fa469c71239a737eb72ca8d542"
 dependencies = [
  "ab_glyph",
+ "bitflags 2.11.0",
  "bytemuck",
  "cpal",
  "env_logger",
  "glam 0.25.0",
- "glow 0.13.1",
+ "glow 0.16.0",
  "glutin 0.32.3",
  "glutin-winit",
  "log",

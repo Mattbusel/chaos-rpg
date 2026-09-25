@@ -36,22 +36,42 @@ It ships three frontends over one shared game core: a terminal UI (ratatui), a c
 
 **No installation required. No Rust needed. Just download and run.**
 
-### Option A: GitHub Releases (recommended)
+### Option A: Download a release (recommended)
 
-1. Go to the [Releases page](https://github.com/Mattbusel/chaos-rpg/releases)
-2. Under the latest release, download:
+1. Open the [latest release](https://github.com/Mattbusel/chaos-rpg/releases/latest).
+2. Download the file for your computer:
 
-| File | Description |
-|------|-------------|
-| `chaos-rpg-graphical.exe` | **Stable.** bracket-lib OpenGL frontend, all features. **Recommended for playing.** |
-| `chaos-rpg-proof.exe` | **Early preview.** The Proof Engine frontend. Work in progress, rough but functional. |
-| `chaos-rpg.exe` | Terminal frontend. |
-| `chaos-rpg-windows.zip` | Bundle of the above. |
+| Your system | File to download |
+|-------------|------------------|
+| Windows | `chaos-rpg-vX.Y.Z-x86_64-pc-windows-msvc.zip` |
+| Mac with Apple Silicon (M1 and newer) | `chaos-rpg-vX.Y.Z-aarch64-apple-darwin.tar.gz` |
+| Mac with Intel chip | `chaos-rpg-vX.Y.Z-x86_64-apple-darwin.tar.gz` |
+| Linux (x86_64) | `chaos-rpg-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` |
 
-3. Double-click to run
-4. If Windows SmartScreen blocks it: click **More info** then **Run anyway** (full source is public here)
+3. Unzip it. Inside are all three frontends, the README, and `chaos_config.toml`.
+4. Run `chaos-rpg-graphical` (double-click `chaos-rpg-graphical.exe` on Windows).
 
-### Option B: itch.io
+The binaries are not code signed, so your OS will warn you the first time:
+
+- **Windows:** SmartScreen may say "Windows protected your PC" or "unknown publisher". Click **More info**, then **Run anyway**.
+- **macOS:** right-click the binary and choose **Open**, then confirm. You only need to do this once.
+
+Each release also has a `SHA256SUMS.txt` if you want to check the download.
+
+### Option B: cargo install
+
+If you already have Rust:
+
+```bash
+cargo install chaos-rpg-graphical   # bracket-lib frontend (stable)
+cargo install chaos-rpg-proof       # Proof Engine frontend (preview)
+cargo install chaos-rpg             # terminal frontend
+```
+
+On Linux you need the usual windowing and audio headers first, for example on Debian/Ubuntu:
+`sudo apt install pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxkbcommon-dev libgl1-mesa-dev libfontconfig1-dev`.
+
+### Option C: itch.io
 
 [mattbusel.itch.io/chaos-rpg](https://mattbusel.itch.io/chaos-rpg)
 
@@ -61,16 +81,15 @@ It ships three frontends over one shared game core: a terminal UI (ratatui), a c
 - **chaos-rpg-proof**: early preview of the frontend built on [Proof Engine](https://github.com/Mattbusel/proof-engine). All game mechanics work (combat, bosses, crafting, achievements), but visuals are still being refined. Includes the chaos engine visualizer (V key), auto-pilot (Z key), and an animated chaos field background. Expect rough edges.
 - **chaos-rpg** (terminal): runs in any terminal, works over SSH, no GPU required.
 
+Every frontend answers `--help` and `--version`.
+
 ---
 
 ## Build from Source
 
-Requires Rust 1.75+ from [rustup.rs](https://rustup.rs).
-
-The `graphical-proof` crate depends on Proof Engine by relative path (`../../proof-engine`), and because it is a workspace member the whole workspace needs it. Clone both repositories side by side:
+Requires Rust 1.75+ from [rustup.rs](https://rustup.rs). Proof Engine comes from crates.io, so one clone is enough:
 
 ```bash
-git clone https://github.com/Mattbusel/proof-engine
 git clone https://github.com/Mattbusel/chaos-rpg
 cd chaos-rpg
 
@@ -494,7 +513,7 @@ player_name = ""
 
 ## Project Structure
 
-A Cargo workspace of six crates (`core`, `audio`, `terminal`, `graphical`, `graphical-proof`, `web`). The Proof Engine frontend pulls in **[Proof Engine](https://github.com/Mattbusel/proof-engine)** from a sibling checkout.
+A Cargo workspace of six crates (`core`, `audio`, `terminal`, `graphical`, `graphical-proof`, `web`). The Proof Engine frontend uses **[Proof Engine](https://github.com/Mattbusel/proof-engine)** from crates.io.
 
 ```
 chaos-rpg/
@@ -536,7 +555,7 @@ chaos-rpg/
 ├── web/                          # web frontend: macroquad (470 lines)
 │
 ├── src/                          # older single-crate version of the game (not a workspace member)
-├── dist/                         # older release builds committed to the repo
+├── dist/                         # older release builds (now only in git history; see Releases)
 │
 ├── server/                       # Cloudflare Worker leaderboard
 └── docs/                         # Guides, mechanics, boss docs
