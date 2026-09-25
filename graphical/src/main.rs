@@ -8171,7 +8171,30 @@ impl State {
 
 // ─── ENTRY POINT ─────────────────────────────────────────────────────────────
 
+fn handle_cli_flags(bin: &str, what: &str) {
+    if let Some(arg) = std::env::args().nth(1) {
+        match arg.as_str() {
+            "--version" | "-V" => {
+                println!("{bin} {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            "--help" | "-h" => {
+                println!("{bin} {}", env!("CARGO_PKG_VERSION"));
+                println!("CHAOS RPG: {what}");
+                println!();
+                println!("Usage: {bin} [--help | --version]");
+                println!();
+                println!("Run with no arguments to play. Set CHAOS_SEED=<number> for a reproducible run.");
+                println!("https://github.com/Mattbusel/chaos-rpg");
+                std::process::exit(0);
+            }
+            _ => {}
+        }
+    }
+}
+
 fn main() -> BError {
+    handle_cli_flags("chaos-rpg-graphical", "graphical frontend (bracket-lib)");
     let builder = BTermBuilder::simple(160, 80)?
         .with_title("CHAOS RPG — Where Math Goes To Die")
         .with_tile_dimensions(12, 12)

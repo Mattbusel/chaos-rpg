@@ -559,12 +559,15 @@ impl SoftEntity {
         }
 
         // Free all glyphs with random outward impulse
-        for g in &mut self.glyphs {
+        let angles: Vec<f32> = (0..self.glyphs.len())
+            .map(|_| self.next_rng_f32() * TAU)
+            .collect();
+        let center = self.center;
+        for (g, angle) in self.glyphs.iter_mut().zip(angles) {
             g.freed = true;
-            let to_glyph = (g.position - self.center).normalize_or_zero();
+            let to_glyph = (g.position - center).normalize_or_zero();
 
             // Random angle perturbation
-            let angle = self.next_rng_f32() * TAU;
             let random_dir = Vec2::new(angle.cos(), angle.sin());
 
             g.velocity += (to_glyph * 0.7 + random_dir * 0.3) * DEATH_BURST_SPEED;

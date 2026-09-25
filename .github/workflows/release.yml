@@ -1,138 +1,142 @@
 name: Release
 
+# Push a tag like v2.2.0 to build all three native frontends for Linux, macOS
+# and Windows and attach them to a GitHub Release. Publishing to crates.io stays manual.
 on:
-  workflow_dispatch:
   push:
-    tags: ['v*']
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  # Build-only dry run when this workflow itself changes (nothing is released).
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v2.2.0"
+        required: true
+
+permissions:
+  contents: write
 
 env:
   CARGO_TERM_COLOR: always
+  TAG: ${{ github.event_name == 'pull_request' && 'pr-test' || github.event.inputs.tag || github.ref_name }}
+  BINS: chaos-rpg chaos-rpg-graphical chaos-rpg-proof
 
 jobs:
-  # ── Proof Engine Frontend (the new one) ──────────────────────────────────────
-  build-proof-windows:
-    name: Proof Engine — Windows
-    runs-on: windows-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout proof-engine
-        uses: actions/checkout@v4
         with:
-          repository: Mattbusel/proof-engine
-          path: proof-engine-checkout
-      - name: Place proof-engine at expected path
+          ref: ${{ github.event_name == 'pull_request' && github.sha || env.TAG }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libxkbcommon-dev libgl1-mesa-dev libfontconfig1-dev libwayland-dev \
+            libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }} -p chaos-rpg -p chaos-rpg-graphical -p chaos-rpg-proof
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          mkdir -p "$(pwd)/../proof-engine"
-          cp -r proof-engine-checkout/* "$(pwd)/../proof-engine/"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --release -p chaos-rpg-proof
-      - uses: actions/upload-artifact@v4
-        with:
-          name: chaos-rpg-proof-windows-x64
-          path: target/release/chaos-rpg-proof.exe
+          name="chaos-rpg-${TAG}-${{ matrix.target }}"
+          mkdir "$name"
+          for b in $BINS; do cp "target/${{ matrix.target }}/release/$b" "$name/"; done
+          cp README.md LICENSE chaos_config.toml "$name/"
+          tar czf "$name.tar.gz" "$name"
+          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
 
-  # ── Graphical (bracket-lib) ─────────────────────────────────────────────────
-  build-graphical-windows:
-    name: Graphical — Windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Checkout proof-engine (needed by workspace)
-        uses: actions/checkout@v4
-        with:
-          repository: Mattbusel/proof-engine
-          path: proof-engine-checkout
-      - name: Place proof-engine
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "chaos-rpg-$env:TAG-${{ matrix.target }}"
+          New-Item -ItemType Directory $name | Out-Null
+          foreach ($b in $env:BINS.Split(' ')) { Copy-Item "target/${{ matrix.target }}/release/$b.exe" $name }
+          Copy-Item README.md, LICENSE, chaos_config.toml $name
+          Compress-Archive -Path $name -DestinationPath "$name.zip"
+          $hash = (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $name.zip" | Out-File -Encoding ascii "$name.zip.sha256"
+
+      - name: Smoke test
         shell: bash
         run: |
-          mkdir -p "$(pwd)/../proof-engine"
-          cp -r proof-engine-checkout/* "$(pwd)/../proof-engine/"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --release -p chaos-rpg-graphical
+          for b in $BINS; do "target/${{ matrix.target }}/release/$b" --version; done
+
       - uses: actions/upload-artifact@v4
         with:
-          name: chaos-rpg-graphical-windows-x64
-          path: target/release/chaos-rpg-graphical.exe
+          name: ${{ matrix.target }}
+          path: |
+            chaos-rpg-*.tar.gz*
+            chaos-rpg-*.zip*
 
-  # ── Terminal (ratatui) ──────────────────────────────────────────────────────
-  build-terminal-windows:
-    name: Terminal — Windows
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Checkout proof-engine (needed by workspace)
-        uses: actions/checkout@v4
-        with:
-          repository: Mattbusel/proof-engine
-          path: proof-engine-checkout
-      - name: Place proof-engine
-        shell: bash
-        run: |
-          mkdir -p "$(pwd)/../proof-engine"
-          cp -r proof-engine-checkout/* "$(pwd)/../proof-engine/"
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --release -p chaos-rpg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: chaos-rpg-terminal-windows-x64
-          path: target/release/chaos-rpg.exe
-
-  # ── Package & Release ──────────────────────────────────────────────────────
-  create-release:
-    needs:
-      - build-proof-windows
-      - build-graphical-windows
-      - build-terminal-windows
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: dist
+          merge-multiple: true
 
-      - name: Create zip package
+      - name: Checksums
         run: |
-          mkdir -p package
-          cp artifacts/chaos-rpg-proof-windows-x64/chaos-rpg-proof.exe package/
-          cp artifacts/chaos-rpg-graphical-windows-x64/chaos-rpg-graphical.exe package/
-          cp artifacts/chaos-rpg-terminal-windows-x64/chaos-rpg.exe package/chaos-rpg-terminal.exe
-          cp chaos_config.toml package/
-          cp -r assets package/ 2>/dev/null || true
-          echo "CHAOS RPG v2.0 — Double-click chaos-rpg-proof.exe to play" > package/README.txt
-          cd package && zip -r ../chaos-rpg-windows.zip . && cd ..
+          cd dist
+          cat *.sha256 > SHA256SUMS.txt
+          cat SHA256SUMS.txt
 
-      - name: Create GitHub Release
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          TAG="${GITHUB_REF_NAME:-dev-build}"
-          gh release delete "$TAG" --yes 2>/dev/null || true
-          gh release create "$TAG" \
-            "artifacts/chaos-rpg-proof-windows-x64/chaos-rpg-proof.exe#chaos-rpg-proof.exe" \
-            "artifacts/chaos-rpg-graphical-windows-x64/chaos-rpg-graphical.exe#chaos-rpg-graphical.exe" \
-            "artifacts/chaos-rpg-terminal-windows-x64/chaos-rpg.exe#chaos-rpg-terminal.exe" \
-            "chaos-rpg-windows.zip#chaos-rpg-v2.0-windows.zip" \
-            --title "CHAOS RPG $TAG — Proof Engine" \
-            --notes "## CHAOS RPG $TAG
+          ls -l dist
+          cat > notes.md <<NOTES
+          Prebuilt CHAOS RPG binaries. Each archive holds all three frontends:
 
-          Powered by **Proof Engine** — 221,000+ line custom mathematical rendering engine.
+          - \`chaos-rpg-graphical\`: the stable tile frontend, recommended for playing
+          - \`chaos-rpg-proof\`: the Proof Engine frontend (preview)
+          - \`chaos-rpg\`: the terminal frontend
 
-          ### Downloads
+          Pick the file for your system: Windows \`x86_64-pc-windows-msvc.zip\`, Apple Silicon Mac \`aarch64-apple-darwin.tar.gz\`, Intel Mac \`x86_64-apple-darwin.tar.gz\`, Linux \`x86_64-unknown-linux-gnu.tar.gz\`.
 
-          | File | Description |
-          |------|-------------|
-          | **chaos-rpg-proof.exe** | **Proof Engine frontend (recommended)** |
-          | chaos-rpg-graphical.exe | Legacy bracket-lib frontend |
-          | chaos-rpg-terminal.exe | Terminal frontend |
-          | chaos-rpg-v2.0-windows.zip | All three + config |
+          The binaries are not code signed. On Windows, SmartScreen may say "unknown publisher": click More info, then Run anyway. On macOS, right-click the binary and choose Open the first time.
 
-          Built by GitHub Actions on windows-latest. Full source: [chaos-rpg](https://github.com/Mattbusel/chaos-rpg) + [proof-engine](https://github.com/Mattbusel/proof-engine)"
+          See CHANGELOG.md for what changed. Verify downloads against SHA256SUMS.txt.
+          NOTES
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "CHAOS RPG $TAG" --notes-file notes.md
+          fi

@@ -3,15 +3,20 @@ name = "chaos-rpg-proof"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CHAOS RPG — proof-engine graphical frontend"
+repository.workspace = true
+homepage.workspace = true
+readme = "../README.md"
+keywords = ["game", "roguelike", "rpg", "chaos", "math"]
+categories = ["games"]
+description = "CHAOS RPG: proof-engine graphical frontend"
 
 [[bin]]
 name = "chaos-rpg-proof"
 path = "src/main.rs"
 
 [dependencies]
-chaos-rpg-core = { path = "../core" }
-proof-engine = { path = "../../proof-engine" }
+chaos-rpg-core = { path = "../core", version = "2.2.0" }
+proof-engine = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 rand = { workspace = true }

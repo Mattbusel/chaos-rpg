@@ -313,7 +313,30 @@ fn render_fallback_screen(state: &GameState, engine: &mut ProofEngine) {
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
+fn handle_cli_flags(bin: &str, what: &str) {
+    if let Some(arg) = std::env::args().nth(1) {
+        match arg.as_str() {
+            "--version" | "-V" => {
+                println!("{bin} {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            "--help" | "-h" => {
+                println!("{bin} {}", env!("CARGO_PKG_VERSION"));
+                println!("CHAOS RPG: {what}");
+                println!();
+                println!("Usage: {bin} [--help | --version]");
+                println!();
+                println!("Run with no arguments to play. Set CHAOS_SEED=<number> for a reproducible run.");
+                println!("https://github.com/Mattbusel/chaos-rpg");
+                std::process::exit(0);
+            }
+            _ => {}
+        }
+    }
+}
+
 fn main() {
+    handle_cli_flags("chaos-rpg-proof", "Proof Engine frontend");
     let game = ChaosRpgGame {
         state: GameState::new(),
         music_bridge: music_bridge::MusicBridge::init(),

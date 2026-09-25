@@ -45,7 +45,30 @@ fn daily_seed() -> u64 {
         .wrapping_add(1442695040888963407)
 }
 
+fn handle_cli_flags(bin: &str, what: &str) {
+    if let Some(arg) = std::env::args().nth(1) {
+        match arg.as_str() {
+            "--version" | "-V" => {
+                println!("{bin} {}", env!("CARGO_PKG_VERSION"));
+                std::process::exit(0);
+            }
+            "--help" | "-h" => {
+                println!("{bin} {}", env!("CARGO_PKG_VERSION"));
+                println!("CHAOS RPG: {what}");
+                println!();
+                println!("Usage: {bin} [--help | --version]");
+                println!();
+                println!("Run with no arguments to play. Set CHAOS_SEED=<number> for a reproducible run.");
+                println!("https://github.com/Mattbusel/chaos-rpg");
+                std::process::exit(0);
+            }
+            _ => {}
+        }
+    }
+}
+
 fn main() {
+    handle_cli_flags("chaos-rpg", "terminal frontend");
     let _fullscreen = ui::FullscreenGuard::enter();
 
     loop {

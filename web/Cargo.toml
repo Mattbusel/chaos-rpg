@@ -3,7 +3,13 @@ name = "chaos-rpg-web"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "CHAOS RPG — web frontend with macroquad (WASM build)"
+repository.workspace = true
+homepage.workspace = true
+readme = "../README.md"
+keywords = ["game", "roguelike", "rpg", "chaos", "math"]
+categories = ["games"]
+publish = false
+description = "CHAOS RPG: web frontend with macroquad (WASM build)"
 
 [[bin]]
 name = "chaos-rpg-web"
