@@ -30,7 +30,7 @@ jobs:
             libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
       - name: Cargo check (all native frontends)
         run: cargo check --locked -p chaos-rpg-core -p chaos-rpg -p chaos-rpg-graphical -p chaos-rpg-proof
-      - name: Test (core: unit tests, doc examples, examples)
+      - name: Test core (unit tests, doc examples, examples)
         run: cargo test --locked -p chaos-rpg-core
 
   clippy:
