@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Mattbusel.ChaosRPG
+PackageVersion: 2.2.1
+PackageLocale: en-US
+Publisher: Matt Busel
+PublisherUrl: https://github.com/Mattbusel
+PublisherSupportUrl: https://github.com/Mattbusel/chaos-rpg/issues
+PackageName: CHAOS RPG
+PackageUrl: https://github.com/Mattbusel/chaos-rpg
+License: MIT
+LicenseUrl: https://github.com/Mattbusel/chaos-rpg/blob/master/LICENSE
+ShortDescription: A roguelike where every roll is a chain of real math (Lorenz, Mandelbrot, Collatz).
+Description: |-
+  CHAOS RPG is a roguelike where every hit, heal and loot drop is decided by chaining real
+  math engines (the Lorenz attractor, the Mandelbrot set, the logistic map, Collatz, Riemann zeta)
+  instead of a random number. Installs three programs: chaos-rpg-graphical (the game in its own
+  window), chaos-rpg-proof (the Proof Engine version, preview) and chaos-rpg (the terminal version).
+Moniker: chaos-rpg
+Tags:
+  - roguelike
+  - game
+  - rpg
+  - terminal
+  - math
+ReleaseNotesUrl: https://github.com/Mattbusel/chaos-rpg/releases/tag/v2.2.1
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
