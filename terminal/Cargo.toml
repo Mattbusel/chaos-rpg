@@ -5,10 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://github.com/Mattbusel/chaos-rpg#readme"
 readme = "../README.md"
-keywords = ["game", "roguelike", "rpg", "chaos", "math"]
-categories = ["games"]
-description = "CHAOS RPG: terminal frontend with ratatui"
+keywords = ["roguelike", "game", "rpg", "terminal", "chaos"]
+categories = ["games", "command-line-utilities"]
+description = "CHAOS RPG in your terminal: a roguelike where every roll is a chain of real math (Lorenz, Mandelbrot, Collatz, zeta)"
 
 [[bin]]
 name = "chaos-rpg"
@@ -22,3 +23,12 @@ ratatui.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rand.workspace = true
+
+# `cargo binstall chaos-rpg` downloads the prebuilt release archive instead of compiling.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/chaos-rpg-v{ version }-{ target }{ archive-suffix }"
+bin-dir = "chaos-rpg-v{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"

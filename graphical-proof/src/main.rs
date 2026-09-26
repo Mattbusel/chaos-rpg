@@ -322,13 +322,27 @@ fn handle_cli_flags(bin: &str, what: &str) {
             }
             "--help" | "-h" => {
                 println!("{bin} {}", env!("CARGO_PKG_VERSION"));
-                println!("CHAOS RPG: {what}");
+                println!("CHAOS RPG: {what}. Every roll is a chain of real math.");
                 println!();
                 println!("Usage: {bin} [--help | --version]");
                 println!();
-                println!("Run with no arguments to play. Set CHAOS_SEED=<number> for a reproducible run.");
-                println!("https://github.com/Mattbusel/chaos-rpg");
+                println!("Opens the Proof Engine frontend (preview) in its own window.");
+                println!();
+                println!("Examples:");
+                println!("  chaos-rpg-proof              start the game");
+                println!();
+                println!("Keys: number keys or arrows and Enter in menus, Z on the floor map turns");
+                println!("on auto-pilot, V in combat opens the chaos engine visualizer, L the combat log.");
+                println!();
+                println!("Settings live in chaos_config.toml next to this program.");
+                println!();
+                println!("Guide: https://github.com/Mattbusel/chaos-rpg#readme");
                 std::process::exit(0);
+            }
+            other if other.starts_with('-') => {
+                eprintln!("{bin}: unknown option '{other}'");
+                eprintln!("Run '{bin} --help' to see what it accepts, or run it with no arguments to play.");
+                std::process::exit(2);
             }
             _ => {}
         }

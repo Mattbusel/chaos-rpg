@@ -18,7 +18,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use chaos_rpg::status_effects::{StatusRegistry, EffectKind};
+//! use chaos_rpg_core::status_effects::{StatusRegistry, EffectKind};
 //!
 //! let mut reg = StatusRegistry::new();
 //! reg.apply(EffectKind::Burning, 3);

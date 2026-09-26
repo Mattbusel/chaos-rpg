@@ -54,13 +54,29 @@ fn handle_cli_flags(bin: &str, what: &str) {
             }
             "--help" | "-h" => {
                 println!("{bin} {}", env!("CARGO_PKG_VERSION"));
-                println!("CHAOS RPG: {what}");
+                println!("CHAOS RPG: {what}. Every roll is a chain of real math.");
                 println!();
                 println!("Usage: {bin} [--help | --version]");
                 println!();
-                println!("Run with no arguments to play. Set CHAOS_SEED=<number> for a reproducible run.");
-                println!("https://github.com/Mattbusel/chaos-rpg");
+                println!("Plays in this terminal window. Works over SSH, no GPU needed.");
+                println!();
+                println!("Examples:");
+                println!("  chaos-rpg                          start the game");
+                println!("  CHAOS_SEED=666 chaos-rpg           same character, enemies and loot every time");
+                println!("  $env:CHAOS_SEED=666; chaos-rpg     the same in PowerShell");
+                println!();
+                println!("On the title screen type N and press Enter for a new Story run.");
+                println!("Answer y to \"Auto-play mode?\" to watch the AI play.");
+                println!();
+                println!("Settings live in chaos_config.toml next to this program (music_vibe = \"off\" to mute).");
+                println!();
+                println!("Guide: https://github.com/Mattbusel/chaos-rpg#readme");
                 std::process::exit(0);
+            }
+            other if other.starts_with('-') => {
+                eprintln!("{bin}: unknown option '{other}'");
+                eprintln!("Run '{bin} --help' to see what it accepts, or run it with no arguments to play.");
+                std::process::exit(2);
             }
             _ => {}
         }

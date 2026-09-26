@@ -15,7 +15,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use chaos_rpg::dungeon::{DungeonGenerator, DungeonConfig};
+//! use chaos_rpg_core::dungeon::{DungeonGenerator, DungeonConfig};
 //!
 //! let cfg = DungeonConfig::for_floor(3);
 //! let map = DungeonGenerator::new(cfg, 12345).generate();

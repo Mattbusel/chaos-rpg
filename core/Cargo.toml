@@ -5,10 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/chaos-rpg-core"
 readme = "../README.md"
-keywords = ["game", "roguelike", "rpg", "chaos", "math"]
-categories = ["games"]
-description = "Core game logic for CHAOS RPG: math engines, combat, characters, items, and world generation"
+keywords = ["roguelike", "chaos", "lorenz", "mandelbrot", "procedural"]
+categories = ["games", "game-development", "mathematics"]
+description = "Game logic for CHAOS RPG, including the chaos pipeline that chains 10 math engines (Lorenz, Mandelbrot, Riemann zeta, Collatz and more) into every dice roll"
 
 [dependencies]
 serde.workspace = true
