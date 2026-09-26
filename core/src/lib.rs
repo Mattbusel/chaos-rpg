@@ -1,10 +1,40 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut, unused_parens, named_arguments_used_positionally)]
 
-//! CHAOS RPG Core — all game logic, zero rendering.
+//! Game logic for [CHAOS RPG](https://github.com/Mattbusel/chaos-rpg): every
+//! dice roll in the game is a chain of real math engines, and this crate is
+//! where that happens.
 //!
-//! Every system lives here: math engines, combat, characters, items, spells,
-//! enemies, world generation, scoreboards, and the nemesis system.
-//! Rendering is the job of the frontend crates (terminal, graphical, web).
+//! ```
+//! use chaos_rpg_core::chaos_pipeline::chaos_roll_verbose;
+//!
+//! // Same input and seed, same chain, every time.
+//! let roll = chaos_roll_verbose(0.5, 666);
+//! for step in &roll.chain {
+//!     println!("{:<24} {:>6.3} -> {:>6.3}", step.engine_name, step.input, step.output);
+//! }
+//! assert!((-1.0..=1.0).contains(&roll.final_value));
+//! let d20 = roll.as_d20();
+//! assert!((1..=20).contains(&d20));
+//! ```
+//!
+//! Run `cargo run -p chaos-rpg-core --example roll -- 666` in the repository
+//! to print a full attack roll and destiny roll.
+//!
+//! Where to look:
+//!
+//! - [`chaos_pipeline`]: [`chaos_roll_verbose`](chaos_pipeline::chaos_roll_verbose),
+//!   [`destiny_roll`](chaos_pipeline::destiny_roll) and
+//!   [`ChaosRollResult`](chaos_pipeline::ChaosRollResult), the rolls behind everything.
+//! - [`math_engines`]: the 10 engines (Lorenz attractor, Fourier harmonic, prime
+//!   density sieve, Riemann zeta partial sum, Fibonacci golden spiral,
+//!   Mandelbrot escape, logistic map, Euler's totient, Collatz chain, modular
+//!   exponentiation hash).
+//! - [`character`], [`combat`], [`enemy`], [`world`]: the game itself.
+//!
+//! Rendering is the job of the frontend crates:
+//! [`chaos-rpg`](https://crates.io/crates/chaos-rpg) (terminal),
+//! [`chaos-rpg-graphical`](https://crates.io/crates/chaos-rpg-graphical) and
+//! [`chaos-rpg-proof`](https://crates.io/crates/chaos-rpg-proof).
 
 pub mod audio_events;
 pub mod audio_synth;

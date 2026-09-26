@@ -1,87 +1,107 @@
-# CHAOS RPG
-
-> *Where Math Goes To Die*
-
-A Rust roguelike where **every outcome** is produced by chaining real mathematical algorithms together. Character stats, enemy behavior, damage, healing, loot, skill checks, world generation - all of it flows through the same chaos pipeline. The same class can produce wildly different characters on every run. You can roll a deity or a corpse. Both are mathematically valid.
-
-It ships three frontends over one shared game core: a terminal UI (ratatui), a classic tile renderer (bracket-lib), and a new one built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a math-driven rendering engine by the same author. Seeded runs are fully reproducible, and the per-roll math trace is visible in game.
-
----
-
 <p align="center">
-  <img src="docs/screenshots/gameplay.gif" alt="CHAOS RPG gameplay" width="100%"/>
+  <img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/assets/banner.png" alt="CHAOS RPG: a roguelike where every roll is a chain of real math" width="100%"/>
 </p>
 
----
+# CHAOS RPG
 
-## Screenshots
+**A roguelike where every hit, heal and loot drop is decided by chaining real math (the Lorenz attractor, the Mandelbrot set, the Collatz sequence) instead of a random number.**
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/assets/proof-frontend.gif" alt="CHAOS RPG running: title screen, character creation, then auto-pilot clears rooms and wins a fight while the combat log shows the math chain behind each roll" width="100%"/>
+  <br/><sub>The Proof Engine frontend, recorded today from a hidden window at real speed (one cut): new run, character creation, then auto-pilot (Z) clears a shrine and two fights.</sub>
+</p>
+
+## Install
+
+| You have | Run this |
+|---|---|
+| **Windows** (PowerShell) | `irm https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/install.ps1 \| iex` |
+| **Windows** (Scoop) | `scoop bucket add mattbusel https://github.com/Mattbusel/scoop-bucket` then `scoop install mattbusel/chaos-rpg` |
+| **macOS / Linux** (Homebrew) | `brew install mattbusel/tap/chaos-rpg` |
+| **macOS / Linux** (script) | `curl -fsSL https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/install.sh \| sh` |
+| **Rust**, prebuilt | `cargo binstall chaos-rpg-graphical` (also `chaos-rpg`, `chaos-rpg-proof`) |
+| **Rust**, from source | `cargo install chaos-rpg-graphical` |
+| Nothing, just a zip | [Latest release](https://github.com/Mattbusel/chaos-rpg/releases/latest): Windows `.zip`, macOS and Linux `.tar.gz`, with `SHA256SUMS.txt` |
+| A browser account | [mattbusel.itch.io/chaos-rpg](https://mattbusel.itch.io/chaos-rpg) |
+
+Every method gives you the same three programs:
+
+| Program | What it is |
+|---|---|
+| `chaos-rpg-graphical` | The game in its own window. **Start here.** |
+| `chaos-rpg-proof` | The same game on [Proof Engine](https://github.com/Mattbusel/proof-engine) (preview, shown in the GIF above). |
+| `chaos-rpg` | The same game in your terminal. Works over SSH, no GPU. |
+
+The binaries are not code signed. If you download the zip by hand, Windows SmartScreen may say "unknown publisher": click **More info**, then **Run anyway**. On macOS, right-click the binary and choose **Open** the first time.
+
+## Play in 3 steps
+
+1. **Start it.** Run `chaos-rpg-graphical` (or double-click it). You land on the title screen.
+2. **Roll a character.** Pick **New Game**, then a mode (Story is 10 floors and a final boss), a class, a background and a boon. Your stats come from a 10-engine "destiny roll", so the same class can be a god or a corpse.
+3. **Descend.** On the floor map press **Enter** to walk into the next room, fight with **A** (attack), **H** (heavy), **D** (defend) or a spell number. Press **Z** to let auto-pilot play, and **V** in combat to watch the math behind each roll.
+
+Want the same run twice? The terminal version takes a seed:
+
+```bash
+CHAOS_SEED=666 chaos-rpg          # macOS / Linux
+$env:CHAOS_SEED=666; chaos-rpg    # Windows PowerShell
+```
+
+Each program answers `--help` and `--version`. Settings (music, difficulty tweaks, visuals) live in `chaos_config.toml` next to the program; see [Configuration](#configuration).
+
+## Results: the math is real
+
+Every combat action prints the chain of engines that produced it. This frame is from the recording above: the hero's attack went Mandelbrot `0.05 -> 1.00`, logistic map `1.00 -> 0.15`, Euler's totient `0.15 -> -0.42`, and landed on **-0.417, a miss**.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/assets/combat-trace.png" alt="Combat screen with the chaos pipeline trace in the combat log" width="85%"/>
+</p>
+
+The pipeline is a plain library, so you can run it yourself. This is the real output of `cargo run -p chaos-rpg-core --example roll -- 666` from a clone of this repository:
+
+```text
+Attack roll, seed 666
+  Logistic Map              0.500 ->  0.374
+  Euler's Totient           0.374 -> -0.126
+  Collatz Chain            -0.126 -> -0.657
+  Modular Exp Hash         -0.657 -> -0.409
+  Lorenz Attractor         -0.409 -> -0.064
+  final -0.064  d20 10  (miss)
+
+Destiny roll (all 10 engines, used for character creation), seed 666
+  Lorenz Attractor          0.500 ->  0.191
+  Fourier Harmonic          0.191 -> -0.383
+  Prime Density Sieve      -0.383 ->  0.433
+  Riemann Zeta Partial      0.433 -> -0.698
+  Fibonacci Golden Spiral  -0.698 -> -0.691
+  Mandelbrot Escape        -0.691 ->  1.000
+  Logistic Map              1.000 ->  0.303
+  Euler's Totient           0.303 -> -0.176
+  Collatz Chain            -0.176 -> -0.613
+  Modular Exp Hash         -0.613 ->  0.609
+  final 0.609  game value 80
+```
+
+Run it again with the same seed and you get exactly the same numbers. That is why seeded runs are reproducible.
+
+<details>
+<summary><b>Screenshots of the stable frontend (chaos-rpg-graphical)</b></summary>
 
 <table>
 <tr>
-<td><img src="docs/screenshots/title-void.png" width="420" alt="Title screen: VOID PROTOCOL theme"/><br/><sub>Title screen · VOID PROTOCOL theme · grouped Play / Progress / Settings menu</sub></td>
-<td><img src="docs/screenshots/title-emerald.png" width="420" alt="Title screen: EMERALD ENGINE theme"/><br/><sub>Title screen · EMERALD ENGINE theme · chaos field background</sub></td>
+<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/title-void.png" width="420" alt="Title screen: VOID PROTOCOL theme"/><br/><sub>Title screen, VOID PROTOCOL theme</sub></td>
+<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/title-emerald.png" width="420" alt="Title screen: EMERALD ENGINE theme"/><br/><sub>Title screen, EMERALD ENGINE theme, chaos field background</sub></td>
 </tr>
 <tr>
-<td><img src="docs/screenshots/character-sheet.png" width="420" alt="Character sheet: Stats tab"/><br/><sub>Character sheet · Stats tab · animated stat bars, run info, faction standings</sub></td>
-<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body condition: 13-part injury system"/><br/><sub>Body condition · 13-part system · injuries cascade into MATH.ABSENT</sub></td>
+<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/character-sheet.png" width="420" alt="Character sheet: Stats tab"/><br/><sub>Character sheet: stat bars, run info, faction standings</sub></td>
+<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/body-chart.png" width="420" alt="Body condition: 13-part injury system"/><br/><sub>Body condition: 13-part injury system</sub></td>
 </tr>
 <tr>
-<td colspan="2"><img src="docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death: dual-panel layout · damage dealt, final events, full combat log</sub></td>
+<td colspan="2"><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death: damage dealt, final events, combat log</sub></td>
 </tr>
 </table>
 
----
-
-## Download and Play
-
-**No installation required. No Rust needed. Just download and run.**
-
-### Option A: Download a release (recommended)
-
-1. Open the [latest release](https://github.com/Mattbusel/chaos-rpg/releases/latest).
-2. Download the file for your computer:
-
-| Your system | File to download |
-|-------------|------------------|
-| Windows | `chaos-rpg-vX.Y.Z-x86_64-pc-windows-msvc.zip` |
-| Mac with Apple Silicon (M1 and newer) | `chaos-rpg-vX.Y.Z-aarch64-apple-darwin.tar.gz` |
-| Mac with Intel chip | `chaos-rpg-vX.Y.Z-x86_64-apple-darwin.tar.gz` |
-| Linux (x86_64) | `chaos-rpg-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz` |
-
-3. Unzip it. Inside are all three frontends, the README, and `chaos_config.toml`.
-4. Run `chaos-rpg-graphical` (double-click `chaos-rpg-graphical.exe` on Windows).
-
-The binaries are not code signed, so your OS will warn you the first time:
-
-- **Windows:** SmartScreen may say "Windows protected your PC" or "unknown publisher". Click **More info**, then **Run anyway**.
-- **macOS:** right-click the binary and choose **Open**, then confirm. You only need to do this once.
-
-Each release also has a `SHA256SUMS.txt` if you want to check the download.
-
-### Option B: cargo install
-
-If you already have Rust:
-
-```bash
-cargo install chaos-rpg-graphical   # bracket-lib frontend (stable)
-cargo install chaos-rpg-proof       # Proof Engine frontend (preview)
-cargo install chaos-rpg             # terminal frontend
-```
-
-On Linux you need the usual windowing and audio headers first, for example on Debian/Ubuntu:
-`sudo apt install pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libxkbcommon-dev libgl1-mesa-dev libfontconfig1-dev`.
-
-### Option C: itch.io
-
-[mattbusel.itch.io/chaos-rpg](https://mattbusel.itch.io/chaos-rpg)
-
-### Which version should I run?
-
-- **chaos-rpg-graphical**: the stable bracket-lib frontend. Full visual effects, 5 themes, all features. **Play this one.**
-- **chaos-rpg-proof**: early preview of the frontend built on [Proof Engine](https://github.com/Mattbusel/proof-engine). All game mechanics work (combat, bosses, crafting, achievements), but visuals are still being refined. Includes the chaos engine visualizer (V key), auto-pilot (Z key), and an animated chaos field background. Expect rough edges.
-- **chaos-rpg** (terminal): runs in any terminal, works over SSH, no GPU required.
-
-Every frontend answers `--help` and `--version`.
+</details>
 
 ---
 
@@ -109,44 +129,45 @@ Same seed = same character stats, same enemies, same loot, every time.
 
 ## The Chaos Pipeline
 
-This is the math running under every number in the game.
+This is the math under every number in the game (`core/src/chaos_pipeline.rs`, `core/src/math_engines.rs`).
+
+There are 10 engines. Each takes a value in [-1, 1] plus a seed and returns a new value in [-1, 1]:
+
+| Engine | What it computes |
+|---|---|
+| Lorenz Attractor | steps the Lorenz system (sigma 10, rho 28, beta 8/3) |
+| Fourier Harmonic | a sum of seeded harmonics |
+| Prime Density Sieve | prime density around a seeded integer |
+| Riemann Zeta Partial | a partial sum of zeta on the critical line |
+| Fibonacci Golden Spiral | Fibonacci ratios and the golden angle |
+| Mandelbrot Escape | escape time of z -> z^2 + c |
+| Logistic Map | iterates r x (1 - x) in the chaotic regime |
+| Euler's Totient | phi(n) / n for a seeded n |
+| Collatz Chain | stopping time of the Collatz sequence |
+| Modular Exp Hash | modular exponentiation as a hash |
 
 ```
-Input seed (u64)
-  │
-  ▼ Lorenz Attractor
-  │   20 iterations of dx/dt=σ(y-x), dy/dt=x(ρ-z)-y, dz/dt=xy-βz
-  │   σ=10, ρ=28, β=8/3  → output: x-coordinate
-  │
-  ▼ Mandelbrot Escape
-  │   c = lorenz_x/30 + seed_frac·i
-  │   Run z→z²+c up to 100 iterations → normalized escape depth
-  │
-  ▼ Bifurcation / Logistic Map
-  │   r·x·(1-x) iterated from Mandelbrot output
-  │
-  ▼ Zeta Sum
-  │   Partial ζ(s) at s=2+mandelbrot_output → correction factor
-  │
-  ▼ Collatz Depth
-  │   Steps to 1 from seed-derived integer → distribution shaping
-  │
-  ▼ Fibonacci Normalizer
-  │   F(n)/F(n+1) → center around 0
-  │
-  └─ ChaosRollResult
-       .final_value   (typically -100..100, not capped)
-       .is_critical() (|value| > 85)
-       .is_catastrophe() (value < -95)
-       .engine_id     (which engine dominated)
-       .trace         (full per-stage output visible in TUI)
+input (-1..1), seed
+  |
+  v  chaos_roll_verbose: pick 4 to 8 engines from the seed,
+  |  feed each engine's output into the next one
+  v
+ChaosRollResult
+  .final_value     -1.0 .. 1.0
+  .chain           every step: engine, input, output (shown in the combat log)
+  .game_value      0 .. 100
+  .as_d20()        1 .. 20
+  .is_success()    final_value > 0.5
+  .is_critical()   final_value > 0.8
+  .is_catastrophe() final_value < -0.8
 ```
 
-Every attack, heal, flee attempt, loot roll, enemy stat, and world event uses this pipeline with different seeds and biases. The same damage formula can produce anything from 0 to several thousand depending on what the math decides to do.
+- **Destiny roll** (character creation) runs all 10 engines in a fixed order, which is why the same class can roll wildly different stats.
+- **Biased rolls** blend the chain's result toward a bias, so stats and difficulty tilt the odds without removing the chaos.
+- **Corruption:** every 50 kills is one corruption stage (up to 8). Each stage mutates the Lorenz, logistic and Mandelbrot engines, and every second stage adds one more engine to the chain. From 400 kills on, a roll has a 5% to 20% chance to backfire and flip negative.
+- **EngineLock** crafting locks an engine into an item's rolls.
 
-**Ten Engines:** The pipeline selects one of 10 mathematical engines per roll: Linear, Lorenz, Zeta, Collatz, Mandelbrot, Fibonacci, Euler, SharpEdge, Orbit, Recursive. Each has different distribution properties (SharpEdge is extreme bimodal; Fibonacci is stable and convergent; Zeta has heavy tails). **EngineLock** crafting can lock an item to always use a specific engine.
-
-**Corruption:** Each kill adds 1 corruption stack. Every 50 stacks, the pipeline's core parameters shift permanently - σ drifts, Zeta's evaluation point moves. By stack 400+, you are running a completely different mathematical system than the one you started with.
+Same input and seed always give the same chain, so seeded runs are fully reproducible.
 
 **Chaos Engine Visualizer:** Press **`[V]`** during combat to open a live overlay showing the full engine chain - engine name, raw input, output, delta, and a magnitude bar for each step in the current roll.
 
@@ -154,11 +175,14 @@ Every attack, heal, flee attempt, loot roll, enemy stat, and world event uses th
 
 ## Three Frontends, One Game
 
-All frontends share the same core library (`chaos-rpg-core`). 34,800 lines of game logic, zero duplication.
+<details>
+<summary>What each frontend has</summary>
+
+All frontends share the same core library (`chaos-rpg-core`), so the game plays the same everywhere.
 
 ### Proof Engine frontend (preview)
 
-Built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust. About 15,000 lines of frontend code across 54 files.
+Built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust.
 
 - **PBR Lighting**: per-room presets (combat red, shrine blue, boss spotlight), per-entity point lights, attack/crit/spell flash lights, status effect lights (burn flicker, freeze steady, poison pulse, stun strobe), floor-depth ambient scaling (warm → cold → void)
 - **Shader Graph**: 5 per-theme presets (VOID chromatic+vignette, BLOOD contrast+red, EMERALD CRT+green, SOLAR warm+bloom, GLACIAL desat+blue), floor-depth visual degradation (clean → grain → distortion → VHS), corruption glitch effects, 6 boss-specific shader overrides (Null progressive strip, Paradox hue inversion, Algorithm glitch storm)
@@ -191,9 +215,14 @@ Built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a mathematic
 | **SOLAR FORGE** | Amber/gold alchemical heat |
 | **GLACIAL ABYSS** | Crystalline ice blue, zero-precision cold |
 
+</details>
+
 ---
 
 ## Game Systems
+
+<details>
+<summary>Modes, classes, combat, bosses, crafting, achievements and more</summary>
 
 ### Game Modes
 
@@ -346,7 +375,7 @@ Each boss targets a specific build archetype:
 | **The Paradox** | 75+ | Inverts defense stats - high Vitality becomes a liability |
 | **The Algorithm Reborn** | 100 | The dungeon itself, fully aware - adapts to your playstyle across 3 phases |
 
-Full boss strategies: [docs/BOSSES.md](docs/BOSSES.md)
+Full boss strategies: [docs/BOSSES.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/BOSSES.md)
 
 ### Crafting
 
@@ -444,9 +473,14 @@ score = kills × floor × difficulty_multiplier × chaos_bonus × underdog_multi
 - Character graveyard with procedurally generated epitaphs
 - Hall of Misery historical records
 
+</details>
+
 ---
 
 ## Configuration
+
+<details>
+<summary>Every setting in chaos_config.toml</summary>
 
 `chaos_config.toml` is read from the same folder as the executable on startup. All fields are optional - defaults are used for anything not specified.
 
@@ -493,9 +527,14 @@ fetch_on_open = true
 player_name = ""
 ```
 
+</details>
+
 ---
 
 ## Room Types
+
+<details>
+<summary>The room icons on the floor map</summary>
 
 | Icon | Room | What Happens |
 |------|------|-------------|
@@ -509,15 +548,20 @@ player_name = ""
 | `[8]` | Chaos Rift | Pure chaos event. Anything can happen. |
 | `[c]` | Crafting | Modify items at the bench. |
 
+</details>
+
 ---
 
 ## Project Structure
+
+<details>
+<summary>Workspace layout</summary>
 
 A Cargo workspace of six crates (`core`, `audio`, `terminal`, `graphical`, `graphical-proof`, `web`). The Proof Engine frontend uses **[Proof Engine](https://github.com/Mattbusel/proof-engine)** from crates.io.
 
 ```
 chaos-rpg/
-├── core/                         # chaos-rpg-core: all game logic (34,800 lines)
+├── core/                         # chaos-rpg-core: all game logic
 │   └── src/
 │       ├── character.rs              12 classes, 8 backgrounds, stat rolling, passives
 │       ├── combat.rs                 round resolution, chaos-powered damage
@@ -528,7 +572,7 @@ chaos-rpg/
 │       ├── achievement_system.rs     175 achievements, 7 rarity tiers
 │       └── ... (77 source files)
 │
-├── graphical-proof/              # chaos-rpg-proof: PROOF ENGINE FRONTEND (15,000 lines)
+├── graphical-proof/              # chaos-rpg-proof: PROOF ENGINE FRONTEND
 │   └── src/
 │       ├── main.rs                   ProofGame impl, game loop, screen dispatch
 │       ├── state.rs                  150+ field game state
@@ -549,10 +593,10 @@ chaos-rpg/
 │       ├── screens/                  19 fully implemented screens
 │       └── ... (54 source files)
 │
-├── graphical/                    # chaos-rpg-graphical: bracket-lib frontend (11,900 lines)
-├── terminal/                     # chaos-rpg-terminal: ratatui TUI (6,000 lines)
-├── audio/                        # chaos-rpg-audio: procedural synthesis (370 lines)
-├── web/                          # web frontend: macroquad (470 lines)
+├── graphical/                    # chaos-rpg-graphical: bracket-lib frontend
+├── terminal/                     # chaos-rpg: terminal frontend
+├── audio/                        # chaos-rpg-audio: procedural synthesis
+├── web/                          # web frontend: macroquad
 │
 ├── src/                          # older single-crate version of the game (not a workspace member)
 ├── dist/                         # older release builds (now only in git history; see Releases)
@@ -560,6 +604,8 @@ chaos-rpg/
 ├── server/                       # Cloudflare Worker leaderboard
 └── docs/                         # Guides, mechanics, boss docs
 ```
+
+</details>
 
 ---
 
@@ -573,7 +619,7 @@ The chaos pipeline parameters (Lorenz σ/ρ/β, Mandelbrot max_iter, bifurcation
 
 ## Further Reading
 
-- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) - first run walkthrough, stat explanations, survival tips
-- [docs/MECHANICS.md](docs/MECHANICS.md) - full mathematical breakdown of every system
-- [docs/BOSSES.md](docs/BOSSES.md) - all 12 bosses, their mechanics, and how to beat them
-- [docs/LORE.md](docs/LORE.md) - the full lore of The Proof: epochs, factions, engines, bosses, bestiary, items, Fragments
+- [docs/GETTING_STARTED.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/GETTING_STARTED.md) - first run walkthrough, stat explanations, survival tips
+- [docs/MECHANICS.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/MECHANICS.md) - full mathematical breakdown of every system
+- [docs/BOSSES.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/BOSSES.md) - all 12 bosses, their mechanics, and how to beat them
+- [docs/LORE.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/LORE.md) - the full lore of The Proof: epochs, factions, engines, bosses, bestiary, items, Fragments

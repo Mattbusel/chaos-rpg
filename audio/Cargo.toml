@@ -3,15 +3,16 @@ name = "chaos-rpg-audio"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Procedural audio synthesis for CHAOS RPG"
+description = "Procedural audio for CHAOS RPG: every sound effect and music loop is synthesized at runtime, with no audio files"
 repository.workspace = true
 homepage.workspace = true
+documentation = "https://docs.rs/chaos-rpg-audio"
 readme = "../README.md"
-keywords = ["game", "roguelike", "rpg", "chaos", "math"]
-categories = ["games"]
+keywords = ["roguelike", "synthesis", "procedural", "audio", "game"]
+categories = ["games", "multimedia::audio"]
 
 [dependencies]
-chaos-rpg-core = { path = "../core", version = "2.2.0" }
+chaos-rpg-core = { path = "../core", version = "2.2.1" }
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
 
 [features]

@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "chaos-rpg-audio",
  "chaos-rpg-core",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-audio"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "chaos-rpg-core",
  "rodio",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-core"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "rand",
  "serde",
@@ -563,7 +563,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-graphical"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "bracket-lib",
  "chaos-rpg-audio",
@@ -575,7 +575,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-proof"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "chaos-rpg-core",
  "glam 0.25.0",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "chaos-rpg-web"
-version = "2.2.0"
+version = "2.2.1"
 dependencies = [
  "chaos-rpg-core",
  "macroquad",

@@ -10,7 +10,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "2.2.0"
+version = "2.2.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/Mattbusel/chaos-rpg"
@@ -25,8 +25,8 @@ crossterm = "0.27"
 ratatui = "0.28"
 bracket-lib = "0.8"
 macroquad = "0.4"
-chaos-rpg-core = { path = "core", version = "2.2.0" }
-chaos-rpg-audio = { path = "audio", version = "2.2.0" }
+chaos-rpg-core = { path = "core", version = "2.2.1" }
+chaos-rpg-audio = { path = "audio", version = "2.2.1" }
 rodio = { version = "0.17", default-features = false, features = ["wav"] }
 toml = "0.8"
 ureq = { version = "2", features = ["json"] }
