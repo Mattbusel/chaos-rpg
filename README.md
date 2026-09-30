@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/assets/banner.png" alt="CHAOS RPG: a roguelike where every roll is a chain of real math" width="100%"/>
+  <img src="assets/banner.png" alt="CHAOS RPG: a roguelike where every roll is a chain of real math" width="100%"/>
 </p>
 
 # CHAOS RPG
@@ -7,7 +7,7 @@
 **A roguelike where every hit, heal and loot drop is decided by chaining real math (the Lorenz attractor, the Mandelbrot set, the Collatz sequence) instead of a random number.**
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/assets/proof-frontend.gif" alt="CHAOS RPG running: title screen, character creation, then auto-pilot clears rooms and wins a fight while the combat log shows the math chain behind each roll" width="100%"/>
+  <img src="assets/proof-frontend.gif" alt="CHAOS RPG running: title screen, character creation, then auto-pilot clears rooms and wins a fight while the combat log shows the math chain behind each roll" width="100%"/>
   <br/><sub>The Proof Engine frontend, recorded today from a hidden window at real speed (one cut): new run, character creation, then auto-pilot (Z) clears a shrine and two fights.</sub>
 </p>
 
@@ -15,10 +15,10 @@
 
 | You have | Run this |
 |---|---|
-| **Windows** (PowerShell) | `irm https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/install.ps1 \| iex` |
+| **Windows** (PowerShell) | `irm https://gitlab.com/mattbusel/chaos-rpg/-/raw/master/install.ps1 \| iex` |
 | **Windows** (Scoop) | `scoop bucket add mattbusel https://github.com/Mattbusel/scoop-bucket` then `scoop install mattbusel/chaos-rpg` |
 | **macOS / Linux** (Homebrew) | `brew install mattbusel/tap/chaos-rpg` |
-| **macOS / Linux** (script) | `curl -fsSL https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/install.sh \| sh` |
+| **macOS / Linux** (script) | `curl -fsSL https://gitlab.com/mattbusel/chaos-rpg/-/raw/master/install.sh \| sh` |
 | **Rust**, prebuilt | `cargo binstall chaos-rpg-graphical` (also `chaos-rpg`, `chaos-rpg-proof`) |
 | **Rust**, from source | `cargo install chaos-rpg-graphical` |
 | Nothing, just a zip | [Latest release](https://github.com/Mattbusel/chaos-rpg/releases/latest): Windows `.zip`, macOS and Linux `.tar.gz`, with `SHA256SUMS.txt` |
@@ -54,7 +54,7 @@ Each program answers `--help` and `--version`. Settings (music, difficulty tweak
 Every combat action prints the chain of engines that produced it. This frame is from the recording above: the hero's attack went Mandelbrot `0.05 -> 1.00`, logistic map `1.00 -> 0.15`, Euler's totient `0.15 -> -0.42`, and landed on **-0.417, a miss**.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/assets/combat-trace.png" alt="Combat screen with the chaos pipeline trace in the combat log" width="85%"/>
+  <img src="assets/combat-trace.png" alt="Combat screen with the chaos pipeline trace in the combat log" width="85%"/>
 </p>
 
 The pipeline is a plain library, so you can run it yourself. This is the real output of `cargo run -p chaos-rpg-core --example roll -- 666` from a clone of this repository:
@@ -89,15 +89,15 @@ Run it again with the same seed and you get exactly the same numbers. That is wh
 
 <table>
 <tr>
-<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/title-void.png" width="420" alt="Title screen: VOID PROTOCOL theme"/><br/><sub>Title screen, VOID PROTOCOL theme</sub></td>
-<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/title-emerald.png" width="420" alt="Title screen: EMERALD ENGINE theme"/><br/><sub>Title screen, EMERALD ENGINE theme, chaos field background</sub></td>
+<td><img src="docs/screenshots/title-void.png" width="420" alt="Title screen: VOID PROTOCOL theme"/><br/><sub>Title screen, VOID PROTOCOL theme</sub></td>
+<td><img src="docs/screenshots/title-emerald.png" width="420" alt="Title screen: EMERALD ENGINE theme"/><br/><sub>Title screen, EMERALD ENGINE theme, chaos field background</sub></td>
 </tr>
 <tr>
-<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/character-sheet.png" width="420" alt="Character sheet: Stats tab"/><br/><sub>Character sheet: stat bars, run info, faction standings</sub></td>
-<td><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/body-chart.png" width="420" alt="Body condition: 13-part injury system"/><br/><sub>Body condition: 13-part injury system</sub></td>
+<td><img src="docs/screenshots/character-sheet.png" width="420" alt="Character sheet: Stats tab"/><br/><sub>Character sheet: stat bars, run info, faction standings</sub></td>
+<td><img src="docs/screenshots/body-chart.png" width="420" alt="Body condition: 13-part injury system"/><br/><sub>Body condition: 13-part injury system</sub></td>
 </tr>
 <tr>
-<td colspan="2"><img src="https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death: damage dealt, final events, combat log</sub></td>
+<td colspan="2"><img src="docs/screenshots/game-over.png" width="860" alt="Run summary on death"/><br/><sub>Full run summary on death: damage dealt, final events, combat log</sub></td>
 </tr>
 </table>
 
