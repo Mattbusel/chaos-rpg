@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install CHAOS RPG on Linux or macOS from the latest GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Mattbusel/chaos-rpg/master/install.sh | sh
+#   curl -fsSL https://gitlab.com/mattbusel/chaos-rpg/-/raw/master/install.sh | sh
 #
 # Installs chaos-rpg, chaos-rpg-graphical and chaos-rpg-proof into ~/.local/bin
 # (override with CHAOS_RPG_INSTALL_DIR) after checking the SHA-256 of the download.

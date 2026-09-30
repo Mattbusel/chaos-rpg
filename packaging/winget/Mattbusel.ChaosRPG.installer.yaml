@@ -13,7 +13,7 @@ NestedInstallerFiles:
 ReleaseDate: 2026-09-26
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/Mattbusel/chaos-rpg/releases/download/v2.2.1/chaos-rpg-v2.2.1-x86_64-pc-windows-msvc.zip
+    InstallerUrl: https://gitlab.com/mattbusel/chaos-rpg/-/releases
     InstallerSha256: 50B83F124D2BBE173DBBA231A17A4BEBC346CBEAA4AB11765512B4B6700DC957
 ManifestType: installer
 ManifestVersion: 1.6.0

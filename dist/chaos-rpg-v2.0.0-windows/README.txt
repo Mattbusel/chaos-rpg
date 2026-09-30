@@ -76,5 +76,5 @@ CREDITS
 -------
 
   Game: Matthew Busel
-  Engine: Proof Engine (https://github.com/Mattbusel/proof-engine)
-  Source: https://github.com/Mattbusel/chaos-rpg
+  Engine: Proof Engine (https://gitlab.com/mattbusel/proof-engine)
+  Source: https://gitlab.com/mattbusel/chaos-rpg

@@ -16,12 +16,12 @@
 | You have | Run this |
 |---|---|
 | **Windows** (PowerShell) | `irm https://gitlab.com/mattbusel/chaos-rpg/-/raw/master/install.ps1 \| iex` |
-| **Windows** (Scoop) | `scoop bucket add mattbusel https://github.com/Mattbusel/scoop-bucket` then `scoop install mattbusel/chaos-rpg` |
+| **Windows** (Scoop) | `scoop bucket add mattbusel https://gitlab.com/mattbusel/scoop-bucket` then `scoop install mattbusel/chaos-rpg` |
 | **macOS / Linux** (Homebrew) | `brew install mattbusel/tap/chaos-rpg` |
 | **macOS / Linux** (script) | `curl -fsSL https://gitlab.com/mattbusel/chaos-rpg/-/raw/master/install.sh \| sh` |
 | **Rust**, prebuilt | `cargo binstall chaos-rpg-graphical` (also `chaos-rpg`, `chaos-rpg-proof`) |
 | **Rust**, from source | `cargo install chaos-rpg-graphical` |
-| Nothing, just a zip | [Latest release](https://github.com/Mattbusel/chaos-rpg/releases/latest): Windows `.zip`, macOS and Linux `.tar.gz`, with `SHA256SUMS.txt` |
+| Nothing, just a zip | [Latest release](https://gitlab.com/mattbusel/chaos-rpg/-/releases): Windows `.zip`, macOS and Linux `.tar.gz`, with `SHA256SUMS.txt` |
 | A browser account | [mattbusel.itch.io/chaos-rpg](https://mattbusel.itch.io/chaos-rpg) |
 
 Every method gives you the same three programs:
@@ -29,7 +29,7 @@ Every method gives you the same three programs:
 | Program | What it is |
 |---|---|
 | `chaos-rpg-graphical` | The game in its own window. **Start here.** |
-| `chaos-rpg-proof` | The same game on [Proof Engine](https://github.com/Mattbusel/proof-engine) (preview, shown in the GIF above). |
+| `chaos-rpg-proof` | The same game on [Proof Engine](https://gitlab.com/mattbusel/proof-engine) (preview, shown in the GIF above). |
 | `chaos-rpg` | The same game in your terminal. Works over SSH, no GPU. |
 
 The binaries are not code signed. If you download the zip by hand, Windows SmartScreen may say "unknown publisher": click **More info**, then **Run anyway**. On macOS, right-click the binary and choose **Open** the first time.
@@ -110,7 +110,7 @@ Run it again with the same seed and you get exactly the same numbers. That is wh
 Requires Rust 1.75+ from [rustup.rs](https://rustup.rs). Proof Engine comes from crates.io, so one clone is enough:
 
 ```bash
-git clone https://github.com/Mattbusel/chaos-rpg
+git clone https://gitlab.com/mattbusel/chaos-rpg
 cd chaos-rpg
 
 cargo run --release -p chaos-rpg-graphical  # bracket-lib frontend (stable)
@@ -182,7 +182,7 @@ All frontends share the same core library (`chaos-rpg-core`), so the game plays 
 
 ### Proof Engine frontend (preview)
 
-Built on [Proof Engine](https://github.com/Mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust.
+Built on [Proof Engine](https://gitlab.com/mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust.
 
 - **PBR Lighting**: per-room presets (combat red, shrine blue, boss spotlight), per-entity point lights, attack/crit/spell flash lights, status effect lights (burn flicker, freeze steady, poison pulse, stun strobe), floor-depth ambient scaling (warm → cold → void)
 - **Shader Graph**: 5 per-theme presets (VOID chromatic+vignette, BLOOD contrast+red, EMERALD CRT+green, SOLAR warm+bloom, GLACIAL desat+blue), floor-depth visual degradation (clean → grain → distortion → VHS), corruption glitch effects, 6 boss-specific shader overrides (Null progressive strip, Paradox hue inversion, Algorithm glitch storm)
@@ -375,7 +375,7 @@ Each boss targets a specific build archetype:
 | **The Paradox** | 75+ | Inverts defense stats - high Vitality becomes a liability |
 | **The Algorithm Reborn** | 100 | The dungeon itself, fully aware - adapts to your playstyle across 3 phases |
 
-Full boss strategies: [docs/BOSSES.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/BOSSES.md)
+Full boss strategies: [docs/BOSSES.md](https://gitlab.com/mattbusel/chaos-rpg/-/blob/master/docs/BOSSES.md)
 
 ### Crafting
 
@@ -557,7 +557,7 @@ player_name = ""
 <details>
 <summary>Workspace layout</summary>
 
-A Cargo workspace of six crates (`core`, `audio`, `terminal`, `graphical`, `graphical-proof`, `web`). The Proof Engine frontend uses **[Proof Engine](https://github.com/Mattbusel/proof-engine)** from crates.io.
+A Cargo workspace of six crates (`core`, `audio`, `terminal`, `graphical`, `graphical-proof`, `web`). The Proof Engine frontend uses **[Proof Engine](https://gitlab.com/mattbusel/proof-engine)** from crates.io.
 
 ```
 chaos-rpg/
@@ -619,7 +619,7 @@ The chaos pipeline parameters (Lorenz σ/ρ/β, Mandelbrot max_iter, bifurcation
 
 ## Further Reading
 
-- [docs/GETTING_STARTED.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/GETTING_STARTED.md) - first run walkthrough, stat explanations, survival tips
-- [docs/MECHANICS.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/MECHANICS.md) - full mathematical breakdown of every system
-- [docs/BOSSES.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/BOSSES.md) - all 12 bosses, their mechanics, and how to beat them
-- [docs/LORE.md](https://github.com/Mattbusel/chaos-rpg/blob/master/docs/LORE.md) - the full lore of The Proof: epochs, factions, engines, bosses, bestiary, items, Fragments
+- [docs/GETTING_STARTED.md](https://gitlab.com/mattbusel/chaos-rpg/-/blob/master/docs/GETTING_STARTED.md) - first run walkthrough, stat explanations, survival tips
+- [docs/MECHANICS.md](https://gitlab.com/mattbusel/chaos-rpg/-/blob/master/docs/MECHANICS.md) - full mathematical breakdown of every system
+- [docs/BOSSES.md](https://gitlab.com/mattbusel/chaos-rpg/-/blob/master/docs/BOSSES.md) - all 12 bosses, their mechanics, and how to beat them
+- [docs/LORE.md](https://gitlab.com/mattbusel/chaos-rpg/-/blob/master/docs/LORE.md) - the full lore of The Proof: epochs, factions, engines, bosses, bestiary, items, Fragments

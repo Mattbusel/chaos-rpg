@@ -10,7 +10,7 @@ This guide walks you through your first run. No prior roguelike experience requi
 
 ### Pre-built Binaries (Recommended)
 
-Download from the [GitHub Releases page](https://github.com/Mattbusel/chaos-rpg/releases). Two frontends are available:
+Download from the [GitHub Releases page](https://gitlab.com/mattbusel/chaos-rpg/-/releases). Two frontends are available:
 
 | Binary | Platform | Description |
 |--------|----------|-------------|
@@ -32,7 +32,7 @@ Download from the [GitHub Releases page](https://github.com/Mattbusel/chaos-rpg/
 Requires Rust 1.75+ from [rustup.rs](https://rustup.rs).
 
 ```bash
-git clone https://github.com/Mattbusel/chaos-rpg
+git clone https://gitlab.com/mattbusel/chaos-rpg
 cd chaos-rpg
 cargo run --release -p chaos-rpg           # terminal frontend
 cargo run --release -p chaos-rpg-graphical # graphical frontend

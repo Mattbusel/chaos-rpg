@@ -3,12 +3,12 @@ PackageIdentifier: Mattbusel.ChaosRPG
 PackageVersion: 2.2.1
 PackageLocale: en-US
 Publisher: Matt Busel
-PublisherUrl: https://github.com/Mattbusel
-PublisherSupportUrl: https://github.com/Mattbusel/chaos-rpg/issues
+PublisherUrl: https://gitlab.com/mattbusel
+PublisherSupportUrl: https://gitlab.com/mattbusel/chaos-rpg/-/issues
 PackageName: CHAOS RPG
-PackageUrl: https://github.com/Mattbusel/chaos-rpg
+PackageUrl: https://gitlab.com/mattbusel/chaos-rpg
 License: MIT
-LicenseUrl: https://github.com/Mattbusel/chaos-rpg/blob/master/LICENSE
+LicenseUrl: https://gitlab.com/mattbusel/chaos-rpg/-/blob/master/LICENSE
 ShortDescription: A roguelike where every roll is a chain of real math (Lorenz, Mandelbrot, Collatz).
 Description: |-
   CHAOS RPG is a roguelike where every hit, heal and loot drop is decided by chaining real
@@ -22,6 +22,6 @@ Tags:
   - rpg
   - terminal
   - math
-ReleaseNotesUrl: https://github.com/Mattbusel/chaos-rpg/releases/tag/v2.2.1
+ReleaseNotesUrl: https://gitlab.com/mattbusel/chaos-rpg/-/releases
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

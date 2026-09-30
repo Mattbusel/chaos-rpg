@@ -336,7 +336,7 @@ fn handle_cli_flags(bin: &str, what: &str) {
                 println!();
                 println!("Settings live in chaos_config.toml next to this program.");
                 println!();
-                println!("Guide: https://github.com/Mattbusel/chaos-rpg#readme");
+                println!("Guide: https://gitlab.com/mattbusel/chaos-rpg#readme");
                 std::process::exit(0);
             }
             other if other.starts_with('-') => {

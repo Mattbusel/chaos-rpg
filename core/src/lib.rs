@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut, unused_parens, named_arguments_used_positionally)]
 
-//! Game logic for [CHAOS RPG](https://github.com/Mattbusel/chaos-rpg): every
+//! Game logic for [CHAOS RPG](https://gitlab.com/mattbusel/chaos-rpg): every
 //! dice roll in the game is a chain of real math engines, and this crate is
 //! where that happens.
 //!
