@@ -99,8 +99,8 @@ impl EnemyAi {
 
     /// Manhattan distance between two grid positions.
     pub fn manhattan_distance(a: (u32, u32), b: (u32, u32)) -> u32 {
-        let dx = if a.0 > b.0 { a.0 - b.0 } else { b.0 - a.0 };
-        let dy = if a.1 > b.1 { a.1 - b.1 } else { b.1 - a.1 };
+        let dx = a.0.abs_diff(b.0);
+        let dy = a.1.abs_diff(b.1);
         dx + dy
     }
 
@@ -167,12 +167,10 @@ impl EnemyAi {
                     if let Some(pos) = player_pos {
                         // Seen player — immediately chase.
                         (AiState::Chasing { target: pos }, AiDecision::MoveToward(pos))
+                    } else if self.alerted_turns >= 2 {
+                        (AiState::Chasing { target: source }, AiDecision::MoveToward(source))
                     } else {
-                        if self.alerted_turns >= 2 {
-                            (AiState::Chasing { target: source }, AiDecision::MoveToward(source))
-                        } else {
-                            (AiState::Alerted { source }, AiDecision::MoveToward(source))
-                        }
+                        (AiState::Alerted { source }, AiDecision::MoveToward(source))
                     }
                 } else if self.alerted_turns >= 2 {
                     (AiState::Chasing { target: source }, AiDecision::MoveToward(source))

@@ -169,7 +169,7 @@ impl AchievementBanner {
         }
     }
 
-    fn emit_unlock_particles(&mut self, frame: u64) {
+    fn emit_unlock_particles(&mut self, _frame: u64) {
         use std::f32::consts::TAU;
         let count = self.rarity.particle_count();
         let col = self.rarity.primary_color();
@@ -227,7 +227,7 @@ impl AchievementBanner {
 
         // Banner box size
         let shown: String = self.text.chars().take(self.typewriter_len).collect();
-        let box_w = (shown.len() as i32 + 6).max(26).min(80);
+        let box_w = (shown.len() as i32 + 6).clamp(26, 80);
         let bx = ((160 - box_w) / 2).max(0);
         let by = 1i32;
         let box_h = 4i32;
@@ -277,7 +277,7 @@ impl AchievementBanner {
         }
 
         // Border pulse for Epic+: flash the box corners
-        if self.rarity.pulse_border() && (frame / 4) % 2 == 0 {
+        if self.rarity.pulse_border() && (frame / 4).is_multiple_of(2) {
             let pv = (alpha * 255.0) as u8;
             let pulse_col = RGB::from_u8(pv, (pv as f32 * col.1 as f32 / 255.0) as u8, 0);
             ctx.set(bx, by, pulse_col, bg_rgb, 218u16);           // ╔

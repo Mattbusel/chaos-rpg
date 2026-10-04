@@ -66,12 +66,12 @@ pub fn draw_shake_text(
 ) {
     for (i, ch) in text.chars().enumerate() {
         let seed = (i as u64).wrapping_mul(1231) + frame.wrapping_mul(7);
-        let ox = if amplitude > 0.5 && seed % 4 == 0 { (seed % 3) as i32 - 1 } else { 0 };
+        let ox = if amplitude > 0.5 && seed.is_multiple_of(4) { (seed % 3) as i32 - 1 } else { 0 };
         let oy = if amplitude > 0.5 && seed % 5 == 1 { (seed % 3) as i32 - 1 } else { 0 };
         let cx = x + i as i32 + ox;
         let cy = y + oy;
-        if cx >= 0 && cx < 160 && cy >= 0 && cy < 80 {
-            ctx.print_color(cx, cy, fg, bg, &ch.to_string());
+        if (0..160).contains(&cx) && (0..80).contains(&cy) {
+            ctx.print_color(cx, cy, fg, bg, ch.to_string());
         }
     }
 }
@@ -90,8 +90,8 @@ pub fn draw_wave_text(
         let wave = (phase + i as f32 * 0.4).sin() * amplitude;
         let cy = y + wave.round() as i32;
         let cx = x + i as i32;
-        if cx >= 0 && cx < 160 && cy >= 0 && cy < 80 {
-            ctx.print_color(cx, cy, fg, bg, &ch.to_string());
+        if (0..160).contains(&cx) && (0..80).contains(&cy) {
+            ctx.print_color(cx, cy, fg, bg, ch.to_string());
         }
     }
 }
@@ -130,8 +130,8 @@ pub fn scramble_reveal(text: &str, frame: u64, progress: f32) -> String {
 /// Returns a y-offset for "drip" effect: characters slowly fall downward.
 /// `phase` is per-character phase; offset increases with time.
 pub fn drip_offset(char_idx: usize, frame: u64) -> i32 {
-    let drift = ((frame / 4 + char_idx as u64 * 7) % 6) as i32;
-    drift
+    
+    ((frame / 4 + char_idx as u64 * 7) % 6) as i32
 }
 
 // ── Rainbow text ──────────────────────────────────────────────────────────────
@@ -144,6 +144,6 @@ pub fn draw_rainbow(ctx: &mut BTerm, x: i32, y: i32, text: &str, bg: RGB, frame:
         let r = ((hue.cos() + 1.0) * 0.5 * 220.0 + 35.0) as u8;
         let g = (((hue + 2.09).cos() + 1.0) * 0.5 * 220.0 + 35.0) as u8;
         let b = (((hue + 4.19).cos() + 1.0) * 0.5 * 220.0 + 35.0) as u8;
-        ctx.print_color(x + i as i32, y, RGB::from_u8(r, g, b), bg, &ch.to_string());
+        ctx.print_color(x + i as i32, y, RGB::from_u8(r, g, b), bg, ch.to_string());
     }
 }

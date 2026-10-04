@@ -27,10 +27,14 @@ fn default_one() -> f64 { 1.0 }
 fn default_true() -> bool { true }
 fn default_max_particles() -> u32 { 2000 }
 fn default_field_density() -> f64 { 1.0 }
-fn default_url() -> String { "https://chaos-rpg-leaderboard.mfletcherdev.workers.dev".to_string() }
+/// No default server: the one this used to point at no longer resolves, so
+/// every daily run tried a dead host. Deploy `server/worker.js` (Cloudflare
+/// Workers, free tier) and put its URL in `[leaderboard] url`.
+fn default_url() -> String { String::new() }
 fn default_music_vibe() -> String { "chill".to_string() }
 fn default_volume() -> f64 { 1.0 }
 
+/// The `[audio]` section of `chaos_config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
     /// Music vibe preset: "chill" (default), "classic", "minimal", "off"
@@ -50,12 +54,16 @@ impl Default for AudioConfig {
     }
 }
 
+/// The `[display]` section of `chaos_config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisplayConfig {
+    /// Multiplier on particle drift speed (1.0 is normal).
     #[serde(default = "default_one")]
     pub particle_speed_mult: f64,
+    /// Frames a killed enemy stays on screen; 0 uses the engine default.
     #[serde(default)]
     pub kill_linger_frames: u32,   // 0 = use engine default
+    /// Halve visual timings (same as the FAST_MODE=1 environment variable).
     #[serde(default)]
     pub fast_mode: bool,
 }
@@ -66,22 +74,31 @@ impl Default for DisplayConfig {
     }
 }
 
+/// The `[gameplay]` section of `chaos_config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameplayConfig {
+    /// Extra gold at the start of a run.
     #[serde(default)]
     pub starting_gold_bonus: i64,
+    /// Multiplier on enemy HP and damage (1.0 is normal).
     #[serde(default = "default_one")]
     pub difficulty_modifier: f64,
+    /// Fixed seed for Infinite mode; 0 picks a random seed.
     #[serde(default)]
     pub infinite_seed_override: u64,  // 0 = random
+    /// Turn off The Hunger.
     #[serde(default)]
     pub disable_hunger: bool,
+    /// Turn off the nemesis system.
     #[serde(default)]
     pub disable_nemesis: bool,
+    /// Turn off corruption.
     #[serde(default)]
     pub disable_corruption: bool,
+    /// Extra inventory slots (0 to 20).
     #[serde(default)]
     pub extra_inventory_slots: u32,
+    /// Bonus XP as a fraction (0.0 is none, 1.0 doubles XP).
     #[serde(default)]
     pub xp_multiplier: f64,
 }
@@ -101,12 +118,16 @@ impl Default for GameplayConfig {
     }
 }
 
+/// The `[leaderboard]` section of `chaos_config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaderboardConfig {
+    /// Daily leaderboard server URL; empty keeps scores local only.
     #[serde(default = "default_url")]
     pub url: String,
+    /// Submit your Daily Seed score automatically after each daily run.
     #[serde(default = "default_true")]
     pub submit_daily: bool,
+    /// Fetch the leaderboard when its screen opens.
     #[serde(default = "default_true")]
     pub fetch_on_open: bool,
 }
@@ -117,20 +138,20 @@ impl Default for LeaderboardConfig {
     }
 }
 
+/// The `[meta]` section of `chaos_config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct MetaConfig {
+    /// Name used on leaderboard submissions instead of the character name; empty uses the character name.
     #[serde(default)]
     pub player_name: String,
+    /// Label for custom seeds (read from the file but not used by the game yet).
     #[serde(default)]
     pub custom_seed_label: String,
 }
 
-impl Default for MetaConfig {
-    fn default() -> Self {
-        Self { player_name: String::new(), custom_seed_label: String::new() }
-    }
-}
 
+/// The `[visuals]` section of `chaos_config.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VisualsConfig {
     /// Enable the chaos field animated background.
@@ -186,18 +207,25 @@ impl Default for VisualsConfig {
     }
 }
 
+/// All settings from `chaos_config.toml`, with defaults for anything missing.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChaosConfig {
+    /// Music and sound settings.
     #[serde(default)]
     pub audio: AudioConfig,
+    /// Animation and display settings.
     #[serde(default)]
     pub display: DisplayConfig,
+    /// Rule tweaks and toggles.
     #[serde(default)]
     pub gameplay: GameplayConfig,
+    /// Daily leaderboard settings.
     #[serde(default)]
     pub leaderboard: LeaderboardConfig,
+    /// Player name and labels.
     #[serde(default)]
     pub meta: MetaConfig,
+    /// Visual effect toggles.
     #[serde(default)]
     pub visuals: VisualsConfig,
     /// True if a config file was actually found and loaded.
@@ -263,8 +291,9 @@ extra_inventory_slots = 0
 xp_multiplier = 0.0
 
 [leaderboard]
-# Daily seed leaderboard endpoint
-url = "https://chaos-rpg-leaderboard.mfletcherdev.workers.dev"
+# Daily seed leaderboard endpoint. Empty = local scores only. To share
+# scores, deploy server/worker.js (Cloudflare Workers) and put its URL here.
+url = ""
 # Auto-submit your daily seed score after each run
 submit_daily = true
 # Fetch leaderboard on open
@@ -297,9 +326,6 @@ reduce_flashing = false
     }
 
     fn path() -> std::path::PathBuf {
-        let mut p = std::env::current_exe().unwrap_or_default();
-        p.pop();
-        p.push("chaos_config.toml");
-        p
+        crate::paths::data_file("chaos_config.toml")
     }
 }

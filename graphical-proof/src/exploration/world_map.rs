@@ -120,6 +120,12 @@ pub struct WorldMap {
     pub descent_to: u32,
 }
 
+impl Default for WorldMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorldMap {
     pub fn new() -> Self {
         Self {

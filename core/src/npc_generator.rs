@@ -5,17 +5,26 @@ use serde::{Deserialize, Serialize};
 // ─── RACE ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Ancestry of a generated NPC.
 pub enum Race {
+    /// Human.
     Human,
+    /// Elf.
     Elf,
+    /// Dwarf.
     Dwarf,
+    /// Halfling.
     Halfling,
+    /// Gnome.
     Gnome,
+    /// Half-orc.
     HalfOrc,
+    /// Dragonborn.
     Dragonborn,
 }
 
 impl Race {
+    /// Typical lifespan in years, used to cap generated ages.
     pub fn lifespan(&self) -> u32 {
         match self {
             Race::Human => 80,
@@ -28,6 +37,7 @@ impl Race {
         }
     }
 
+    /// Personality traits typical of the race, used when generating NPCs.
     pub fn typical_traits(&self) -> Vec<&str> {
         match self {
             Race::Human => vec!["Ambitious", "Adaptable", "Diverse", "Short-lived"],
@@ -56,18 +66,28 @@ impl Race {
 // ─── PROFESSION ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// What a generated NPC does for a living.
 pub enum Profession {
+    /// Sells goods.
     Merchant,
+    /// Keeps watch.
     Guard,
+    /// Works the land.
     Farmer,
+    /// Studies and teaches.
     Scholar,
+    /// Runs an inn.
     Innkeeper,
+    /// Forges and repairs gear.
     Blacksmith,
+    /// Steals.
     Thief,
+    /// Tends the sick and wounded.
     Healer,
 }
 
 impl Profession {
+    /// Skills typical of the profession.
     pub fn typical_skills(&self) -> Vec<&str> {
         match self {
             Profession::Merchant => vec!["Persuasion", "Insight", "Investigation", "Deception"],
@@ -98,25 +118,40 @@ impl Profession {
 // ─── PERSONALITY ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// An NPC's personality, in the style of tabletop character sheets.
 pub struct Personality {
+    /// First personality trait.
     pub trait_1: String,
+    /// Second personality trait.
     pub trait_2: String,
+    /// What the NPC believes in.
     pub ideal: String,
+    /// Who or what the NPC is attached to.
     pub bond: String,
+    /// The NPC's weakness.
     pub flaw: String,
 }
 
 // ─── NPC ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A generated non-player character.
 pub struct NPC {
+    /// Unique id, derived from the seed ("npc_" plus hex).
     pub id: String,
+    /// Full name.
     pub name: String,
+    /// Ancestry.
     pub race: Race,
+    /// Job.
     pub profession: Profession,
+    /// Age in years, from 18 up to the race's lifespan.
     pub age: u32,
+    /// Personality traits, ideal, bond and flaw.
     pub personality: Personality,
+    /// How the NPC regards the player, -100 to 100.
     pub reputation: i8,
+    /// Gold carried, 0 to 9,999.
     pub gold: u64,
 }
 
@@ -211,9 +246,11 @@ const FLAWS: &[&str] = &[
 
 // ─── NPC GENERATOR ───────────────────────────────────────────────────────────
 
+/// Builds random NPCs from a seed.
 pub struct NpcGenerator;
 
 impl NpcGenerator {
+    /// A complete NPC generated from `seed`; the same seed gives the same NPC.
     pub fn generate(seed: u64) -> NPC {
         let mut s = lcg(seed);
 
@@ -265,6 +302,7 @@ impl NpcGenerator {
         }
     }
 
+    /// A name suited to `race`, picked by `seed`.
     pub fn generate_name(race: &Race, seed: u64) -> String {
         let (prefixes, suffixes) = match race {
             Race::Human => (HUMAN_PREFIXES, HUMAN_SUFFIXES),
@@ -282,6 +320,7 @@ impl NpcGenerator {
         format!("{}{}", prefixes[pi], suffixes[si])
     }
 
+    /// A random personality picked by `seed`.
     pub fn generate_personality(seed: u64) -> Personality {
         let s1 = lcg(seed);
         let t1i = ((s1 >> 33) as usize) % TRAITS.len();
@@ -303,6 +342,7 @@ impl NpcGenerator {
         }
     }
 
+    /// `count` NPCs, each from the next seed in a sequence that starts at `seed`.
     pub fn generate_batch(count: usize, seed: u64) -> Vec<NPC> {
         let mut results = Vec::with_capacity(count);
         let mut s = seed;

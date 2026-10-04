@@ -9,15 +9,22 @@ use serde::{Deserialize, Serialize};
 // ─── TIERS ───────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// How dangerous an enemy is; scales its HP, XP and gold.
 pub enum EnemyTier {
+    /// Weakest: 0.5x HP, 1x XP, 0.5x gold.
     Minion,
+    /// 1x HP, 3x XP, 1.2x gold.
     Elite,
+    /// 2x HP, 8x XP, 3x gold.
     Champion,
+    /// 4.5x HP, 25x XP, 8x gold.
     Boss,
+    /// Strongest: 12x HP, 100x XP, 30x gold.
     Abomination,
 }
 
 impl EnemyTier {
+    /// Display name of the tier.
     pub fn name(&self) -> &'static str {
         match self {
             EnemyTier::Minion => "Minion",
@@ -28,6 +35,7 @@ impl EnemyTier {
         }
     }
 
+    /// HP multiplier for the tier.
     pub fn hp_multiplier(&self) -> f64 {
         match self {
             EnemyTier::Minion => 0.5,
@@ -38,6 +46,7 @@ impl EnemyTier {
         }
     }
 
+    /// XP multiplier for the tier.
     pub fn xp_multiplier(&self) -> u64 {
         match self {
             EnemyTier::Minion => 1,
@@ -48,6 +57,7 @@ impl EnemyTier {
         }
     }
 
+    /// Gold multiplier for the tier.
     pub fn gold_multiplier(&self) -> f64 {
         match self {
             EnemyTier::Minion => 0.5,
@@ -74,37 +84,55 @@ pub enum FloorAbility {
     NullifyAura,
 }
 
+/// An enemy the player fights.
 pub struct Enemy {
+    /// Generated name.
     pub name: String,
+    /// Tier.
     pub tier: EnemyTier,
+    /// HP left.
     pub hp: i64,
+    /// HP at the start of the fight.
     pub max_hp: i64,
+    /// Damage of a basic attack before chaos rolls.
     pub base_damage: i64,
+    /// Bonus added to the enemy's attack rolls.
     pub attack_modifier: i64,
+    /// How chaotic the enemy is; used as the input to its chaos rolls.
     pub chaos_level: f64, // feeds into chaos rolls as input
+    /// XP the player earns for the kill.
     pub xp_reward: u64,
+    /// Gold the player earns for the kill.
     pub gold_reward: i64,
+    /// ASCII art shown in combat.
     pub ascii_sprite: &'static str,
+    /// Seed the enemy was generated from.
     pub seed: u64,
+    /// Name of a special ability, if any.
     pub special_ability: Option<&'static str>,
+    /// Ability that counters the player on deep floors.
     pub floor_ability: FloorAbility,
 }
 
 impl Enemy {
+    /// True while the enemy has HP left.
     pub fn is_alive(&self) -> bool {
         self.hp > 0
     }
 
+    /// HP left as a fraction of max HP, clamped to 0.0 to 1.0.
     pub fn hp_percent(&self) -> f64 {
         (self.hp as f64 / self.max_hp as f64).clamp(0.0, 1.0)
     }
 
+    /// Terminal HP bar `width` cells wide, followed by "hp/max".
     pub fn hp_bar(&self, width: usize) -> String {
         let filled = ((self.hp_percent() * width as f64) as usize).min(width);
         let bar = "█".repeat(filled) + &"░".repeat(width - filled);
         format!("[{}] {}/{}", bar, self.hp, self.max_hp)
     }
 
+    /// ANSI colour for the enemy's tier.
     pub fn tier_color(&self) -> &'static str {
         match self.tier {
             EnemyTier::Minion => "\x1b[37m",
@@ -202,6 +230,7 @@ const SPRITE_ABOMINATION: &str = "##############\n# [UNDEFINED] #\n# (x_INFINITY
 
 // ─── GENERATION ──────────────────────────────────────────────────────────────
 
+/// Generate a chaos-rolled enemy for `floor` from `seed`: name, tier, stats, rewards and abilities.
 pub fn generate_enemy(floor: u32, seed: u64) -> Enemy {
     let tier = determine_tier(floor, seed);
 

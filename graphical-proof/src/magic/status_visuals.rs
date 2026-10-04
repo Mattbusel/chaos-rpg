@@ -83,6 +83,12 @@ pub struct StatusVisualManager {
     pub active: Vec<(usize, ActiveStatus)>,
 }
 
+impl Default for StatusVisualManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StatusVisualManager {
     pub fn new() -> Self {
         Self { active: Vec::new() }
@@ -324,7 +330,7 @@ fn render_frozen(engine: &mut ProofEngine, pos: Vec3, t: f32, frame: u64) {
 fn render_shocked(engine: &mut ProofEngine, pos: Vec3, _t: f32, frame: u64) {
     // Random spark glyphs appearing briefly
     for i in 0..3 {
-        if (frame + i * 7) % 5 != 0 { continue; }
+        if !(frame + i * 7).is_multiple_of(5) { continue; }
         let seed = (frame as f32 * 0.7 + i as f32 * 19.3);
         let sx = pos.x + seed.sin() * 1.2;
         let sy = pos.y + seed.cos() * 0.8;

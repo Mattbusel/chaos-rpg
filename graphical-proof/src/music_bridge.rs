@@ -175,7 +175,7 @@ const LOW_HP_THRESHOLD: f32 = 0.25;
 
 /// Check whether the player is currently at low HP.
 fn is_player_low_hp(state: &GameState) -> bool {
-    state.player.as_ref().map_or(false, |p| {
+    state.player.as_ref().is_some_and(|p| {
         let frac = p.current_hp as f32 / p.max_hp.max(1) as f32;
         frac <= LOW_HP_THRESHOLD && frac > 0.0
     })
@@ -705,10 +705,12 @@ mod tests {
 
     #[test]
     fn enemy_tier_mapping() {
-        assert_eq!(map_enemy_tier(0), EnemyTier::Fodder);
-        assert_eq!(map_enemy_tier(1), EnemyTier::Standard);
-        assert_eq!(map_enemy_tier(2), EnemyTier::Elite);
-        assert_eq!(map_enemy_tier(5), EnemyTier::MiniBoss);
+        use chaos_rpg_core::enemy::EnemyTier as T;
+        assert_eq!(map_enemy_tier(&T::Minion), EnemyTier::Fodder);
+        assert_eq!(map_enemy_tier(&T::Elite), EnemyTier::Standard);
+        assert_eq!(map_enemy_tier(&T::Champion), EnemyTier::Elite);
+        assert_eq!(map_enemy_tier(&T::Boss), EnemyTier::MiniBoss);
+        assert_eq!(map_enemy_tier(&T::Abomination), EnemyTier::MiniBoss);
     }
 
     #[test]

@@ -95,6 +95,12 @@ pub struct CombatVisualState {
     pub time: f32,
 }
 
+impl Default for CombatVisualState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CombatVisualState {
     pub fn new() -> Self {
         Self {
@@ -466,7 +472,7 @@ pub fn trigger_enemy_death(vis: &mut CombatVisualState, enemy_name: &str, tier: 
 pub fn trigger_player_death(vis: &mut CombatVisualState) {
     vis.death_timer = 0.001; // start counting
     vis.death_scatter.clear();
-    let chars = vec!['#', '@', '%', '&', '*'];
+    let chars = ['#', '@', '%', '&', '*'];
     let color = Vec4::new(0.9, 0.2, 0.15, 1.0);
     for i in 0..10 {
         let angle = (i as f32 / 10.0) * std::f32::consts::TAU;

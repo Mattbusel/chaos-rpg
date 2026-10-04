@@ -31,17 +31,29 @@ use serde::{Deserialize, Serialize};
 /// What occupies a single grid cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Cell {
+    /// Solid rock; the only cell you cannot walk through.
     Wall,
+    /// Open room floor.
     Floor,
+    /// A corridor between rooms.
     Corridor,
+    /// A doorway.
     Door,
+    /// Stairs to the next floor.
     StairsDown,
+    /// Stairs to the previous floor.
     StairsUp,
+    /// A trap.
     Trap,
+    /// A shrine.
     Shrine,
+    /// Treasure.
     Treasure,
+    /// A shop.
     Shop,
+    /// Where the player starts the floor.
     Spawn,   // player start
+    /// The boss arena.
     BossArena,
 }
 
@@ -75,24 +87,37 @@ impl Cell {
 /// An axis-aligned rectangular room carved into the dungeon.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
+    /// Left edge, in cells.
     pub x: usize,
+    /// Top edge, in cells.
     pub y: usize,
+    /// Width in cells.
     pub width: usize,
+    /// Height in cells.
     pub height: usize,
+    /// What kind of room it is.
     pub room_type: RoomKind,
 }
 
+/// What a room is used for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RoomKind {
+    /// An ordinary room.
     Normal,
+    /// A treasure room.
     Treasure,
+    /// A shrine room.
     Shrine,
+    /// A shop.
     Shop,
+    /// The boss room.
     Boss,
+    /// The room the player starts in.
     Spawn,
 }
 
 impl Room {
+    /// The cell at the middle of the room, as (x, y).
     pub fn center(&self) -> (usize, usize) {
         (self.x + self.width / 2, self.y + self.height / 2)
     }
@@ -148,10 +173,15 @@ impl DungeonConfig {
 /// The fully-generated dungeon floor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DungeonMap {
+    /// Map width in cells.
     pub width: usize,
+    /// Map height in cells.
     pub height: usize,
+    /// Cells, indexed `grid[y][x]`.
     pub grid: Vec<Vec<Cell>>,
+    /// Rooms carved into the map.
     pub rooms: Vec<Room>,
+    /// Floor number.
     pub floor: u32,
     /// Player starting position `(x, y)`.
     pub player_start: (usize, usize),
@@ -214,12 +244,19 @@ impl DungeonMap {
 /// Summary info for a generated dungeon floor.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DungeonStats {
+    /// Floor number.
     pub floor: u32,
+    /// Number of rooms.
     pub room_count: usize,
+    /// Number of walkable cells.
     pub floor_tiles: usize,
+    /// Number of traps.
     pub trap_count: usize,
+    /// Number of treasure cells.
     pub treasure_count: usize,
+    /// Whether the floor has a boss room.
     pub has_boss: bool,
+    /// Whether the floor has a shop.
     pub has_shop: bool,
 }
 
@@ -248,6 +285,7 @@ pub struct DungeonGenerator {
 }
 
 impl DungeonGenerator {
+    /// A generator for one floor, with layout settings `cfg` and a `seed` (same seed, same map).
     pub fn new(cfg: DungeonConfig, seed: u64) -> Self {
         Self { cfg, seed }
     }
@@ -446,7 +484,7 @@ impl DungeonGenerator {
 
     // ── corridor carvers ─────────────────────────────────────────────────────
 
-    fn carve_h(grid: &mut Vec<Vec<Cell>>, x0: usize, x1: usize, y: usize) {
+    fn carve_h(grid: &mut [Vec<Cell>], x0: usize, x1: usize, y: usize) {
         let (lo, hi) = if x0 <= x1 { (x0, x1) } else { (x1, x0) };
         let h = grid.len();
         let w = if h > 0 { grid[0].len() } else { 0 };
@@ -457,7 +495,7 @@ impl DungeonGenerator {
         }
     }
 
-    fn carve_v(grid: &mut Vec<Vec<Cell>>, y0: usize, y1: usize, x: usize) {
+    fn carve_v(grid: &mut [Vec<Cell>], y0: usize, y1: usize, x: usize) {
         let (lo, hi) = if y0 <= y1 { (y0, y1) } else { (y1, y0) };
         let h = grid.len();
         let w = if h > 0 { grid[0].len() } else { 0 };

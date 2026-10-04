@@ -5,37 +5,59 @@ use std::collections::HashMap;
 /// Creature size categories.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreatureSize {
+    /// Smaller than a cat.
     Tiny,
+    /// About child sized.
     Small,
+    /// About human sized.
     Medium,
+    /// Horse sized.
     Large,
+    /// Giant sized.
     Huge,
+    /// Larger than a giant.
     Gargantuan,
 }
 
 /// Creature type categories.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreatureType {
+    /// Natural animals and monsters.
     Beast,
+    /// Risen dead.
     Undead,
+    /// People and humanlike creatures.
     Humanoid,
+    /// Dragons.
     Dragon,
+    /// Living elements such as fire or water.
     Elemental,
+    /// Built or animated objects.
     Construct,
+    /// Demons and devils.
     Fiend,
+    /// Heavenly beings.
     Celestial,
+    /// Living plants.
     Plant,
+    /// Alien, unnatural creatures.
     Aberration,
 }
 
 /// The six core ability scores.
 #[derive(Debug, Clone)]
 pub struct AbilityScores {
+    /// Strength score (raw physical power).
     pub strength: u8,
+    /// Dexterity score (agility and reflexes).
     pub dexterity: u8,
+    /// Constitution score (toughness).
     pub constitution: u8,
+    /// Intelligence score.
     pub intelligence: u8,
+    /// Wisdom score.
     pub wisdom: u8,
+    /// Charisma score.
     pub charisma: u8,
 }
 
@@ -55,73 +77,122 @@ impl AbilityScores {
 /// An entry in a creature's loot table.
 #[derive(Debug, Clone)]
 pub struct LootEntry {
+    /// Name of the item that can drop.
     pub item_name: String,
     /// (min, max) inclusive quantity range.
     pub quantity_range: (u32, u32),
     /// Drop chance 0–100.
     pub drop_chance_pct: u8,
+    /// Value of one item in gold.
     pub gold_value: u32,
 }
 
 /// AI behavior mode for a creature.
 #[derive(Debug, Clone)]
 pub enum AiBehavior {
+    /// Always attacks.
     Aggressive,
+    /// Attacks, but defends when below 30% HP.
     Defensive,
+    /// Attacks, but retreats when below 50% HP.
     Skirmisher,
+    /// Uses a support ability when allies are near, otherwise attacks.
     Supporter,
-    Coward { flee_threshold_hp_pct: f64 },
-    Pack { min_allies: usize },
-    Territorial { range: f64 },
+    /// Attacks until HP falls to a threshold, then flees.
+    Coward {
+        /// HP fraction (0.0 to 1.0) at or below which it flees.
+        flee_threshold_hp_pct: f64,
+    },
+    /// Attacks only with enough allies nearby, otherwise retreats.
+    Pack {
+        /// Allies needed nearby before it attacks.
+        min_allies: usize,
+    },
+    /// Guards an area and attacks intruders.
+    Territorial {
+        /// Size of the guarded area (not used by `decide_action` yet, which always attacks).
+        range: f64,
+    },
+    /// Opens with an ambush strike.
     Ambush,
 }
 
 /// A single attack profile.
 #[derive(Debug, Clone)]
 pub struct AttackProfile {
+    /// Name of the attack.
     pub name: String,
+    /// Bonus added to the d20 attack roll.
     pub hit_bonus: i8,
     /// (count, sides) e.g. (2, 6) = 2d6.
     pub damage_dice: (u32, u32),
+    /// Flat damage added to the dice.
     pub damage_bonus: i32,
+    /// Reach in feet.
     pub reach_ft: u32,
 }
 
 /// Result of an attack roll.
 #[derive(Debug, Clone)]
 pub struct AttackResult {
+    /// The natural d20 roll (1 to 20).
     pub roll: u32,
+    /// Roll plus hit bonus.
     pub total: i32,
+    /// Whether the attack hit.
     pub is_hit: bool,
+    /// Whether it was a natural 20.
     pub is_critical: bool,
 }
 
 /// Action chosen by the AI.
 #[derive(Debug, Clone)]
 pub enum CombatAction {
-    Attack { target_idx: usize },
+    /// Attack a target.
+    Attack {
+        /// Index of the target in the encounter.
+        target_idx: usize,
+    },
+    /// Run away from the fight.
     Flee,
+    /// Use the named special ability.
     UseAbility(String),
+    /// Brace and defend this turn.
     Defend,
+    /// Back off without leaving the fight.
     Retreat,
 }
 
 /// A creature instance.
 #[derive(Debug, Clone)]
 pub struct Creature {
+    /// Unique id of the creature type.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Creature type (beast, undead and so on).
     pub creature_type: CreatureType,
+    /// Size category.
     pub size: CreatureSize,
+    /// Challenge rating: how dangerous it is, used to budget encounters.
     pub challenge_rating: f64,
+    /// Maximum hit points.
     pub hp_max: u32,
+    /// Current hit points.
     pub hp_current: u32,
+    /// Armor class an attack roll must reach to hit.
     pub armor_class: u8,
+    /// Walking speed in feet per round.
     pub speed_ft: u32,
+    /// The six ability scores.
     pub ability_scores: AbilityScores,
+    /// Attacks it can make.
     pub attacks: Vec<AttackProfile>,
+    /// What it can drop when killed.
     pub loot_table: Vec<LootEntry>,
+    /// How it behaves in combat.
     pub ai_behavior: AiBehavior,
+    /// Experience awarded for defeating it.
     pub xp_reward: u32,
 }
 
@@ -181,7 +252,7 @@ impl Creature {
             total += roll as i32;
             s = ns;
         }
-        total = total + atk.damage_bonus;
+        total += atk.damage_bonus;
         if total < 0 { 0 } else { total as u32 }
     }
 

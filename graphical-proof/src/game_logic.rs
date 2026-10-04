@@ -58,7 +58,7 @@ pub fn generate_floor(state: &mut GameState) {
         .wrapping_add(state.floor_num as u64 * 31337);
 
     // Item volatility: every 20 floors, re-roll a random item
-    if state.floor_num > 1 && state.floor_num % 20 == 0 {
+    if state.floor_num > 1 && state.floor_num.is_multiple_of(20) {
         if let Some(ref mut p) = state.player {
             if !p.inventory.is_empty() {
                 let vol_idx = (state.floor_seed % p.inventory.len() as u64) as usize;
@@ -75,7 +75,7 @@ pub fn generate_floor(state: &mut GameState) {
     }
 
     // Cursed floor: every 25 floors
-    state.is_cursed_floor = state.floor_num > 0 && state.floor_num % 25 == 0;
+    state.is_cursed_floor = state.floor_num > 0 && state.floor_num.is_multiple_of(25);
     if state.is_cursed_floor {
         push_log(
             state,
@@ -255,7 +255,7 @@ pub fn enter_room(state: &mut GameState) {
     let room_type = state
         .floor
         .as_ref()
-        .map(|f| f.current().room_type.clone())
+        .map(|f| f.current().room_type)
         .unwrap_or(RoomType::Empty);
     let room_desc = state
         .floor
@@ -368,7 +368,7 @@ fn enter_combat_room(
     }
 
     // ── Boss gauntlet: every 10 floors, boss room = 3-fight gauntlet ─────
-    if is_boss && floor_num % 10 == 0 {
+    if is_boss && floor_num.is_multiple_of(10) {
         let mut enemies = Vec::new();
 
         let mut e1 = generate_enemy(floor_num, room_seed.wrapping_add(1));
@@ -424,9 +424,9 @@ fn enter_combat_room(
         .as_ref()
         .map(|f| f.current_room)
         .unwrap_or(0);
-    let spawn_unique = (floor_num >= 100 && current_room_idx % 3 == 0)
+    let spawn_unique = (floor_num >= 100 && current_room_idx.is_multiple_of(3))
         || (floor_num >= 50 && !is_boss && unique_roll < 20)
-        || (is_boss && floor_num % 5 == 0);
+        || (is_boss && floor_num.is_multiple_of(5));
 
     if spawn_unique {
         if let Some(boss_id) = random_unique_boss(floor_num, room_seed) {
@@ -831,7 +831,7 @@ fn enter_treasure_room(
     ev.pending_item = Some(item);
 
     // 25% chance for a spell scroll
-    if room_seed % 4 == 0 {
+    if room_seed.is_multiple_of(4) {
         let spell = Spell::generate(room_seed.wrapping_add(54321));
         ev.lines.push(String::new());
         ev.lines
@@ -861,7 +861,7 @@ fn enter_shop_room(state: &mut GameState, floor_num: u32, room_seed: u64) {
         .as_ref()
         .map(|p| p.stats.cunning)
         .unwrap_or(0);
-    let npc_items: Vec<Item> = npc.inventory.drain(..).collect();
+    let npc_items: Vec<Item> = std::mem::take(&mut npc.inventory);
     let shop: Vec<(Item, i64)> = npc_items
         .into_iter()
         .map(|item| {
@@ -903,7 +903,7 @@ fn enter_shrine_room(
         "luck",
     ];
     let stat_name = stats[(room_seed % stats.len() as u64) as usize];
-    let buff = 3 + (roll.to_range(1, 10) as i64) + floor_num as i64 / 2;
+    let buff = 3 + roll.to_range(1, 10) + floor_num as i64 / 2;
     let hp_restore = state
         .player
         .as_ref()
@@ -1491,7 +1491,7 @@ pub fn boss_pre_turn(state: &mut GameState, bid: u8) {
     match bid {
         7 => {
             // Ouroboros: heal to full every 3 turns
-            if state.boss_turn > 1 && (state.boss_turn - 1) % 3 == 0 {
+            if state.boss_turn > 1 && (state.boss_turn - 1).is_multiple_of(3) {
                 let max_hp = state.boss_extra;
                 if let Some(ref mut e) = state.enemy {
                     e.hp = max_hp;

@@ -60,11 +60,10 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     }
 
     // Descend — only if all rooms cleared, checks victory, hunger, generates new floor
-    if key_d {
-        if crate::game_logic::can_descend(state) {
+    if key_d
+        && crate::game_logic::can_descend(state) {
             crate::game_logic::descend(state);
         }
-    }
 
     if key_c { state.screen = AppScreen::CharacterSheet; }
     if key_n { state.screen = AppScreen::PassiveTree; }
@@ -93,7 +92,7 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
         let end = (start + visible).min(floor.rooms.len());
 
         let mut y = 3.0;
-        for (_, idx) in (start..end).enumerate() {
+        for idx in start..end {
             let room = &floor.rooms[idx];
             let is_current = idx == floor.current_room;
 

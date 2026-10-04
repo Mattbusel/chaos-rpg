@@ -227,7 +227,7 @@ impl CombatAnim {
                     (seed - 2) as i32
                 }
                 SpellElement::Arcane => ((i as f32 * 0.45).sin() * 2.0).round() as i32,
-                SpellElement::Necro  => if i % 4 == 0 { 1 } else { 0 },
+                SpellElement::Necro if i % 4 == 0 => { 1 },
                 _ => 0,
             };
             let reveal = i as u32 * self.travel_frames / total.max(1);
@@ -284,7 +284,7 @@ impl CombatAnim {
         if self.phase == AnimPhase::Impact {
             if let AnimKind::LevelUpPillar = &self.kind {
                 let intensity = (self.phase_frame as f32 / self.impact_frames as f32).min(1.0);
-                if frame % 2 == 0 {
+                if frame.is_multiple_of(2) {
                     let col = (255u8, 215u8, 0u8);
                     let pillar_chars = ["│", "║", "✦", "·", "│"];
                     let ch = pillar_chars[(frame as usize / 3) % pillar_chars.len()];
@@ -358,7 +358,7 @@ impl CombatAnim {
 
     // ── Player melee ──────────────────────────────────────────────────────────
 
-    fn draw_player_melee(&self, ctx: &mut BTerm, bg: RGB, is_crit: bool, weapon: WeaponKind, frame: u64) {
+    fn draw_player_melee(&self, ctx: &mut BTerm, bg: RGB, is_crit: bool, weapon: WeaponKind, _frame: u64) {
         let base_col: (u8, u8, u8) = if is_crit {
             (255, 200, 50)
         } else {
@@ -411,7 +411,7 @@ impl CombatAnim {
 
     // ── Player spell ──────────────────────────────────────────────────────────
 
-    fn draw_player_spell(&self, ctx: &mut BTerm, bg: RGB, is_crit: bool, element: SpellElement, frame: u64) {
+    fn draw_player_spell(&self, ctx: &mut BTerm, bg: RGB, _is_crit: bool, element: SpellElement, frame: u64) {
         let (r, g, b_c) = spell_color(element);
 
         // Windup/channel: glyph at player position with growing intensity
@@ -486,7 +486,7 @@ impl CombatAnim {
                 dash_i += 1;
             }
             // Pulse at enemy position
-            if is_crit && (frame / 3) % 2 == 0 {
+            if is_crit && (frame / 3).is_multiple_of(2) {
                 ctx.print_color(40, 17, RGB::from_u8(base_v, 20, 20), bg, "⚔");
             }
         }
@@ -501,7 +501,7 @@ impl CombatAnim {
             } else {
                 RGB::from_u8(200, 80, 80)
             };
-            if head_x >= 0 && head_x < 160 {
+            if (0..160).contains(&head_x) {
                 ctx.print_color(head_x, 18, col, bg, ch);
                 // Trail behind projectile
                 for trail_dist in 1..4i32 {
@@ -533,7 +533,7 @@ impl CombatAnim {
         if self.ability_text_len > 0 {
             let shown: String = self.ability_text.chars().take(self.ability_text_len).collect();
             let x = (40 - shown.len() as i32 / 2).max(3);
-            let pulse = (frame / 4) % 2 == 0;
+            let pulse = (frame / 4).is_multiple_of(2);
             let v: u8 = if pulse { 240 } else { 160 };
             ctx.print_color(x, 8, RGB::from_u8(v, v / 4, v / 4), bg, &shown);
         }
@@ -575,7 +575,7 @@ impl CombatAnim {
                     ctx.print_color(rx, 20, RGB::from_u8(v, v/4, v/4), bg, "─");
                 }
             }
-            for i in 0..=(r * 1) {
+            for i in 0..=r {
                 let ry = 17 - (r/2) + i;
                 if ry > 3 && ry < 36 {
                     ctx.print_color(38 - r/2, ry, RGB::from_u8(v, v/4, v/4), bg, "│");
@@ -621,7 +621,7 @@ impl CombatAnim {
 
     // ── Player flee ───────────────────────────────────────────────────────────
 
-    fn draw_flee(&self, ctx: &mut BTerm, bg: RGB, success: bool, frame: u64) {
+    fn draw_flee(&self, ctx: &mut BTerm, bg: RGB, success: bool, _frame: u64) {
         // Windup: spinning chaos indicator
         if self.phase == AnimPhase::Windup {
             let spin = ["|", "/", "─", "\\"];
@@ -683,7 +683,7 @@ impl CombatAnim {
 
     // ── Status apply ──────────────────────────────────────────────────────────
 
-    fn draw_status_apply(&self, ctx: &mut BTerm, bg: RGB, status: StatusKind, on_enemy: bool, frame: u64) {
+    fn draw_status_apply(&self, ctx: &mut BTerm, bg: RGB, status: StatusKind, on_enemy: bool, _frame: u64) {
         let (cx, cy) = if on_enemy { (38i32, 18i32) } else { (118i32, 18i32) };
         let col = status_color(status);
         let r_int = self.status_ring_radius as i32;

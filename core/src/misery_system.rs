@@ -11,17 +11,29 @@ use serde::{Deserialize, Serialize};
 /// Every event that contributes to the Misery Index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MiserySource {
+    /// Taking damage; adds the damage amount.
     DamageTaken,        // +damage_amount
+    /// Your own spell backfiring; adds twice the backfire damage.
     SpellBackfire,      // +backfire_damage × 2
+    /// Being hit in the head; adds 50.
     Headshot,           // +50
+    /// Missing an attack; adds 10.
     AttackMissed,       // +10
+    /// The enemy dodging; adds 20.
     EnemyDodged,        // +20
+    /// Failing a skill check; adds the check's difficulty.
     SkillCheckFailed,   // +difficulty value
+    /// Failing to flee; adds 100.
     FleeFailed,         // +100
+    /// An item vanishing; adds the item's stat magnitude.
     ItemVanished,       // +item stat magnitude
+    /// An enemy taking pity on you; adds 200.
     EnemyPitiedYou,     // +200 (the pity itself is misery)
+    /// Not being able to afford anything in a shop; adds 50.
     ShopTooExpensive,   // +50
+    /// A stat going down on level up; adds ten times the decrease.
     StatDecreaseOnLevelUp, // +abs(decrease) × 10
+    /// Dying; adds the enemy's remaining HP.
     DeathRemainingEnemyHp, // +enemy remaining HP
 }
 
@@ -30,20 +42,32 @@ pub enum MiserySource {
 /// Milestones unlocked as Misery Index grows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum MiseryMilestone {
+    /// Misery Index 100.
     ItGetsWorse,         // 100
+    /// Misery Index 500.
     BelovedOfMurphy,     // 500
+    /// Misery Index 1,000; +5% Underdog XP.
     ProfessionalVictim,  // 1_000
+    /// Misery Index 2,500; +10% Underdog XP.
     UniversesPunchingBag,// 2_500
+    /// Misery Index 5,000; unlocks Spite.
     Sisyphus,            // 5_000 — unlocks Spite
+    /// Misery Index 10,000; unlocks Defiance.
     StatisticalImpossibility, // 10_000 — unlocks Defiance
+    /// Misery Index 25,000; unlocks the Cosmic Joke.
     ThePunchline,        // 25_000 — unlocks Cosmic Joke
+    /// Misery Index 50,000; unlocks Transcendent Misery.
     ActuallyImpressive,  // 50_000 — unlocks Transcendent Misery
+    /// Misery Index 100,000; unlocks Published Failure.
     TheyWillWritePapers, // 100_000 — unlocks Published Failure
+    /// Misery Index 500,000; earns a Hall of Misery entry.
     TheMostWretched,     // 500_000 — Hall of Misery entry
+    /// Misery Index 1,000,000; the inverse of OMEGA.
     NegativeGod,         // 1_000_000
 }
 
 impl MiseryMilestone {
+    /// Misery Index needed to reach this milestone.
     pub fn threshold(self) -> f64 {
         match self {
             MiseryMilestone::ItGetsWorse            => 100.0,
@@ -60,6 +84,7 @@ impl MiseryMilestone {
         }
     }
 
+    /// Title shown when the milestone is reached.
     pub fn title(self) -> &'static str {
         match self {
             MiseryMilestone::ItGetsWorse             => "It Gets Worse",
@@ -76,6 +101,7 @@ impl MiseryMilestone {
         }
     }
 
+    /// Flavour line shown with the title, including what it unlocks.
     pub fn flavor(self) -> &'static str {
         match self {
             MiseryMilestone::ItGetsWorse             => "The math has noticed you specifically.",
@@ -92,6 +118,7 @@ impl MiseryMilestone {
         }
     }
 
+    /// Every milestone, lowest threshold first.
     pub const ALL: &'static [MiseryMilestone] = &[
         MiseryMilestone::ItGetsWorse,
         MiseryMilestone::BelovedOfMurphy,
@@ -125,6 +152,7 @@ pub enum SpiteAction {
 }
 
 impl SpiteAction {
+    /// Spite needed to use this action.
     pub fn cost(self) -> f64 {
         match self {
             SpiteAction::SpitefulStrike    => 50.0,
@@ -135,6 +163,7 @@ impl SpiteAction {
         }
     }
 
+    /// Name shown to the player.
     pub fn name(self) -> &'static str {
         match self {
             SpiteAction::SpitefulStrike     => "Spiteful Strike",
@@ -145,6 +174,7 @@ impl SpiteAction {
         }
     }
 
+    /// One-line description of the action's effect.
     pub fn description(self) -> &'static str {
         match self {
             SpiteAction::SpitefulStrike     => "Deal MISERY/100 guaranteed damage, bypassing all rolls.",
@@ -170,6 +200,7 @@ pub enum DefiancePassive {
 }
 
 impl DefiancePassive {
+    /// Chaos rolls survived in Defiance needed to earn this passive.
     pub fn rolls_required(self) -> u64 {
         match self {
             DefiancePassive::ImmovableObject           => 1_000,
@@ -178,6 +209,7 @@ impl DefiancePassive {
         }
     }
 
+    /// Name shown to the player.
     pub fn name(self) -> &'static str {
         match self {
             DefiancePassive::ImmovableObject           => "Immovable Object",
@@ -192,15 +224,21 @@ impl DefiancePassive {
 /// All negative-run mechanics for a character. Serialized with the character.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiseryState {
+    /// Accumulated Misery Index for the run.
     pub misery_index: f64,
+    /// Spite available to spend.
     pub spite: f64,
+    /// Spite spent so far this run.
     pub spite_total_spent: f64,
     /// Chaos rolls survived since entering Defiance.
     pub defiance_rolls: u64,
+    /// Whether the character is in the Defiance state.
     pub in_defiance: bool,
     /// Passives earned through Defiance.
     pub defiance_passives: Vec<DefiancePassive>,
+    /// Whether the Cosmic Joke has been unlocked.
     pub cosmic_joke: bool,
+    /// Whether Transcendent Misery has been unlocked.
     pub transcendent_misery: bool,
     /// Milestones already hit (to avoid double-triggering).
     pub milestones_hit: Vec<MiseryMilestone>,
@@ -238,6 +276,7 @@ impl Default for MiseryState {
 }
 
 impl MiseryState {
+    /// A fresh state with no misery, spite or unlocks.
     pub fn new() -> Self { Self::default() }
 
     // ── Misery accumulation ───────────────────────────────────────────────────
@@ -299,6 +338,7 @@ impl MiseryState {
 
     // ── Spite ─────────────────────────────────────────────────────────────────
 
+    /// Add Spite (also counted in the run's total earned).
     pub fn add_spite(&mut self, amount: f64) {
         self.spite += amount;
         self.spite_total_earned += amount;
@@ -361,13 +401,15 @@ impl MiseryState {
 
     /// Returns true if every-100-rolls stat bonus should trigger.
     pub fn should_grant_defiance_stat_bonus(&self) -> bool {
-        self.in_defiance && self.defiance_rolls > 0 && self.defiance_rolls % 100 == 0
+        self.in_defiance && self.defiance_rolls > 0 && self.defiance_rolls.is_multiple_of(100)
     }
 
+    /// Whether the Immovable Object passive (half incoming damage) is earned.
     pub fn has_immovable_object(&self) -> bool {
         self.defiance_passives.contains(&DefiancePassive::ImmovableObject)
     }
 
+    /// Whether the Paradox Armor passive (defense from your lowest stat) is earned.
     pub fn has_paradox_armor(&self) -> bool {
         self.defiance_passives.contains(&DefiancePassive::ParadoxArmor)
     }
@@ -494,7 +536,7 @@ impl MiseryState {
 
     /// Primary displayed metric label and value for the character sheet.
     /// Returns ("MISERY", index) for high-misery chars, ("POWER", tier_name) otherwise.
-    pub fn display_primary<'a>(&self, stat_total: i64, tier_name: &'a str) -> (&'static str, String) {
+    pub fn display_primary(&self, stat_total: i64, tier_name: &str) -> (&'static str, String) {
         if stat_total < 0 && self.misery_index >= 1_000.0 {
             ("MISERY", format!("{:.0}", self.misery_index))
         } else {

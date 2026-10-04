@@ -5,32 +5,73 @@ use std::collections::HashMap;
 /// Current status of a quest.
 #[derive(Debug, Clone, PartialEq)]
 pub enum QuestStatus {
+    /// Can be started.
     Available,
+    /// Started and in progress.
     Active,
+    /// All objectives done.
     Completed,
+    /// Failed, for example by running out of time.
     Failed,
+    /// Not shown to the player yet.
     Hidden,
 }
 
 /// What a quest objective requires the player to do.
 #[derive(Debug, Clone)]
 pub enum ObjectiveType {
-    KillCreature { creature_id: String, count: u32 },
-    CollectItem { item_name: String, count: u32 },
-    VisitLocation { location_id: String },
-    TalkToNpc { npc_id: String },
-    EscortNpc { npc_id: String, destination: String },
-    CraftItem { item_name: String },
+    /// Kill a number of one creature.
+    KillCreature {
+        /// Creature to kill.
+        creature_id: String,
+        /// How many.
+        count: u32,
+    },
+    /// Collect a number of one item.
+    CollectItem {
+        /// Item to collect.
+        item_name: String,
+        /// How many.
+        count: u32,
+    },
+    /// Go to a location.
+    VisitLocation {
+        /// Location to visit.
+        location_id: String,
+    },
+    /// Talk to an NPC.
+    TalkToNpc {
+        /// NPC to talk to.
+        npc_id: String,
+    },
+    /// Escort an NPC somewhere.
+    EscortNpc {
+        /// NPC to escort.
+        npc_id: String,
+        /// Where to take them.
+        destination: String,
+    },
+    /// Craft an item.
+    CraftItem {
+        /// Item to craft.
+        item_name: String,
+    },
 }
 
 /// A single objective within a quest.
 #[derive(Debug, Clone)]
 pub struct QuestObjective {
+    /// Identifier, unique within its quest.
     pub id: String,
+    /// What the objective asks for.
     pub objective_type: ObjectiveType,
+    /// Text shown to the player.
     pub description: String,
+    /// Progress so far, capped at `required`.
     pub progress: u32,
+    /// Progress needed to complete.
     pub required: u32,
+    /// Whether it is done.
     pub completed: bool,
 }
 
@@ -54,25 +95,38 @@ impl QuestObjective {
 /// Rewards granted upon completing a quest.
 #[derive(Debug, Clone, Default)]
 pub struct QuestReward {
+    /// Experience awarded.
     pub xp: u32,
+    /// Gold awarded.
     pub gold: u32,
+    /// Items awarded, as (name, count).
     pub items: Vec<(String, u32)>,
+    /// Reputation changes, as (faction id, amount).
     pub reputation_gains: Vec<(String, i32)>,
 }
 
 /// A quest with its objectives, rewards, and chain metadata.
 #[derive(Debug, Clone)]
 pub struct Quest {
+    /// Unique quest identifier.
     pub id: String,
+    /// Title shown to the player.
     pub title: String,
+    /// Description shown to the player.
     pub description: String,
+    /// Current status.
     pub status: QuestStatus,
+    /// Steps of the quest.
     pub objectives: Vec<QuestObjective>,
+    /// What completing it pays.
     pub rewards: QuestReward,
+    /// Quest ids that must be completed first.
     pub prerequisite_quests: Vec<String>,
+    /// Time limit in minutes, if any.
     pub time_limit_minutes: Option<u32>,
     /// Unix timestamp (seconds) when the quest was started.
     pub started_at: Option<u64>,
+    /// Id of the quest chain this belongs to, if any.
     pub chain_id: Option<String>,
 }
 
@@ -105,10 +159,13 @@ impl Quest {
 /// An ordered chain of quests that unlock sequentially.
 #[derive(Debug, Clone)]
 pub struct QuestChain {
+    /// Unique chain identifier.
     pub id: String,
+    /// Name shown to the player.
     pub name: String,
     /// Ordered list of quest ids.
     pub quests: Vec<String>,
+    /// Index into `quests` of the current quest.
     pub current_idx: usize,
 }
 

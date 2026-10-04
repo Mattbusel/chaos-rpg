@@ -2,11 +2,13 @@
 name = "chaos-rpg"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://gitlab.com/mattbusel/chaos-rpg#readme"
+documentation = "https://docs.rs/chaos-rpg"
 readme = "../README.md"
+include = ["src/**/*", "Cargo.toml"]
 keywords = ["roguelike", "game", "rpg", "terminal", "chaos"]
 categories = ["games", "command-line-utilities"]
 description = "CHAOS RPG in your terminal: a roguelike where every roll is a chain of real math (Lorenz, Mandelbrot, Collatz, zeta)"
@@ -26,7 +28,7 @@ rand.workspace = true
 
 # `cargo binstall chaos-rpg` downloads the prebuilt release archive instead of compiling.
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/chaos-rpg-v{ version }-{ target }{ archive-suffix }"
+pkg-url = "https://github.com/Mattbusel/chaos-rpg/releases/download/v{ version }/chaos-rpg-v{ version }-{ target }{ archive-suffix }"
 bin-dir = "chaos-rpg-v{ version }-{ target }/{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
 

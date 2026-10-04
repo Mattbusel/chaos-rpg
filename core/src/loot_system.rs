@@ -27,10 +27,15 @@ fn lcg_f64(state: u64) -> f64 {
 /// Rarity tier for a loot item. Higher rarity ⇒ lower drop weight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ItemRarity {
+    /// Most frequent (drop weight 50).
     Common,
+    /// Drop weight 25.
     Uncommon,
+    /// Drop weight 15.
     Rare,
+    /// Drop weight 7.
     Epic,
+    /// Rarest (drop weight 3).
     Legendary,
 }
 
@@ -66,11 +71,15 @@ impl ItemRarity {
 /// A single entry in a loot table.
 #[derive(Debug, Clone)]
 pub struct LootEntry {
+    /// Item id of the drop.
     pub item_id:  String,
+    /// Rarity, which sets the default weight.
     pub rarity:   ItemRarity,
     /// Explicit weight override; set to 0.0 to use `rarity.drop_weight()`.
     pub weight:   f64,
+    /// Fewest copies dropped.
     pub min_qty:  u32,
+    /// Most copies dropped.
     pub max_qty:  u32,
 }
 
@@ -104,14 +113,17 @@ pub struct LootDrop {
 /// A weighted loot table that can be rolled for drops.
 #[derive(Debug, Clone, Default)]
 pub struct LootTable {
+    /// Possible drops.
     pub entries: Vec<LootEntry>,
 }
 
 impl LootTable {
+    /// An empty loot table.
     pub fn new() -> Self {
         Self { entries: Vec::new() }
     }
 
+    /// Add a possible drop.
     pub fn add_entry(&mut self, entry: LootEntry) {
         self.entries.push(entry);
     }
@@ -179,6 +191,7 @@ pub struct LootGenerator {
 }
 
 impl LootGenerator {
+    /// A generator over `table` whose first roll uses `initial_seed`.
     pub fn new(table: LootTable, initial_seed: u64) -> Self {
         Self { table, seed: initial_seed }
     }
@@ -259,13 +272,18 @@ pub fn generate_magic_name(base: &str, seed: u64) -> String {
 /// Convenience wrapper representing a magic item.
 #[derive(Debug, Clone)]
 pub struct MagicItem {
+    /// Plain item name, e.g. "Sword".
     pub base_name: String,
+    /// Generated name with prefix and suffix.
     pub magic_name: String,
+    /// Rarity.
     pub rarity: ItemRarity,
+    /// Seed the name was generated from.
     pub seed: u64,
 }
 
 impl MagicItem {
+    /// A magic item named from `base_name` and `seed`.
     pub fn new(base_name: impl Into<String>, rarity: ItemRarity, seed: u64) -> Self {
         let base = base_name.into();
         let magic_name = generate_magic_name(&base, seed);

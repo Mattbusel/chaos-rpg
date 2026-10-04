@@ -19,6 +19,12 @@ pub struct DemandTracker {
     pub rounds_since_purchase: HashMap<String, u32>,
 }
 
+impl Default for DemandTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DemandTracker {
     pub fn new() -> Self {
         Self {
@@ -66,6 +72,12 @@ impl DemandTracker {
 pub struct FactionEconomy {
     pub treasuries: HashMap<String, i64>,
     pub embargoes: Vec<(String, String)>, // (faction_a, faction_b) embargo pairs
+}
+
+impl Default for FactionEconomy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FactionEconomy {
@@ -126,7 +138,7 @@ impl FactionEconomy {
 
     /// Tick faction economy each floor (trade income, maintenance costs).
     pub fn tick_floor(&mut self) {
-        for (_faction, treasury) in self.treasuries.iter_mut() {
+        for treasury in self.treasuries.values_mut() {
             // Passive income
             *treasury += 200;
             // Maintenance cost
@@ -161,6 +173,12 @@ pub struct GameEconomy {
     pub factions: FactionEconomy,
 }
 
+impl Default for GameEconomy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GameEconomy {
     pub fn new() -> Self {
         Self {
@@ -190,20 +208,18 @@ impl GameEconomy {
         // Find the most inflated item
         let mut most_inflated: Option<(&str, f32)> = None;
         for (item_type, modifier) in &self.demand.price_modifiers {
-            if *modifier > 1.3 {
-                if most_inflated.is_none() || *modifier > most_inflated.unwrap().1 {
+            if *modifier > 1.3
+                && (most_inflated.is_none() || *modifier > most_inflated.unwrap().1) {
                     most_inflated = Some((item_type, *modifier));
                 }
-            }
         }
         // Find the most deflated item
         let mut most_deflated: Option<(&str, f32)> = None;
         for (item_type, modifier) in &self.demand.price_modifiers {
-            if *modifier < 0.8 {
-                if most_deflated.is_none() || *modifier < most_deflated.unwrap().1 {
+            if *modifier < 0.8
+                && (most_deflated.is_none() || *modifier < most_deflated.unwrap().1) {
                     most_deflated = Some((item_type, *modifier));
                 }
-            }
         }
 
         if let Some((item, mult)) = most_inflated {

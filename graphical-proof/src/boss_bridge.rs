@@ -352,6 +352,12 @@ pub struct BossBridge {
     turn: u32,
 }
 
+impl Default for BossBridge {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BossBridge {
     /// Create a new, idle boss bridge.
     pub fn new() -> Self {

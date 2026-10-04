@@ -33,6 +33,7 @@ if %ERRORLEVEL% NEQ 0 (
 
 echo.
 echo [3/3] Copying to dist...
+if not exist "%REPO_DIR%dist" mkdir "%REPO_DIR%dist"
 copy /Y "%CARGO_TARGET_DIR%\release\chaos-rpg-graphical.exe" "%REPO_DIR%dist\chaos-rpg-graphical.exe" >nul
 
 :LAUNCH

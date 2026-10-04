@@ -54,7 +54,7 @@ const BRACE_RESTORE_RATE: f32 = 5.0;
 pub struct SoftGlyph {
     /// Handle to the engine glyph (for rendering).
     pub glyph_id: GlyphId,
-    /// Current 2D position (screen-space relative to entity center).
+    /// Current 2D position in world space (the entity center plus this glyph's offset at rest).
     pub position: Vec2,
     /// Current velocity.
     pub velocity: Vec2,
@@ -234,13 +234,18 @@ impl SoftEntity {
 
         let mut glyphs: Vec<SoftGlyph> = (0..n)
             .map(|i| {
-                SoftGlyph::new(
+                let mut g = SoftGlyph::new(
                     glyph_ids.get(i).copied().unwrap_or(GlyphId(i as u32)),
                     characters.get(i).copied().unwrap_or('◆'),
                     offsets[i],
                     colors.get(i).copied().unwrap_or(Vec4::ONE),
                     mass_per,
-                )
+                );
+                // Positions are world space (the anchor force pulls toward
+                // `center + target_offset`); starting at the bare offset put
+                // every glyph near the origin and made it fly across the screen.
+                g.position = center + offsets[i];
+                g
             })
             .collect();
 
@@ -973,7 +978,7 @@ mod tests {
         ];
         let chars = vec!['◆', '◇', '○', '●', '★'];
         let colors = vec![Vec4::ONE; 5];
-        let ids: Vec<GlyphId> = (0..5).map(|i| GlyphId(i)).collect();
+        let ids: Vec<GlyphId> = (0..5).map(GlyphId).collect();
         SoftEntity::new(Vec2::new(5.0, 5.0), &offsets, &chars, &colors, &ids)
     }
 
@@ -981,7 +986,7 @@ mod tests {
     fn test_construction() {
         let e = test_entity();
         assert_eq!(e.glyphs.len(), 5);
-        assert!(e.springs.len() > 0);
+        assert!(!e.springs.is_empty());
         assert_eq!(e.hp_fraction, 1.0);
         assert_eq!(e.active_effect, EntityEffect::None);
     }
@@ -1108,7 +1113,7 @@ mod tests {
     fn test_simple_noise_range() {
         for i in 0..100 {
             let v = simple_noise(i as f32 * 0.1);
-            assert!(v >= -1.0 && v <= 1.0, "noise out of range: {v}");
+            assert!((-1.0..=1.0).contains(&v), "noise out of range: {v}");
         }
     }
 }

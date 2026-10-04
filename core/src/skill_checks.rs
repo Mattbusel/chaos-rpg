@@ -9,18 +9,28 @@ use crate::character::Character;
 // ─── SKILL CHECK TYPES ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// A skill the player can test outside combat.
 pub enum SkillType {
+    /// Spot traps and hidden items (precision).
     Perception,    // spot traps, hidden items
+    /// Sneak past enemies (cunning).
     Stealth,       // sneak past enemies
+    /// Open locked chests (cunning).
     Lockpick,      // open locked chests
+    /// Get better prices and talk past fights (cunning plus half luck).
     Persuasion,    // better NPC prices, avoid fights
+    /// Identify magic items and spells (mana).
     Arcana,        // identify magic items, spells
+    /// Survive environmental effects (vitality plus half force).
     Athletics,     // survive environmental effects
+    /// A pure chaos roll with no stat bias (luck).
     Luck,          // pure chaos roll with no stat bias
+    /// An unbiased roll that is harder to predict (entropy).
     ChaosAffinity, // harder to predict, higher ceiling
 }
 
 impl SkillType {
+    /// Display name of the skill.
     pub fn name(&self) -> &'static str {
         match self {
             SkillType::Perception => "Perception",
@@ -34,6 +44,7 @@ impl SkillType {
         }
     }
 
+    /// The character's stat value used for this skill.
     pub fn governing_stat(&self, character: &Character) -> i64 {
         match self {
             SkillType::Perception => character.stats.precision,
@@ -51,16 +62,24 @@ impl SkillType {
 // ─── DIFFICULTY ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How hard a skill check is.
 pub enum Difficulty {
+    /// DC 10.
     Trivial,    // DC 10
+    /// DC 25.
     Easy,       // DC 25
+    /// DC 40.
     Medium,     // DC 40
+    /// DC 60.
     Hard,       // DC 60
+    /// DC 80.
     Extreme,    // DC 80
+    /// DC 95.
     Impossible, // DC 95 — the math itself fights you
 }
 
 impl Difficulty {
+    /// Display name of the difficulty.
     pub fn name(&self) -> &'static str {
         match self {
             Difficulty::Trivial => "Trivial",
@@ -72,6 +91,7 @@ impl Difficulty {
         }
     }
 
+    /// Number the roll must reach (10 to 95 on a 1 to 100 scale).
     pub fn dc(&self) -> i64 {
         match self {
             Difficulty::Trivial => 10,
@@ -87,14 +107,23 @@ impl Difficulty {
 // ─── SKILL CHECK RESULT ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// Outcome of a skill check.
 pub struct SkillCheckResult {
+    /// Skill tested.
     pub skill: SkillType,
+    /// Difficulty attempted.
     pub difficulty: Difficulty,
+    /// Roll from 1 to 100.
     pub roll_value: i64, // 1-100
+    /// Number the roll had to reach.
     pub dc: i64,
+    /// True if the check succeeded.
     pub passed: bool,
+    /// Roll minus DC: positive by how much it passed, negative by how much it failed.
     pub margin: i64, // how much over/under DC
+    /// The chaos roll behind the result.
     pub chaos_result: ChaosRollResult,
+    /// Text describing what happened.
     pub narrative: String,
 }
 
@@ -142,6 +171,7 @@ impl SkillCheckResult {
 
 // ─── SKILL CHECK EXECUTION ───────────────────────────────────────────────────
 
+/// Roll a skill check through the chaos pipeline, biased by the governing stat (Luck and Chaos Affinity roll unbiased), against the difficulty's DC.
 pub fn perform_skill_check(
     character: &Character,
     skill: SkillType,

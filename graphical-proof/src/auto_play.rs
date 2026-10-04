@@ -252,7 +252,7 @@ pub fn render_indicator(state: &GameState, engine: &mut ProofEngine) {
     ui_render::text_z(engine, "AUTO-PILOT", 5.2, 5.0, ui_render::Z_TOP, color, 0.35, 0.8);
 
     // Small blinking dot
-    let blink = if (state.frame / 15) % 2 == 0 { '*' } else { ' ' };
+    let blink = if (state.frame / 15).is_multiple_of(2) { '*' } else { ' ' };
     if blink != ' ' {
         engine.spawn_glyph(Glyph {
             character: blink,

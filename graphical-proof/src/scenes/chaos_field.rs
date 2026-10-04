@@ -76,21 +76,21 @@ fn engine_position(engine_idx: usize, t: f32, seed: u64, bx: f32, by: f32, inten
         0 => { // Linear: straight vertical fall
             let speed = 0.5 + hf(seed) * 1.5;
             let y = ((by + t * speed * intensity) % (VIEW_Y * 2.0 + 2.0)) - VIEW_Y - 1.0;
-            (bx + (t * 0.3 + hf(seed + 1) * 6.28).sin() * 0.15, y)
+            (bx + (t * 0.3 + hf(seed + 1) * std::f32::consts::TAU).sin() * 0.15, y)
         }
         1 => { // Lorenz: chaotic orbits via irrational frequency ratios
             let fx = hf(seed + 10) * 0.3 + 0.1;
             let fy = fx * std::f32::consts::SQRT_2;
             let ax = 2.0 + hf(seed + 11) * 3.0;
             let ay = 1.5 + hf(seed + 12) * 2.5;
-            (bx + (t * fx * intensity + hf(seed + 13) * 6.28).sin() * ax,
-             by + (t * fy * intensity + hf(seed + 14) * 6.28).cos() * ay)
+            (bx + (t * fx * intensity + hf(seed + 13) * std::f32::consts::TAU).sin() * ax,
+             by + (t * fy * intensity + hf(seed + 14) * std::f32::consts::TAU).cos() * ay)
         }
         2 => { // Mandelbrot: escape-boundary radial motion
             let cx = hs(seed + 20) * 3.0;
             let cy = hs(seed + 21) * 2.0;
-            let r = 2.0 + (t * 0.2 * intensity + hf(seed + 22) * 6.28).sin() * 1.5;
-            let a = t * 0.15 * intensity + hf(seed + 23) * 6.28;
+            let r = 2.0 + (t * 0.2 * intensity + hf(seed + 22) * std::f32::consts::TAU).sin() * 1.5;
+            let a = t * 0.15 * intensity + hf(seed + 23) * std::f32::consts::TAU;
             (cx + a.cos() * r, cy + a.sin() * r)
         }
         3 => { // Fibonacci: golden spiral paths
@@ -101,25 +101,25 @@ fn engine_position(engine_idx: usize, t: f32, seed: u64, bx: f32, by: f32, inten
         }
         4 => { // Collatz: triangle wave bounce with 3n+1 spikes
             let freq = 0.4 + hf(seed + 40) * 0.6;
-            let phase = hf(seed + 41) * 6.28;
+            let phase = hf(seed + 41) * std::f32::consts::TAU;
             let tri = ((t * freq * intensity + phase) % 2.0 - 1.0).abs() * 2.0 - 1.0;
             let spike_p = (t * freq * 0.33 * intensity + phase).sin();
             let spike = if spike_p > 0.85 { (spike_p - 0.85) * 10.0 } else { 0.0 };
             let y = ((by + tri * 3.0 + spike * 2.0 + VIEW_Y + 1.0) % (VIEW_Y * 2.0 + 2.0)) - VIEW_Y - 1.0;
-            (bx + (t * 0.05 + hf(seed + 42) * 6.28).sin() * 0.5, y)
+            (bx + (t * 0.05 + hf(seed + 42) * std::f32::consts::TAU).sin() * 0.5, y)
         }
         5 => { // Lissajous: parametric figure paths
             let a = 2.0 + (seed % 3) as f32;
             let b = 3.0 + (seed % 4) as f32;
             let s = 2.5 + hf(seed + 51) * 2.0;
-            ((a * t * 0.2 * intensity + hf(seed + 50) * 3.14).sin() * s,
+            ((a * t * 0.2 * intensity + hf(seed + 50) * std::f32::consts::PI).sin() * s,
              (b * t * 0.2 * intensity).sin() * s * 0.7)
         }
         6 => { // Pendulum: damped swing
             let len = 3.0 + hf(seed + 60) * 4.0;
             let freq = (9.81 / len).sqrt() * 0.5;
             let amp = 4.0 * (-0.008 * t).exp().max(0.3);
-            let angle = (t * freq * intensity + hf(seed + 62) * 6.28).sin() * amp;
+            let angle = (t * freq * intensity + hf(seed + 62) * std::f32::consts::TAU).sin() * amp;
             (bx + angle, by + (1.0 - angle.abs() / 4.0) * 0.5)
         }
         7 => { // Sine: vertical fall with horizontal weave
@@ -127,7 +127,7 @@ fn engine_position(engine_idx: usize, t: f32, seed: u64, bx: f32, by: f32, inten
             let fx = 0.3 + hf(seed + 71) * 0.5;
             let ax = 1.0 + hf(seed + 72) * 2.0;
             let y = ((by + t * sy * intensity) % (VIEW_Y * 2.0 + 2.0)) - VIEW_Y - 1.0;
-            (bx + (t * fx * intensity + hf(seed + 73) * 6.28).sin() * ax, y)
+            (bx + (t * fx * intensity + hf(seed + 73) * std::f32::consts::TAU).sin() * ax, y)
         }
         8 => { // Perlin: layered-sine noise drift
             let nx = (t * 0.13 * intensity + hf(seed + 80) * 100.0).sin() * 0.7
@@ -142,7 +142,7 @@ fn engine_position(engine_idx: usize, t: f32, seed: u64, bx: f32, by: f32, inten
             let cy = hs(seed + 91) * 1.5;
             let rx = 1.5 + hf(seed + 92) * 3.0;
             let ry = 1.0 + hf(seed + 93) * 2.0;
-            let a = t * (0.2 + hf(seed + 94) * 0.4) * intensity + hf(seed + 95) * 6.28;
+            let a = t * (0.2 + hf(seed + 94) * 0.4) * intensity + hf(seed + 95) * std::f32::consts::TAU;
             (cx + a.cos() * rx, cy + a.sin() * ry)
         }
     }
@@ -193,13 +193,13 @@ fn screen_mods(state: &GameState) -> Mods {
 }
 
 fn is_chaos_rift(state: &GameState) -> bool {
-    state.floor.as_ref().map_or(false, |f| {
+    state.floor.as_ref().is_some_and(|f| {
         use chaos_rpg_core::world::RoomType;
         f.current().room_type == RoomType::ChaosRift
     })
 }
 fn is_shrine(state: &GameState) -> bool {
-    state.floor.as_ref().map_or(false, |f| {
+    state.floor.as_ref().is_some_and(|f| {
         use chaos_rpg_core::world::RoomType;
         f.current().room_type == RoomType::Shrine
     })

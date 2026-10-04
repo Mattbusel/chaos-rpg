@@ -11,9 +11,18 @@ use crate::io_util as ui;
 
 // ─── OUTCOME ─────────────────────────────────────────────────────────────────
 
+/// How a unique boss fight ended.
 pub enum BossOutcome {
-    PlayerWon { xp: u64, gold: i64 },
+    /// The player won.
+    PlayerWon {
+        /// Experience earned.
+        xp: u64,
+        /// Gold earned.
+        gold: i64,
+    },
+    /// The player died.
     PlayerDied,
+    /// The player got away.
     Escaped,
 }
 
@@ -52,6 +61,7 @@ pub fn boss_pool_for_floor(floor: u32) -> Vec<u8> {
     pool
 }
 
+/// Pick one of the unique bosses unlocked by `floor` (ids 1 to 12) using `seed`; `None` below floor 5.
 pub fn random_unique_boss(floor: u32, seed: u64) -> Option<u8> {
     let pool = boss_pool_for_floor(floor);
     if pool.is_empty() { return None; }
@@ -59,6 +69,7 @@ pub fn random_unique_boss(floor: u32, seed: u64) -> Option<u8> {
     Some(pool[idx])
 }
 
+/// Display name of unique boss `id` (1 to 12), or "UNKNOWN HORROR" for any other id.
 pub fn boss_name(id: u8) -> &'static str {
     match id {
         1  => "THE MIRROR",
@@ -340,7 +351,7 @@ fn fight_fibonacci_hydra(
     seed: u64,
     last_roll: &mut Option<ChaosRollResult>,
 ) -> BossOutcome {
-    const PHI: f64 = 1.6180339887498948482;
+    const PHI: f64 = 1.618_033_988_749_895;
     let base_hp = (200 + player.floor as i64 * 30) as f64;
     let fib_seq = [1u32, 1, 2, 3, 5, 8, 13];
     let mut generation = 0usize;
@@ -789,7 +800,7 @@ fn fight_the_ouroboros(
         sc = advance_seed(sc);
 
         // Heal every 3 rounds
-        if turn > 1 && (turn - 1) % 3 == 0 {
+        if turn > 1 && (turn - 1).is_multiple_of(3) {
             ouroboros_hp = max_hp;
             println!("\n  {}⟳ OUROBOROS HEALS TO FULL. Rounds reset.{}\n", ui::RED, ui::RESET);
             ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
@@ -993,7 +1004,7 @@ fn fight_the_committee(
     println!();
     ui::press_enter(&format!("  {}[ENTER]...{}", ui::DIM, ui::RESET));
 
-    let mut members_alive = vec![true; 5];
+    let mut members_alive = [true; 5];
     let mut member_hp: Vec<i64> = vec![member_hp_base; 5];
     let mut discovered: Vec<Option<&'static str>> = vec![None; 5];
 
@@ -1028,7 +1039,7 @@ fn fight_the_committee(
 
         let target_input = ui::prompt("  Target member # > ");
         let target_idx = match target_input.trim().parse::<usize>() {
-            Ok(n) if n >= 1 && n <= 5 && members_alive[n - 1] => n - 1,
+            Ok(n) if (1..=5).contains(&n) && members_alive[n - 1] => n - 1,
             _ => {
                 println!("  {}Invalid target.{}", ui::RED, ui::RESET);
                 continue;
@@ -1046,8 +1057,8 @@ fn fight_the_committee(
                 let total_dmg: i64 = members_alive.iter().enumerate()
                     .filter(|(_, &a)| a)
                     .map(|(_, _)| {
-                        let d = 8 + player.floor as i64;
-                        d
+                        
+                        8 + player.floor as i64
                     }).sum();
                 let reduced = (total_dmg - player.stats.vitality / 3).max(1);
                 player.take_damage(reduced);

@@ -1,0 +1,58 @@
+# GitLab CI for the CHAOS RPG workspace.
+#
+# Builds and tests every crate on Linux. The frontends need ALSA, X11,
+# Wayland and GL headers to compile (nothing here opens a window or plays
+# sound: the tests are pure logic). Release archives are still built by
+# .github/workflows/release.yml.
+
+stages:
+  - check
+
+default:
+  image: rust:1
+  before_script:
+    - apt-get update -qq
+    - >
+      apt-get install -y -qq --no-install-recommends
+      pkg-config libasound2-dev libudev-dev libx11-dev libxcursor-dev libxrandr-dev
+      libxi-dev libxkbcommon-dev libgl1-mesa-dev libegl1-mesa-dev libfontconfig1-dev
+      libwayland-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+    - rustc --version
+  cache:
+    key: cargo-$CI_JOB_NAME
+    paths:
+      - target/
+      - .cargo-home/registry/
+
+variables:
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo-home"
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+test:
+  stage: check
+  timeout: 2h
+  script:
+    - cargo test --locked --workspace
+
+clippy:
+  stage: check
+  timeout: 2h
+  script:
+    - rustup component add clippy
+    - cargo clippy --locked --workspace --all-targets -- -D warnings
+
+doc:
+  stage: check
+  variables:
+    RUSTDOCFLAGS: "-D warnings"
+  script:
+    - cargo doc --locked --no-deps -p chaos-rpg-core -p chaos-rpg-audio
+
+msrv:
+  stage: check
+  image: rust:1.88
+  script:
+    - cargo check --locked -p chaos-rpg-core -p chaos-rpg-audio -p chaos-rpg

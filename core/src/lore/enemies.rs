@@ -1,11 +1,16 @@
 //! Enemy lore entries — unlocked on first encounter.
 
+/// Lore text for one enemy type, unlocked on first encounter.
 pub struct EnemyLore {
+    /// Enemy name.
     pub name: &'static str,
+    /// Lore text.
     pub description: &'static str,
+    /// Epoch of the world the enemy belongs to.
     pub epoch: &'static str,
 }
 
+/// Lore for every regular enemy type.
 pub const ENEMY_LORE: &[EnemyLore] = &[
     EnemyLore {
         name: "Divergence Tick",

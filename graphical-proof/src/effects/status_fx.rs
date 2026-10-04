@@ -18,7 +18,7 @@ pub fn emit_status_particles(
     frame: u64,
 ) {
     // Rate-limit: only emit every few frames
-    if frame % 6 != 0 { return; }
+    if !frame.is_multiple_of(6) { return; }
 
     if flags & STATUS_BURN != 0 {
         // Orange sparks floating upward

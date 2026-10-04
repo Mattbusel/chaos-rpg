@@ -50,46 +50,86 @@ pub enum TierEffect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum PowerTier {
     // ── Negative tiers (ascending severity) ──────────────────────────────────
+    /// Stat total -1,000,000,000 and below.
     TheVoid,          // -1_000_000_000 and below
+    /// Stat total -100,000,000 to -999,999,999.
     HeatDeath,        // -100_000_000 to -999_999_999
+    /// Stat total -10,000,000 to -99,999,999.
     AbsoluteZero,     // -10_000_000 to -99_999_999
+    /// Stat total -1,000,000 to -9,999,999.
     GodelsGhost,      // -1_000_000 to -9_999_999
+    /// Stat total -500,000 to -999,999.
     RussellsParadox,  // -500_000 to -999_999
+    /// Stat total -250,000 to -499,999.
     NegativeAleph,    // -250_000 to -499_999
+    /// Stat total -100,000 to -249,999.
     DivisionByZero,   // -100_000 to -249_999
+    /// Stat total -50,000 to -99,999.
     Paradox,          // -50_000 to -99_999
+    /// Stat total -20,000 to -49,999.
     AntiAxiom,        // -20_000 to -49_999
+    /// Stat total -10,000 to -19,999.
     NegativeInfinity, // -10_000 to -19_999
+    /// Stat total -6,000 to -9,999.
     MathError,        // -6_000 to -9_999
+    /// Stat total -3,000 to -5,999.
     VoidTouched,      // -3_000 to -5_999
+    /// Stat total -1,000 to -2,999.
     AntiChampion,     // -1_000 to -2_999
+    /// Stat total -600 to -999.
     Abyssal,          // -600 to -999
+    /// Stat total -400 to -599.
     Forsaken,         // -400 to -599
+    /// Stat total -200 to -399.
     Damned,           // -200 to -399
+    /// Stat total -100 to -199.
     Cursed,           // -100 to -199
+    /// Stat total -50 to -99.
     Unfortunate,      // -50 to -99
+    /// Stat total -1 to -49.
     BelowAverage,     // -1 to -49
     // ── Positive tiers (ascending power) ─────────────────────────────────────
+    /// Stat total 0 to 49.
     Mortal,           // 0 to 49
+    /// Stat total 50 to 99.
     Mundane,          // 50 to 99
+    /// Stat total 100 to 199.
     Awakened,         // 100 to 199
+    /// Stat total 200 to 399.
     Proven,           // 200 to 399
+    /// Stat total 400 to 599.
     Champion,         // 400 to 599
+    /// Stat total 600 to 999.
     Legendary,        // 600 to 999
+    /// Stat total 1,000 to 2,999.
     Transcendent,     // 1_000 to 2_999
+    /// Stat total 3,000 to 5,999.
     Mythical,         // 3_000 to 5_999
+    /// Stat total 6,000 to 9,999.
     Godlike,          // 6_000 to 9_999
+    /// Stat total 10,000 to 19,999.
     BeyondMath,       // 10_000 to 19_999
+    /// Stat total 20,000 to 49,999.
     Axiom,            // 20_000 to 49_999
+    /// Stat total 50,000 to 99,999.
     Theorem,          // 50_000 to 99_999
+    /// Stat total 100,000 to 249,999.
     Cardinal,         // 100_000 to 249_999
+    /// Stat total 250,000 to 499,999.
     AlephZero,        // 250_000 to 499_999
+    /// Stat total 500,000 to 999,999.
     AlephOne,         // 500_000 to 999_999
+    /// Stat total 1,000,000 to 4,999,999.
     Continuum,        // 1_000_000 to 4_999_999
+    /// Stat total 5,000,000 to 9,999,999.
     LargeCardinal,    // 5_000_000 to 9_999_999
+    /// Stat total 10,000,000 to 49,999,999.
     Inaccessible,     // 10_000_000 to 49_999_999
+    /// Stat total 50,000,000 to 99,999,999.
     Mahlo,            // 50_000_000 to 99_999_999
+    /// Stat total 100,000,000 to 999,999,999.
     Measurable,       // 100_000_000 to 999_999_999
+    /// Stat total 1,000,000,000 and above.
     Omega,            // 1_000_000_000 and above
 }
 
@@ -140,6 +180,7 @@ impl PowerTier {
         }
     }
 
+    /// Upper-case display name of the tier, e.g. "THE VOID".
     pub fn name(&self) -> &'static str {
         match self {
             PowerTier::TheVoid          => "THE VOID",
@@ -185,6 +226,7 @@ impl PowerTier {
         }
     }
 
+    /// One-line flavour text shown for the tier.
     pub fn flavor(&self) -> &'static str {
         match self {
             PowerTier::TheVoid          => "There is nothing here. Not even nothing. Less than that.",
@@ -353,12 +395,12 @@ impl PowerTier {
                 format!("{}{}\x1b[0m", col, name)
             }
             TierEffect::Pulse => {
-                let bright = (frame / 15) % 2 == 0;
+                let bright = (frame / 15).is_multiple_of(2);
                 let prefix = if bright { "\x1b[1m" } else { "\x1b[2m" };
                 format!("{}{}{}\x1b[0m", self.ansi_color(), prefix, name)
             }
             TierEffect::Flash => {
-                if (frame / 12) % 2 == 0 {
+                if (frame / 12).is_multiple_of(2) {
                     format!("{}{}\x1b[0m", self.ansi_color(), name)
                 } else {
                     " ".repeat(name.len())
@@ -369,7 +411,7 @@ impl PowerTier {
                 let mut chars: Vec<char> = name.chars().collect();
                 let idx1 = (frame.wrapping_mul(7919)) as usize % chars.len();
                 let idx2 = (frame.wrapping_mul(6271)) as usize % chars.len();
-                if (frame / 3) % 3 != 0 {
+                if !(frame / 3).is_multiple_of(3) {
                     chars[idx1] = GLITCH[(frame as usize / 5) % GLITCH.len()];
                     if idx2 != idx1 { chars[idx2] = GLITCH[(frame as usize / 3) % GLITCH.len()]; }
                 }
@@ -379,7 +421,7 @@ impl PowerTier {
             TierEffect::Static => {
                 const NOISE: &[char] = &['.', ':', '·', '•', '░', '▒'];
                 let out: String = name.chars().enumerate().map(|(i, c)| {
-                    if (frame.wrapping_add(i as u64 * 3173)) % 7 == 0 {
+                    if (frame.wrapping_add(i as u64 * 3173)).is_multiple_of(7) {
                         NOISE[(frame as usize + i * 17) % NOISE.len()]
                     } else { c }
                 }).collect();
@@ -401,15 +443,15 @@ impl PowerTier {
                 format!("{}{}\x1b[0m", col, name)
             }
             TierEffect::BoldWhiteFlash => {
-                if (frame / 8) % 2 == 0 { format!("\x1b[1;97m{}\x1b[0m", name) }
+                if (frame / 8).is_multiple_of(2) { format!("\x1b[1;97m{}\x1b[0m", name) }
                 else { format!("\x1b[2;37m{}\x1b[0m", name) }
             }
             TierEffect::GoldFlash => {
-                if (frame / 10) % 2 == 0 { format!("\x1b[1;33m{}\x1b[0m", name) }
+                if (frame / 10).is_multiple_of(2) { format!("\x1b[1;33m{}\x1b[0m", name) }
                 else { format!("\x1b[33m{}\x1b[0m", name) }
             }
             TierEffect::FullFlash => {
-                let bright = (frame / 6) % 2 == 0;
+                let bright = (frame / 6).is_multiple_of(2);
                 if bright { format!("\x1b[1;97m{}\x1b[0m", name) }
                 else { format!("\x1b[2;31m{}\x1b[0m", name) }
             }
@@ -472,6 +514,7 @@ impl PowerTier {
         )
     }
 
+    /// True for the deep negative tiers: Void Touched (stat total -3,000) and below.
     pub fn is_extreme_negative(&self) -> bool {
         matches!(self,
             PowerTier::Paradox | PowerTier::AntiAxiom | PowerTier::NegativeInfinity |

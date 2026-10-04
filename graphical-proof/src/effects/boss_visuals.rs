@@ -59,7 +59,7 @@ pub fn render_boss_overlay(state: &GameState, engine: &mut ProofEngine) {
         // ── Boss 3: FIBONACCI HYDRA ──
         // Golden spiral pattern on arena floor
         3 => {
-            let phi: f32 = 1.618033988749895;
+            let phi: f32 = 1.618_034;
             for i in 0..40 {
                 let angle = i as f32 * 2.399963; // golden angle in radians
                 let r = (i as f32).sqrt() * 1.2;
@@ -80,7 +80,7 @@ pub fn render_boss_overlay(state: &GameState, engine: &mut ProofEngine) {
         // ── Boss 4: THE EIGENSTATE ──
         // Rapid alternation between two visual states
         4 => {
-            let is_large = (frame / 8) % 2 == 0; // fast square wave
+            let is_large = (frame / 8).is_multiple_of(2); // fast square wave
             let size_label = if is_large { "██ 10,000 HP ██" } else { "· 1 HP ·" };
             let color = if is_large {
                 Vec4::new(1.0, 0.3, 0.3, 1.0)
@@ -95,7 +95,7 @@ pub fn render_boss_overlay(state: &GameState, engine: &mut ProofEngine) {
                 let x = 8.0 + seed_f.sin() * 3.0;
                 let y = 2.0 + seed_f.cos() * 2.0;
                 engine.spawn_glyph(Glyph {
-                    character: if (frame + i as u64) % 3 == 0 { '░' } else { '▒' },
+                    character: if (frame + i as u64).is_multiple_of(3) { '░' } else { '▒' },
                     position: Vec3::new(x, y, 0.0),
                     color: Vec4::new(0.4, 0.4, 0.5, 0.4),
                     emission: 0.2,
@@ -221,7 +221,7 @@ pub fn render_boss_overlay(state: &GameState, engine: &mut ProofEngine) {
                 let x = 3.0 + j as f32 * 2.5;
                 let y = 6.0;
                 // Alternate approved/denied based on frame seed
-                let approved = ((frame / 15 + j as u64) * 7919) % 3 != 0;
+                let approved = !((frame / 15 + j as u64) * 7919).is_multiple_of(3);
                 let (ch, color) = if approved {
                     ('✓', Vec4::new(0.2, 0.9, 0.3, 0.8))
                 } else {

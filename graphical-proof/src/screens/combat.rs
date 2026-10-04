@@ -158,7 +158,7 @@ fn render_arena_floor(state: &GameState, engine: &mut ProofEngine) {
     let room_type = state
         .floor
         .as_ref()
-        .map(|f| f.current().room_type.clone())
+        .map(|f| f.current().room_type)
         .unwrap_or(RoomType::Combat);
 
     let (primary_char, secondary_char, accent_char) = match room_type {
@@ -1438,7 +1438,7 @@ fn render_kill_linger(state: &GameState, engine: &mut ProofEngine) {
 
             // Blood drip particles
             for i in 0..6 {
-                let seed = (state.frame + i) as u64 * 4517;
+                let seed = (state.frame + i) * 4517;
                 let dx = hash_signed(seed) * 3.0;
                 let dy = 1.0 - (t * 0.8 + hash_f32(seed * 3) * 2.0) % 3.0;
                 engine.spawn_glyph(Glyph {

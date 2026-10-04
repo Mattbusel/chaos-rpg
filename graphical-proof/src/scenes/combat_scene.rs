@@ -67,7 +67,7 @@ enum ForceField { Wind(f32, f32), GravityWell(f32), Vortex(f32) }
 
 fn room_field(state: &GameState) -> ForceField {
     if state.is_boss_fight { return ForceField::GravityWell(0.3); }
-    if state.floor.as_ref().map_or(false, |f| {
+    if state.floor.as_ref().is_some_and(|f| {
         use chaos_rpg_core::world::RoomType;
         f.current().room_type == RoomType::ChaosRift
     }) { return ForceField::Vortex(0.5); }
@@ -103,7 +103,7 @@ pub fn build_arena(state: &GameState, engine: &mut ProofEngine) -> SceneLighting
     let field = room_field(state);
 
     let room_type = if state.is_boss_fight { RoomLighting::Boss }
-        else if state.floor.as_ref().map_or(false, |f| {
+        else if state.floor.as_ref().is_some_and(|f| {
             use chaos_rpg_core::world::RoomType;
             f.current().room_type == RoomType::ChaosRift
         }) { RoomLighting::ChaosRift }

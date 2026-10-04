@@ -236,7 +236,7 @@ impl TileEffects {
 
         // Screen-space lighting
         for light in &self.lights {
-            let pulse_mod = if light.pulse { (light.phase.sin() * 0.2 + 1.0) } else { 1.0 };
+            let pulse_mod = if light.pulse { light.phase.sin() * 0.2 + 1.0 } else { 1.0 };
             let eff = light.intensity * pulse_mod;
             let rx = light.x as i32;
             let ry = light.y as i32;

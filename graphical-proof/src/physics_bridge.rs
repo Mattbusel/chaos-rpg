@@ -31,6 +31,7 @@ use chaos_rpg_core::world::RoomType as CrpgRoomType;
 // ── Render data collected each frame ────────────────────────────────────────
 
 /// All visual output from the physics bridge, ready for the renderer.
+#[derive(Default)]
 pub struct PhysicsRenderData {
     /// Instanced glyph data for debris particles.
     pub debris_instances: Vec<GlyphInstance>,
@@ -50,20 +51,6 @@ pub struct PhysicsRenderData {
     pub arena_damage_events: Vec<DamageEvent>,
 }
 
-impl Default for PhysicsRenderData {
-    fn default() -> Self {
-        Self {
-            debris_instances: Vec::new(),
-            fluid_sprites: Vec::new(),
-            fluid_pool_sprites: Vec::new(),
-            cloth_points: Vec::new(),
-            rope_points: Vec::new(),
-            soft_body_hulls: Vec::new(),
-            trail_vertices: Vec::new(),
-            arena_damage_events: Vec::new(),
-        }
-    }
-}
 
 // ── Element mapping helpers ─────────────────────────────────────────────────
 
@@ -682,7 +669,7 @@ impl PhysicsBridge {
                 }
                 BossArchetype::Tentacled => {
                     // Update tendril start points to follow boss
-                    for (_i, rope_id) in boss.tendril_rope_ids.iter().enumerate() {
+                    for rope_id in boss.tendril_rope_ids.iter() {
                         if let Some(rope) =
                             self.cloth_rope_manager.get_rope_mut(*rope_id)
                         {

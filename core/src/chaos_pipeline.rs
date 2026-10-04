@@ -28,11 +28,22 @@ pub struct ChaosRollResult {
 }
 
 impl ChaosRollResult {
-    /// Map final_value [-1, 1] to [min, max]
+    /// Map `final_value` in [-1, 1] to an integer in `[min, max]`, giving
+    /// every integer an equal share of the input range.
+    ///
+    /// Before 2.3.0 this rounded `min + t * (max - min)`, which gave the two
+    /// end values half the share of the others: on a d20, a natural 1 or 20
+    /// came up half as often as any other face.
     pub fn to_range(&self, min: i64, max: i64) -> i64 {
-        let t = (self.final_value + 1.0) / 2.0; // [0, 1]
-        let range = (max - min) as f64;
-        (min as f64 + t * range).round() as i64
+        if max <= min {
+            return min;
+        }
+        let t = ((self.final_value + 1.0) / 2.0).clamp(0.0, 1.0); // [0, 1]
+        if t.is_nan() {
+            return min;
+        }
+        let buckets = (max - min + 1) as f64;
+        min + ((t * buckets).floor() as i64).min(max - min)
     }
 
     /// Interpret the result as a d20
@@ -504,6 +515,7 @@ impl Default for ChaosPipeline {
 /// - Lorenz sigma increases (more butterfly chaos)
 /// - Logistic r → 4.0 (full bifurcation chaos)
 /// - Mandelbrot zooms deeper into boundary
+///
 /// At 400+ kills, has a chance to invert the final value (backfire for full damage).
 pub fn corrupted_chaos_roll(input: f64, seed: u64, kills: u32) -> ChaosRollResult {
     let stage = (kills / 50).min(8) as usize;
@@ -626,7 +638,7 @@ pub fn instability_chaos_roll(input: f64, seed: u64, floor: u32) -> ChaosRollRes
         if i == 3 {
             let instability_roll = seed.wrapping_mul(0xc0ffee).wrapping_add(floor as u64) % 100;
             if instability_roll < instability_pct {
-                if instability_roll % 2 == 0 {
+                if instability_roll.is_multiple_of(2) {
                     // Inject 3 extra engines
                     for j in 0..3usize {
                         let eidx = (seed.wrapping_mul(0xfeedbeef).wrapping_add(j as u64 * 77777))
@@ -668,6 +680,31 @@ pub fn instability_chaos_roll(input: f64, seed: u64, floor: u32) -> ChaosRollRes
 
 #[cfg(test)]
 mod tests {
+
+    fn with_value(v: f64) -> ChaosRollResult {
+        ChaosRollResult { final_value: v, chain: Vec::new(), game_value: 0 }
+    }
+
+    /// Evenly spread final values must give every d20 face the same count.
+    /// With the old rounding, faces 1 and 20 got half as many.
+    #[test]
+    fn to_range_gives_equal_buckets() {
+        let n = 20_000;
+        let mut counts = [0u32; 21];
+        for i in 0..n {
+            let v = -1.0 + 2.0 * (i as f64 + 0.5) / n as f64;
+            counts[with_value(v).as_d20() as usize] += 1;
+        }
+        for face in 1..=20 {
+            assert_eq!(counts[face], 1000, "face {face}: {counts:?}");
+        }
+        assert_eq!(with_value(-1.0).as_d20(), 1);
+        assert_eq!(with_value(1.0).as_d20(), 20);
+        assert_eq!(with_value(f64::NAN).as_d20(), 1);
+        assert_eq!(with_value(0.3).to_range(5, 5), 5);
+        assert_eq!(with_value(2.0).as_percent(), 100);
+    }
+
     use super::*;
 
     #[test]
@@ -705,7 +742,7 @@ mod tests {
     fn roll_stat_in_range() {
         for seed in 0..50u64 {
             let val = roll_stat(1, 100, seed);
-            assert!(val >= 1 && val <= 100, "roll_stat out of range: {}", val);
+            assert!((1..=100).contains(&val), "roll_stat out of range: {}", val);
         }
     }
 

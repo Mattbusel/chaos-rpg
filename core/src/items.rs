@@ -138,19 +138,30 @@ const STAT_NAMES: &[&str] = &[
 // ─── Rarity ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Item rarity, set by the item's total stat magnitude.
 pub enum Rarity {
+    /// Total magnitude 0 to 10.
     Common,
+    /// Total magnitude 11 to 50.
     Uncommon,
+    /// Total magnitude 51 to 200.
     Rare,
+    /// Total magnitude 201 to 1,000.
     Epic,
+    /// Total magnitude 1,001 to 5,000.
     Legendary,
+    /// Total magnitude 5,001 to 20,000.
     Mythical,
+    /// Total magnitude 20,001 to 99,999.
     Divine,
+    /// Total magnitude 100,000 to 999,999 (shown as "???").
     Beyond,
+    /// Total magnitude of 1,000,000 or more: a one-of-a-kind item.
     Artifact, // unique: one-of-a-kind chaos-generated masterpiece
 }
 
 impl Rarity {
+    /// The rarity for a total stat magnitude (sign ignored).
     pub fn from_magnitude(mag: i64) -> Self {
         let m = mag.abs();
         match m {
@@ -166,6 +177,7 @@ impl Rarity {
         }
     }
 
+    /// Display name of the rarity.
     pub fn name(self) -> &'static str {
         match self {
             Rarity::Common => "Common",
@@ -180,6 +192,7 @@ impl Rarity {
         }
     }
 
+    /// ANSI colour escape used to print items of this rarity in the terminal.
     pub fn color_code(self) -> &'static str {
         match self {
             Rarity::Common => "\x1b[90m",    // dark grey
@@ -198,15 +211,22 @@ impl Rarity {
 // ─── Equipment Slot ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Where an item can be equipped.
 pub enum EquipSlot {
+    /// Main weapon.
     Weapon,
+    /// Body armour.
     Body,
+    /// First ring slot.
     Ring1,
+    /// Second ring slot.
     Ring2,
+    /// Amulet slot.
     Amulet,
 }
 
 impl EquipSlot {
+    /// Six-character label for the slot, padded for aligned menus.
     pub fn label(self) -> &'static str {
         match self {
             EquipSlot::Weapon => "Weapon",
@@ -221,8 +241,11 @@ impl EquipSlot {
 // ─── Stat Modifier ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A bonus (or penalty) to one character stat.
 pub struct StatModifier {
+    /// Stat name, such as "force".
     pub stat: String,
+    /// Amount added to the stat; can be negative.
     pub value: i64,
 }
 
@@ -243,21 +266,29 @@ impl StatModifier {
 // ─── Gem ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Kind of gem that can be socketed into an item.
 pub enum GemType {
+    /// An active ability gem.
     Skill,   // active ability socketed here
+    /// Modifies the linked skill gems.
     Support, // modifies linked skill gems
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A gem that can be socketed into an item.
 pub struct Gem {
+    /// Display name.
     pub name: String,
+    /// Skill or support gem.
     pub gem_type: GemType,
+    /// What the gem does.
     pub description: String,
     /// Engine modifier tag (e.g. "AddedChaos", "Fork", "ControlledDestruction")
     pub tag: String,
 }
 
 impl Gem {
+    /// A gem picked from the gem list by `seed`.
     pub fn generate(seed: u64) -> Self {
         const SUPPORT_GEMS: &[(&str, &str, &str)] = &[
             (
@@ -363,14 +394,23 @@ impl Gem {
 // ─── Item ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A piece of equipment: weapon or armour with rolled stats.
 pub struct Item {
+    /// Generated display name.
     pub name: String,
+    /// Base item type, such as "Sword", "Staff" or "Ring".
     pub base_type: String,
+    /// Weapon damage or armour defense; can be negative.
     pub damage_or_defense: i64,
+    /// Rolled stat bonuses and penalties.
     pub stat_modifiers: Vec<StatModifier>,
+    /// Text of the item's special effect.
     pub special_effect: String,
+    /// Rarity, from the total stat magnitude.
     pub rarity: Rarity,
+    /// Whether it is a weapon (otherwise armour or jewellery).
     pub is_weapon: bool,
+    /// Gold value, 1 to 10,000.
     pub value: i64,
     /// Number of gem sockets (0-6, chaos-rolled at generation)
     pub socket_count: u8,
@@ -399,6 +439,7 @@ pub struct Item {
 fn default_durability() -> u8 { 100 }
 
 impl Item {
+    /// Generate a random item from `seed`.
     pub fn generate(seed: u64) -> Self {
         let base_idx = (seed % BASE_TYPES.len() as u64) as usize;
         let mat_idx = ((seed.wrapping_mul(1234567)) % MATERIALS.len() as u64) as usize;
@@ -541,6 +582,7 @@ impl Item {
         Self::generate(seed)
     }
 
+    /// Sum of the absolute damage/defense and every stat modifier: the number rarity is based on.
     pub fn total_magnitude(&self) -> i64 {
         let mut total = self.damage_or_defense.abs();
         for m in &self.stat_modifiers {

@@ -247,7 +247,7 @@ pub fn boss_dialogue(boss_id: u8, turn: u32, boss_extra: i64) -> Option<Dialogue
 
         // Fibonacci Hydra
         3 => {
-            if turn % 3 == 0 && turn > 0 {
+            if turn.is_multiple_of(3) && turn > 0 {
                 Some(DialogueLine::new("Fibonacci Hydra", "Each head grows two more.", Emotion::Neutral))
             } else { None }
         }

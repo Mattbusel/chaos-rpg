@@ -5,19 +5,30 @@ use serde::{Deserialize, Serialize};
 // ─── STRUCTS ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A participant in the d20-style combat simulator.
 pub struct Combatant {
+    /// Unique id used to target this combatant.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// HP left.
     pub hp: i32,
+    /// HP when unhurt.
     pub max_hp: i32,
+    /// Armour class: an attack hits on d20 + attack bonus at or above this.
     pub ac: u8,
+    /// Bonus added to the d20 attack roll.
     pub attack_bonus: i8,
+    /// Damage dice as (number of dice, sides), e.g. (2, 6) for 2d6.
     pub damage_dice: (u8, u8), // (num, sides)
+    /// Movement speed.
     pub speed: u32,
+    /// Bonus added to the d20 initiative roll.
     pub initiative_bonus: i8,
 }
 
 impl Combatant {
+    /// True while the combatant has HP left.
     pub fn is_alive(&self) -> bool {
         self.hp > 0
     }
@@ -26,20 +37,30 @@ impl Combatant {
 // ─── COMBAT ACTIONS ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// An action in the tabletop-style simulator.
 pub enum CombatAction {
+    /// Attack the combatant with this id.
     Attack { target_id: String },
+    /// Dodge this round.
     Dodge,
+    /// Move at double speed.
     Dash,
+    /// Help the combatant with this id.
     Help { target_id: String },
+    /// Use the named item.
     UseItem(String),
 }
 
 // ─── COMBAT ROUND ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Record of one simulated round.
 pub struct CombatRound {
+    /// Round number.
     pub round_number: u32,
+    /// Who did what, as (combatant id, action).
     pub actions: Vec<(String, CombatAction)>,
+    /// Damage each combatant dealt, as (combatant id, damage).
     pub damage_dealt: Vec<(String, i32)>,
 }
 
@@ -67,17 +88,20 @@ fn lcg_next(seed: u64) -> u64 {
 
 // ─── COMBAT SIMULATOR ────────────────────────────────────────────────────────
 
+/// Runs d20-style rounds (initiative, attacks against armour class) for a group of combatants.
 pub struct CombatSimulator {
     combatants: Vec<Combatant>,
 }
 
 impl CombatSimulator {
+    /// An empty simulator.
     pub fn new() -> Self {
         CombatSimulator {
             combatants: Vec::new(),
         }
     }
 
+    /// Add a combatant to the fight.
     pub fn add_combatant(&mut self, c: Combatant) {
         self.combatants.push(c);
     }
@@ -95,7 +119,7 @@ impl CombatSimulator {
                 (c.id.clone(), init)
             })
             .collect();
-        results.sort_by(|a, b| b.1.cmp(&a.1));
+        results.sort_by_key(|r| std::cmp::Reverse(r.1));
         results
     }
 
@@ -281,7 +305,7 @@ mod tests {
     fn test_roll_dice_range() {
         for seed in 0..100u64 {
             let r = roll_dice(3, 6, seed);
-            assert!(r >= 3 && r <= 18, "roll {} out of range", r);
+            assert!((3..=18).contains(&r), "roll {} out of range", r);
         }
     }
 

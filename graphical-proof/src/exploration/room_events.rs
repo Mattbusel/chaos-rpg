@@ -33,6 +33,12 @@ pub struct RoomEventRenderer {
     pub fire_seed: f32,
 }
 
+impl Default for RoomEventRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoomEventRenderer {
     pub fn new() -> Self {
         Self {
@@ -538,7 +544,7 @@ impl RoomEventRenderer {
 
         // Sparkle particles around chest
         for i in 0..8 {
-            let seed = i as f32 * 3.14;
+            let seed = i as f32 * std::f32::consts::PI;
             let sparkle_life = (self.time * 2.0 + seed) % 2.0;
             let alpha = ((1.0 - sparkle_life / 2.0) * (sparkle_life * 3.0).min(1.0)).max(0.0);
             let sx = chest_x + (seed * 7.0 + self.time).sin() * 1.5;

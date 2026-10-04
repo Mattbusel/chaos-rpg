@@ -7,9 +7,17 @@
 pub enum AudioEvent {
     // ── Navigation ────────────────────────────────────────────────────────────
     /// Entered a new floor. Carries floor number and seed for deterministic sfx.
-    FloorEntered { floor: u32, seed: u64 },
+    FloorEntered {
+        /// Floor number.
+        floor: u32,
+        /// Floor seed.
+        seed: u64,
+    },
     /// Moved into a new room.
-    RoomEntered { room_index: usize },
+    RoomEntered {
+        /// Index of the room on the floor.
+        room_index: usize,
+    },
 
     // ── Combat ────────────────────────────────────────────────────────────────
     /// Player executed a standard melee attack.
@@ -19,41 +27,70 @@ pub enum AudioEvent {
     /// Enemy attacked the player.
     EnemyAttack,
     /// A hit connected and dealt damage to any target.
-    DamageDealt { amount: i32, is_crit: bool },
+    DamageDealt {
+        /// Damage dealt.
+        amount: i32,
+        /// Whether it was a critical hit.
+        is_crit: bool,
+    },
     /// A heal was applied to any target.
-    HealApplied { amount: i32 },
+    HealApplied {
+        /// HP healed.
+        amount: i32,
+    },
     /// Player blocked / defended.
     PlayerDefend,
     /// Player cast a spell. Carries spell index for tonal variety.
-    SpellCast { spell_index: usize },
+    SpellCast {
+        /// Index of the spell cast.
+        spell_index: usize,
+    },
     /// Player successfully fled combat.
     PlayerFled,
     /// An entity died. `is_player` distinguishes player vs enemy deaths.
-    EntityDied { is_player: bool },
+    EntityDied {
+        /// True if the player died, false for an enemy.
+        is_player: bool,
+    },
     /// Player levelled up.
     LevelUp,
     /// Status effect applied (burn, stun, etc.).
     StatusApplied,
     /// Boss fight started. `boss_tier` 1–3 sets intensity.
-    BossEncounterStart { boss_tier: u8 },
+    BossEncounterStart {
+        /// Boss intensity, 1 to 3.
+        boss_tier: u8,
+    },
     /// Three-stage gauntlet started.
     GauntletStart,
     /// One gauntlet stage cleared.
-    GauntletStageClear { stage: u8 },
+    GauntletStageClear {
+        /// Stage just cleared.
+        stage: u8,
+    },
 
     // ── Math Engine / Chaos ───────────────────────────────────────────────────
     /// The chaos engine fired. `engine_id` 0–9 selects the sonic identity.
-    ChaosEngineRoll { engine_id: u8 },
+    ChaosEngineRoll {
+        /// Engine that fired, 0 to 9.
+        engine_id: u8,
+    },
     /// A destiny roll occurred (separate from chaos roll).
     DestinyRoll,
     /// Engine result was a critical — chaotic modifier applied.
     EngineCritical,
     /// Chaos trace displayed — multiple engine layers resolved.
-    ChaosCascade { depth: u8 },
+    ChaosCascade {
+        /// Number of engine layers resolved.
+        depth: u8,
+    },
 
     // ── World / Exploration ───────────────────────────────────────────────────
     /// Trap room triggered. `disarmed` true = success.
-    TrapTriggered { disarmed: bool },
+    TrapTriggered {
+        /// True if the trap was disarmed.
+        disarmed: bool,
+    },
     /// Shop room entered.
     ShopEntered,
     /// Player purchased an item.
@@ -75,7 +112,10 @@ pub enum AudioEvent {
     /// An item was picked up.
     ItemPickup,
     /// Crafting operation started.
-    CraftStart { op_index: usize },
+    CraftStart {
+        /// Which crafting operation started.
+        op_index: usize,
+    },
     /// Crafting operation succeeded.
     CraftSuccess,
     /// Crafting operation failed / cursed result.
@@ -85,7 +125,10 @@ pub enum AudioEvent {
 
     // ── Skill Checks ──────────────────────────────────────────────────────────
     /// Skill check resolved. `success` indicates outcome.
-    SkillCheckResult { success: bool },
+    SkillCheckResult {
+        /// Whether the check passed.
+        success: bool,
+    },
 
     // ── Meta / UI ─────────────────────────────────────────────────────────────
     /// Menu / UI navigation.
@@ -121,6 +164,7 @@ pub enum MusicVibe {
 }
 
 impl MusicVibe {
+    /// Name shown in the settings menu.
     pub fn display_name(self) -> &'static str {
         match self {
             Self::Chill   => "Chill  (Evolving Ambient)",
@@ -129,6 +173,7 @@ impl MusicVibe {
             Self::Off     => "Off",
         }
     }
+    /// The next vibe in the settings cycle (Chill, Classic, Minimal, Off, then back).
     pub fn cycle(self) -> Self {
         match self {
             Self::Chill   => Self::Classic,
@@ -137,6 +182,7 @@ impl MusicVibe {
             Self::Off     => Self::Chill,
         }
     }
+    /// Parse a vibe name from the config file; unknown names give Chill.
     pub fn from_str(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "classic" => Self::Classic,
@@ -145,6 +191,7 @@ impl MusicVibe {
             _         => Self::Chill,
         }
     }
+    /// Name used in the config file, such as "chill".
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Chill   => "chill",
@@ -181,14 +228,23 @@ pub enum MusicState {
 /// Individual music layers that can be enabled / disabled independently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MusicLayer {
+    /// Low sustained bass hum.
     BassDrone,
+    /// Rhythmic pulse.
     RhythmPulse,
+    /// Short melodic phrases.
     MelodicFragment,
+    /// Noisy chaos texture.
     ChaosTexture,
+    /// Distortion that grows with corruption.
     CorruptionDistortion,
+    /// Boss theme.
     BossTheme,
+    /// Rising tension build.
     TensionRiser,
+    /// Victory fanfare.
     VictoryFanfare,
+    /// Funeral bell for a death.
     DeathKnell,
 }
 
@@ -210,6 +266,7 @@ pub enum AmbientZone {
 }
 
 impl AmbientZone {
+    /// The ambient zone for a floor number: 0 to 10 Dungeon, 11 to 25 DeepDungeon, 26 to 49 Abyss, 50 and up Hunger.
     pub fn for_floor(floor: u32) -> Self {
         match floor {
             0..=10 => Self::Dungeon,

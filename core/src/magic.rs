@@ -11,11 +11,17 @@ use serde::{Deserialize, Serialize};
 /// The magical school a spell belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SpellSchool {
+    /// Fire magic.
     Fire,
+    /// Ice magic.
     Ice,
+    /// Lightning magic.
     Lightning,
+    /// Arcane magic.
     Arcane,
+    /// Nature magic.
     Nature,
+    /// Shadow magic.
     Shadow,
 }
 
@@ -24,11 +30,17 @@ pub enum SpellSchool {
 /// The effect produced when a spell is cast.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SpellEffect {
+    /// Deal `base` damage, plus or minus up to `variance`.
     Damage { base: u32, variance: u32 },
+    /// Restore `amount` HP.
     Heal { amount: u32 },
+    /// Apply the buff `effect_id` for `duration_turns` turns.
     Buff { effect_id: String, duration_turns: u32 },
+    /// Summon the named creature.
     Summon { entity: String },
+    /// Teleport the caster.
     Teleport,
+    /// Deal `damage` to everything within `radius`.
     AoE { radius: u32, damage: u32 },
 }
 
@@ -37,14 +49,23 @@ pub enum SpellEffect {
 /// A single spell that can be learned and cast.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spell {
+    /// Unique spell id.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// School of magic.
     pub school: SpellSchool,
+    /// Mana spent per cast.
     pub mana_cost: u32,
+    /// Turns before the spell can be cast again.
     pub cooldown_turns: u32,
+    /// Turns the cast takes.
     pub cast_time_turns: u32,
+    /// Range in tiles.
     pub range: u32,
+    /// What the spell does, in order.
     pub effects: Vec<SpellEffect>,
+    /// Description shown to the player.
     pub description: String,
 }
 
@@ -149,12 +170,16 @@ impl Spell {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum SpellError {
     #[error("unknown spell: {0}")]
+    /// No known spell has this id.
     UnknownSpell(String),
     #[error("insufficient mana: have {have}, need {need}")]
+    /// Not enough mana: the caster has `have` and the spell needs `need`.
     InsufficientMana { have: u32, need: u32 },
     #[error("spell is on cooldown: {turns_remaining} turns remaining")]
+    /// The spell is still cooling down for `turns_remaining` turns.
     OnCooldown { turns_remaining: u32 },
     #[error("spell already known")]
+    /// The spell is already in the spellbook.
     SpellAlreadyKnown,
 }
 
@@ -163,7 +188,9 @@ pub enum SpellError {
 /// Tracks known spells and their cooldowns.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpellBook {
+    /// Spells the caster has learned.
     pub known_spells: Vec<Spell>,
+    /// Turns left on each spell's cooldown, by spell id.
     pub cooldowns: HashMap<String, u32>,
 }
 
@@ -251,8 +278,11 @@ impl Default for SpellBook {
 /// Manages a caster's mana resource.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManaPool {
+    /// Mana available now.
     pub current: u32,
+    /// Maximum mana.
     pub max: u32,
+    /// Mana regained each turn.
     pub regen_per_turn: u32,
 }
 

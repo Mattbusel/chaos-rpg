@@ -97,7 +97,7 @@ fn render_berserker(e: &mut ProofEngine, pos: Vec3, hp: f32, t: f32) {
     for row in -2..=2 {
         for col in -2..=3 {
             let jx = (i as f32*2.71 + t*4.0).sin() * 0.06 * rage;
-            let jy = (i as f32*3.14 + t*3.5).cos() * 0.06 * rage;
+            let jy = (i as f32*std::f32::consts::PI + t*3.5).cos() * 0.06 * rage;
             let b = Vec3::new(col as f32*0.45+jx, row as f32*0.45+jy, 0.0) * sc;
             let rv = (0.85*rage).min(1.0);
             let fl = if hp < 0.3 { ((t*8.0+i as f32).sin()*0.2+0.8).max(0.4) } else { 1.0 };
@@ -173,7 +173,7 @@ fn render_necromancer(e: &mut ProofEngine, pos: Vec3, hp: f32, t: f32, fr: u64) 
             0.9, 0.95, Vec3::new(0.6,0.1,0.8), 0.6);
         i += 1;
     }
-    if fr % 8 == 0 {
+    if fr.is_multiple_of(8) {
         let wa = t*2.5;
         let wr = 1.8 + (t*1.3).sin()*0.5;
         e.spawn_glyph(Glyph {

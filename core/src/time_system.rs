@@ -1,9 +1,13 @@
 /// The four seasons.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Season {
+    /// 12 hours of daylight.
     Spring,
+    /// 14 hours of daylight.
     Summer,
+    /// 10 hours of daylight.
     Autumn,
+    /// 8 hours of daylight.
     Winter,
 }
 
@@ -22,26 +26,39 @@ impl Season {
 /// Time of day bucket.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TimeOfDay {
+    /// Hours 5 and 6.
     Dawn,
+    /// Hours 7 to 11.
     Morning,
+    /// Hours 12 to 16.
     Afternoon,
+    /// Hours 17 and 18.
     Dusk,
+    /// Hours 19 to 21.
     Evening,
+    /// Hours 22 to 2.
     Night,
+    /// Hours 3 and 4.
     Midnight,
 }
 
 /// Calendar date and time.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CalendarDate {
+    /// Year.
     pub year: u32,
+    /// Month, 1 to 12.
     pub month: u8,  // 1-12
+    /// Day of the month, 1 to 30 (every month has 30 days).
     pub day: u8,    // 1-30
+    /// Hour, 0 to 23.
     pub hour: u8,   // 0-23
+    /// Minute, 0 to 59.
     pub minute: u8, // 0-59
 }
 
 impl CalendarDate {
+    /// A date and time; fields are taken as given, without range checks.
     pub fn new(year: u32, month: u8, day: u8, hour: u8, minute: u8) -> Self {
         Self { year, month, day, hour, minute }
     }
@@ -119,10 +136,15 @@ pub fn light_level(time_of_day: &TimeOfDay) -> f32 {
 /// Environmental effects for a given season.
 #[derive(Debug, Clone)]
 pub struct SeasonalEffect {
+    /// Season the effect belongs to.
     pub season: Season,
+    /// Temperature change in degrees.
     pub temperature_mod: f32,
+    /// Travel speed multiplier (1.0 is normal).
     pub travel_speed_mod: f32,
+    /// Creature types that appear more often.
     pub creature_spawn_bias: String,
+    /// Random encounter chance multiplier (1.0 is normal).
     pub encounter_chance_mod: f32,
 }
 
@@ -162,6 +184,7 @@ pub fn seasonal_effects(season: &Season) -> SeasonalEffect {
 
 /// World-level time manager with a configurable speed multiplier.
 pub struct WorldTime {
+    /// Current in-game date and time.
     pub date: CalendarDate,
     /// How many in-game minutes pass per real minute.
     pub speed_multiplier: u32,

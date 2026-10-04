@@ -2,13 +2,17 @@
 // Pure Rust, no external dependencies — uses only std.
 // Produces raw f32 PCM samples that can be wrapped in WAV or fed to any backend.
 
+/// Sample rate of all synthesized audio, in Hz.
 pub const SAMPLE_RATE: u32 = 44_100;
 
 // ── LCG RNG (deterministic, no rand dep) ─────────────────────────────────────
 
+/// Small deterministic random generator (64-bit LCG) for sound synthesis.
 pub struct Lcg(u64);
 impl Lcg {
+    /// A generator seeded with `seed` (mixed with a constant so 0 is usable).
     pub fn new(seed: u64) -> Self { Self(seed ^ 0x9e37_79b9_7f4a_7c15) }
+    /// Next raw 64-bit value.
     pub fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
         self.0
@@ -22,14 +26,21 @@ impl Lcg {
 // ── Oscillators ───────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug)]
+/// Oscillator wave shape.
 pub enum Waveform {
+    /// Pure sine tone.
     Sine,
+    /// Sawtooth (bright, buzzy).
     Saw,
+    /// Square wave; `duty` is the fraction of each cycle spent high (0.0 to 1.0).
     Square { duty: f32 },
+    /// Triangle (soft).
     Triangle,
+    /// Deterministic noise.
     Noise,
 }
 
+/// One oscillator sample in -1.0 to 1.0 at `phase` (cycles, wraps every 1.0).
 pub fn oscillator(waveform: Waveform, freq: f32, phase: f32) -> f32 {
     match waveform {
         Waveform::Sine => (phase * std::f32::consts::TAU).sin(),
@@ -42,8 +53,8 @@ pub fn oscillator(waveform: Waveform, freq: f32, phase: f32) -> f32 {
         Waveform::Noise => {
             // Deterministic per-sample noise using a fast hash of phase + freq
             let bits = (phase.to_bits() ^ freq.to_bits()).wrapping_mul(0x9e3779b9);
-            let v = ((bits >> 16) & 0xffff) as f32 / 32768.0 - 1.0;
-            v
+            
+            ((bits >> 16) & 0xffff) as f32 / 32768.0 - 1.0
         }
     }
 }
@@ -58,14 +69,20 @@ pub fn advance_phase(phase: f32, freq: f32) -> f32 {
 // ── ADSR Envelope ─────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, Debug)]
+/// Attack, decay, sustain, release volume envelope.
 pub struct Adsr {
+    /// Seconds to rise from silence to full volume.
     pub attack:  f32, // seconds
+    /// Seconds to fall from full volume to the sustain level.
     pub decay:   f32,
+    /// Volume held after the decay, 0.0 to 1.0.
     pub sustain: f32, // level 0–1
+    /// Seconds to fade to silence at the end of the sound.
     pub release: f32,
 }
 
 impl Adsr {
+    /// Envelope volume at time `t` seconds of a sound lasting `duration` seconds.
     pub fn amplitude(&self, t: f32, duration: f32) -> f32 {
         let release_start = duration - self.release;
         if t < self.attack {
@@ -88,12 +105,15 @@ impl Adsr {
 
 /// First-order lowpass IIR filter state.
 pub struct Lowpass {
+    /// Cutoff frequency in Hz.
     pub cutoff: f32,
     prev: f32,
 }
 
 impl Lowpass {
+    /// A lowpass filter with the given cutoff in Hz.
     pub fn new(cutoff_hz: f32) -> Self { Self { cutoff: cutoff_hz, prev: 0.0 } }
+    /// Filter one sample.
     pub fn process(&mut self, input: f32) -> f32 {
         let rc = 1.0 / (std::f32::consts::TAU * self.cutoff);
         let dt = 1.0 / SAMPLE_RATE as f32;
@@ -105,13 +125,16 @@ impl Lowpass {
 
 /// First-order highpass IIR filter state.
 pub struct Highpass {
+    /// Cutoff frequency in Hz.
     pub cutoff: f32,
     prev_in: f32,
     prev_out: f32,
 }
 
 impl Highpass {
+    /// A highpass filter with the given cutoff in Hz.
     pub fn new(cutoff_hz: f32) -> Self { Self { cutoff: cutoff_hz, prev_in: 0.0, prev_out: 0.0 } }
+    /// Filter one sample.
     pub fn process(&mut self, input: f32) -> f32 {
         let rc = 1.0 / (std::f32::consts::TAU * self.cutoff);
         let dt = 1.0 / SAMPLE_RATE as f32;
@@ -126,11 +149,11 @@ impl Highpass {
 // ── Bitcrusher ────────────────────────────────────────────────────────────────
 
 /// Quantise to `bits` bits and downsample by `rate` factor.
-pub fn bitcrush(samples: &mut Vec<f32>, bits: u8, rate: u32) {
+pub fn bitcrush(samples: &mut [f32], bits: u8, rate: u32) {
     let levels = (1u32 << bits) as f32;
     let mut hold = 0f32;
     for (i, s) in samples.iter_mut().enumerate() {
-        if i as u32 % rate == 0 {
+        if (i as u32).is_multiple_of(rate) {
             hold = (*s * levels).round() / levels;
         }
         *s = hold;
@@ -175,6 +198,7 @@ pub fn encode_wav(samples: &[f32]) -> Vec<u8> {
 
 // ── Helper: generate samples for a duration ───────────────────────────────────
 
+/// Number of samples in `duration_secs` seconds at `SAMPLE_RATE`.
 pub fn generate(duration_secs: f32) -> usize {
     (duration_secs * SAMPLE_RATE as f32) as usize
 }
@@ -507,7 +531,7 @@ pub fn sfx_engine_roll(engine_id: u8) -> Vec<f32> {
 
 /// Chaos cascade — layered engine rolls with small pitch offsets.
 pub fn sfx_chaos_cascade(depth: u8) -> Vec<f32> {
-    let layers = (depth as usize).min(5).max(1);
+    let layers = (depth as usize).clamp(1, 5);
     let dur = 0.12f32 + layers as f32 * 0.05;
     let n = generate(dur);
     let mut out = vec![0.0f32; n];
@@ -843,7 +867,7 @@ pub fn music_menu_loop() -> Vec<f32> {
 pub fn music_cursed_loop(seed: u64) -> Vec<f32> {
     let dur = 3.0f32;
     let n = generate(dur);
-    let mut rng = Lcg::new(seed ^ 0xC0_DE_DEAD_BEEF_0001);
+    let mut rng = Lcg::new(seed ^ 0xC0DE_DEAD_BEEF_0001);
     let mut out = music_exploration_loop(seed);
     out.resize(n, 0.0);
 

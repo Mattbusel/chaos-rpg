@@ -9,47 +9,83 @@ use std::path::PathBuf;
 
 // ── Achievement IDs ───────────────────────────────────────────────────────────
 
+/// A cross-run achievement; see [`AchievementId::name`] and [`AchievementId::description`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum AchievementId {
     // Negative-run achievements
+    /// Finish a run at BELOW AVERAGE power tier.
     NotGreat,
+    /// Survive 10 floors at CURSED tier or below.
     TechnicallyAlive,
+    /// Enter the Defiance state.
     Defiant,
+    /// Spend 500 Spite in a single run.
     Spiteful,
+    /// Trigger the Cosmic Joke event.
     TheJokesOnMe,
+    /// Generate an in-game academic paper.
     PublishedFailure,
+    /// Reach THE VOID power tier.
     RockBottom,
+    /// Reach a Misery Index of 1,000,000.
     NegativeGod,
+    /// Die to a Singularity Moth on floor 1.
     DieToAMoth,
+    /// Die to your own spell backfire 5 times.
     SelfInflicted,
+    /// Die to exactly 1 damage.
     OneHitWonder,
+    /// Die from a headshot while the rest of the body is at full HP.
     Headshot,
+    /// Die to the same enemy type 3 times.
     NemesisOrigin,
+    /// Have all 7 stats negative at the same time.
     MathIsHard,
+    /// Have an Undecidable item vanish 3 times in one run.
     TrustIssues,
+    /// Visit 10 shops without buying anything.
     WindowShopper,
+    /// Start at ABYSSAL tier or below and finish at CHAMPION or above.
     TheComeback,
+    /// Have a stat total of exactly 0.
     PerfectlyBalanced,
+    /// Die to overflow damage.
     OverflowVictim,
+    /// Die to an enemy with lower stats than you.
     CosmicIrony,
     // Positive-run achievements
+    /// Reach BEYOND MATH power tier.
     BeyondMath,
+    /// Reach AXIOM power tier.
     AxiomReached,
+    /// Reach THEOREM power tier.
     TheoremReached,
+    /// Reach ALEPH-0 power tier.
     AlephZeroReached,
+    /// Reach OMEGA power tier.
     OmegaReached,
+    /// Reach floor 100 in Infinite mode.
     Floor100,
+    /// Deal 1,000,000 damage in a single run.
     MillionDamage,
+    /// Complete Story mode with no combat kills.
     Pacifist,
+    /// Kill a boss in a single hit.
     OnePunch,
+    /// Complete Story mode in under 50 actions.
     SpeedDemon,
+    /// Hold 50 or more items at once.
     Hoarder,
+    /// Learn 100 or more spells in a single run.
     Polyglot,
+    /// Allocate 400 or more passive tree nodes in a single run.
     TreeHugger,
+    /// Play 10 different seeded runs.
     SeedSharer,
 }
 
 impl AchievementId {
+    /// Display name shown when the achievement unlocks.
     pub fn name(self) -> &'static str {
         match self {
             AchievementId::NotGreat         => "Not Great",
@@ -89,6 +125,7 @@ impl AchievementId {
         }
     }
 
+    /// One-line description of what earns the achievement.
     pub fn description(self) -> &'static str {
         match self {
             AchievementId::NotGreat          => "Finish a run at BELOW AVERAGE tier",
@@ -131,52 +168,90 @@ impl AchievementId {
 
 // ── Unlocks ───────────────────────────────────────────────────────────────────
 
+/// A cosmetic or information unlock earned across runs (never combat power).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum UnlockId {
+    /// Lets you pick a colour for your character name.
     NameColorOption,
+    /// Shows the Misery Index at all times.
     MiseryIndexAlwaysVisible,
+    /// A Defiance badge next to your name.
     DefBadge,
+    /// Draws chaos engine traces in red.
     RedEngineTraces,
+    /// Enables extra self-aware flavour text.
     MetaAwareFlavour,
+    /// Shows a mock DOI next to your scoreboard entries.
     DoiOnScoreboard,
+    /// Grants the title "The Void".
     TheVoidTitle,
+    /// Shows Misery as a regular stat on the character sheet.
     MiseryAsVisibleStat,
+    /// A Singularity Moth badge.
     SingularityMothBadge,
+    /// Grants the title "At Great Personal Cost".
     AtGreatPersonalCostTitle,
+    /// Grants the title "Fragile".
     FragileTitle,
+    /// Grants the title "Glass Skull".
     GlassSkullTitle,
+    /// Grants the title "Mathematical Impossibility".
     MathematicalImpossibilityTitle,
+    /// Shows a stability rating on items.
     ItemStabilityRating,
+    /// Unlocks unique merchant dialogue.
     MerchantUniqueDialogue,
+    /// Grants the title "Underdog".
     UnderdogTitle,
+    /// Grants the title "Zero".
     ZeroTitle,
+    /// Tracks overflow damage events during a run.
     OverflowTracker,
+    /// Shows your stats next to the enemy's in combat.
     EnemyStatComparison,
+    /// Adds an infinity decoration to the UI.
     InfinityDecoration,
+    /// Unlocks the dialogue where the game formally concedes.
     GameFormallyConcedesDialogue,
+    /// Grants the title "Centurion".
     CenturionTitle,
+    /// Adds particle effects to damage numbers.
     DamageParticleEffects,
+    /// Shows a running count of your actions.
     ActionCounter,
+    /// Shows the expanded inventory view.
     ExpandedInventoryDisplay,
+    /// Shows badges for spell schools.
     SpellSchoolBadges,
+    /// Makes allocated passive tree nodes glow.
     PassiveTreeGlow,
+    /// Keeps a log of seeds you have played.
     SeedHistoryLog,
 }
 
 // ── Per-engine lifetime stats ─────────────────────────────────────────────────
 
+/// Lifetime statistics for one chaos engine across all runs.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EngineLifetimeStats {
+    /// Index of the engine in the chaos pipeline (0 to 9).
     pub engine_id: u8,
+    /// How many rolls this engine has taken part in.
     pub total_uses: u64,
+    /// Sum of every output, used for the average.
     pub total_output: f64,
+    /// Highest output ever produced.
     pub best_output: f64,
+    /// Lowest output ever produced.
     pub worst_output: f64,
+    /// Rolls where this engine was in the chain of a killing blow you dealt.
     pub times_in_killing_blow: u64,
+    /// Rolls where this engine was in the chain of the blow that killed you.
     pub times_in_death_blow: u64,
 }
 
 impl EngineLifetimeStats {
+    /// Average output per use, or 0 if never used.
     pub fn avg(&self) -> f64 {
         if self.total_uses == 0 { 0.0 } else { self.total_output / self.total_uses as f64 }
     }
@@ -184,22 +259,35 @@ impl EngineLifetimeStats {
 
 // ── Graveyard entry ───────────────────────────────────────────────────────────
 
+/// One dead character in the Graveyard.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraveyardEntry {
+    /// Character name.
     pub name: String,
+    /// Character class name.
     pub class: String,
+    /// Character level at death.
     pub level: u32,
+    /// Floor the character died on.
     pub floor: u32,
+    /// Power tier name at death.
     pub power_tier: String,
+    /// Misery Index at death.
     pub misery_index: f64,
+    /// What killed the character.
     pub cause_of_death: String,
+    /// Enemies killed during the run.
     pub kills: u32,
+    /// Final score.
     pub score: u64,
+    /// Date of death as text.
     pub date: String,
+    /// Generated epitaph shown on the tombstone.
     pub epitaph: String,
 }
 
 impl GraveyardEntry {
+    /// Pick an epitaph for a dead character from how the run went (backfire death, all stats negative, misery, class and so on).
     pub fn generate_epitaph(
         class: &str,
         floor: u32,
@@ -242,12 +330,13 @@ impl GraveyardEntry {
         match class {
             "Mage"       => format!("Floor {floor}. Level unknown to the prime numbers. Remembered by the mana pool."),
             "Berserker"  => format!("Rage carried them to floor {floor}. Math brought them back down."),
-            "Necromancer"=> format!("They came back from worse than this before. They did not come back from this."),
-            "Paladin"    => format!("The regen wasn't enough. Nothing personal — just statistics."),
+            "Necromancer"=> "They came back from worse than this before. They did not come back from this.".to_string(),
+            "Paladin"    => "The regen wasn't enough. Nothing personal — just statistics.".to_string(),
             _            => format!("A {class} of floor {floor}. The chaos engine is indifferent but notes the record."),
         }
     }
 
+    /// ASCII-art tombstone with name, level, floor, score, epitaph and killer.
     pub fn render_tombstone(&self) -> String {
         format!(
             "┌─────────────────────────┐\n\
@@ -278,47 +367,83 @@ impl GraveyardEntry {
 
 // ── Bestiary entry ────────────────────────────────────────────────────────────
 
+/// What you know about one enemy type across all runs.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BestiaryEntry {
+    /// Enemy type name.
     pub enemy_name: String,
+    /// Times you have met this enemy.
     pub encounters: u64,
+    /// Times you killed it.
     pub kills_by_player: u64,
+    /// Times it killed you.
     pub times_killed_player: u64,
+    /// Total damage it has dealt to you.
     pub total_damage_taken_from: i64,
+    /// Total damage you have dealt to it.
     pub total_damage_dealt_to: i64,
 }
 
 // ── Legacy data ───────────────────────────────────────────────────────────────
 
+/// Everything kept between runs: lifetime totals, records, achievements, unlocks, bestiary and graveyard.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LegacyData {
+    /// Runs played.
     pub total_runs: u64,
+    /// Enemies killed across all runs.
     pub total_kills: u64,
+    /// Floors cleared across all runs.
     pub total_floors: u64,
+    /// Damage dealt across all runs.
     pub total_damage_dealt: i64,
+    /// Damage taken across all runs.
     pub total_damage_taken: i64,
+    /// Gold earned across all runs.
     pub total_gold: i64,
+    /// Misery Index accumulated across all runs.
     pub total_misery: f64,
+    /// Spite spent across all runs.
     pub total_spite_spent: f64,
+    /// Chaos engine rolls across all runs.
     pub total_engine_rolls: u64,
+    /// Deaths caused by your own spell backfire.
     pub total_backfire_deaths: u32,
+    /// Seeded runs played.
     pub total_seeded_runs: u32,
+    /// Biggest single hit ever dealt.
     pub highest_single_hit: i64,
+    /// Deepest floor ever reached.
     pub highest_floor: u32,
+    /// Highest power tier ever reached.
     pub highest_power_tier: String,
+    /// Lowest power tier ever reached.
     pub lowest_power_tier: String,
+    /// Highest Misery Index in a single run.
     pub highest_misery_single_run: f64,
+    /// Most floors cleared in one run.
     pub longest_run_floors: u32,
+    /// Fewest floors cleared in one run.
     pub shortest_run_floors: u32,
+    /// Total play time in seconds.
     pub total_play_time_seconds: u64,
+    /// Per-engine lifetime statistics.
     pub per_engine_lifetime: Vec<EngineLifetimeStats>,
+    /// Achievements earned.
     pub achievements: HashSet<AchievementId>,
+    /// Unlocks earned.
     pub unlocks: HashSet<UnlockId>,
+    /// Bestiary entries keyed by enemy name.
     pub enemy_bestiary: HashMap<String, BestiaryEntry>,
+    /// Dead characters, newest last.
     pub character_graveyard: Vec<GraveyardEntry>,
+    /// Backfire deaths counted toward the Self Inflicted achievement.
     pub backfire_death_count: u32,  // for SelfInflicted achievement
+    /// Seeds of seeded runs played, for the Seed Sharer achievement.
     pub seeded_seeds_played: Vec<u64>,
+    /// Shops visited without buying, for the Window Shopper achievement.
     pub window_shopping_runs: u32,  // shops visited without buying
+    /// Runs in a row that finished at a negative power tier.
     pub consecutive_negative_runs: u32,
 }
 
@@ -338,12 +463,14 @@ fn dirs_home() -> Option<PathBuf> {
 }
 
 impl LegacyData {
+    /// Load legacy data from `~/.chaos_rpg/chaos_rpg_legacy.json`, or start empty if missing or unreadable.
     pub fn load() -> Self {
         let path = legacy_path();
         let Ok(bytes) = std::fs::read(&path) else { return Self::default(); };
         serde_json::from_slice(&bytes).unwrap_or_default()
     }
 
+    /// Save legacy data to `~/.chaos_rpg/chaos_rpg_legacy.json`, ignoring write errors.
     pub fn save(&self) {
         let path = legacy_path();
         if let Some(parent) = path.parent() {

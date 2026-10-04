@@ -11,16 +11,24 @@ use serde::{Deserialize, Serialize};
 // ─── NPC ROLES ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// What an NPC does for the player.
 pub enum NpcRole {
+    /// Buys and sells items.
     Merchant,
+    /// Reveals the next room.
     Oracle,     // reveals next room
+    /// Upgrades weapons.
     Blacksmith, // upgrades weapons
+    /// Restores HP.
     Healer,
+    /// An unpredictable stranger.
     MysteriousStranger,
+    /// Sells knowledge at a cost.
     CursedScholar, // sells knowledge at a cost
 }
 
 impl NpcRole {
+    /// Display name of the role.
     pub fn name(&self) -> &'static str {
         match self {
             NpcRole::Merchant => "Merchant",
@@ -36,13 +44,18 @@ impl NpcRole {
 // ─── NPC PERSONALITY ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Chaos-rolled personality traits, each 0.0 to 1.0.
 pub struct NpcPersonality {
+    /// 0.0 is generous, 1.0 greedy; affects prices.
     pub greed: f64,          // 0=generous, 1=greedy. Affects prices.
+    /// 0.0 is friendly, 1.0 hostile; affects dialogue.
     pub hostility: f64,      // 0=friendly, 1=hostile. Affects dialogue.
+    /// 0.0 is orderly, 1.0 chaotic; affects what they say.
     pub chaos_affinity: f64, // 0=orderly, 1=chaotic. Affects what they say.
 }
 
 impl NpcPersonality {
+    /// Roll a personality from `seed` with three chaos rolls.
     pub fn from_seed(seed: u64) -> Self {
         let greed_roll = chaos_roll_verbose(seed as f64 * 1e-12, seed);
         let hostile_roll = chaos_roll_verbose(seed as f64 * 1e-11, seed.wrapping_add(1));
@@ -59,16 +72,24 @@ impl NpcPersonality {
 // ─── NPC ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A non-player character met in the dungeon.
 pub struct Npc {
+    /// Generated name.
     pub name: String,
+    /// Role.
     pub role: NpcRole,
+    /// Personality.
     pub personality: NpcPersonality,
+    /// Items the NPC has.
     pub inventory: Vec<Item>,
+    /// Attitude towards the player from -1.0 (hostile) through 0.0 (neutral) to 1.0 (friendly).
     pub relationship: f64, // -1.0 hostile, 0.0 neutral, 1.0 friendly
+    /// Seed the NPC was generated from.
     pub seed: u64,
 }
 
 impl Npc {
+    /// Opening line, chosen by the NPC's hostility and chaos affinity.
     pub fn greeting(&self) -> String {
         let chaos = self.personality.chaos_affinity;
         let hostile = self.personality.hostility;
@@ -142,7 +163,7 @@ impl Npc {
         // Apply discount to inventory (conceptual — actual price recalculated at purchase)
         let _ = discount;
 
-        (roll.to_range(-20, 0) as i64, rel_delta)
+        (roll.to_range(-20, 0), rel_delta)
     }
 }
 
@@ -173,6 +194,7 @@ const NPC_BASES: &[&str] = &[
     "Math-Touched",
 ];
 
+/// Generate an NPC of the given role for `floor` from `seed`: name, personality, inventory and starting relationship.
 pub fn generate_npc(role: NpcRole, floor: u32, seed: u64) -> Npc {
     let prefix_idx = (seed % NPC_PREFIXES.len() as u64) as usize;
     let base_idx = (seed.wrapping_mul(31337) % NPC_BASES.len() as u64) as usize;

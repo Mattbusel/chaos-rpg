@@ -21,8 +21,8 @@ const FOUNTAIN_MAX: usize = 24;
 pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
     let elapsed = CINEMATIC_DUR - state.title_logo_timer.max(0.0);
     if elapsed < P1 { engine.add_trauma(0.12); }
-    if elapsed > 2.2 {
-        if engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Escape) {
+    if elapsed > 2.2
+        && (engine.input.just_pressed(Key::Enter) || engine.input.just_pressed(Key::Escape)) {
             crate::state::delete_save();
             state.player = None;
             state.floor = None;
@@ -31,7 +31,6 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, _dt: f32) {
             state.screen = AppScreen::Title;
             state.title_logo_timer = 1.5;
         }
-    }
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────

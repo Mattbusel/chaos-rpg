@@ -122,7 +122,10 @@ impl FluidType {
         }
     }
 
-    /// Decay rate (how fast density fades).
+    /// Density kept per frame at 60 fps (how fast the fluid fades).
+    ///
+    /// proof-engine's `FluidGrid::decay` is a per-second factor, so use
+    /// [`FluidType::decay_per_second`] when configuring a grid.
     pub fn decay(self) -> f32 {
         match self {
             Self::Blood  => 0.998,
@@ -134,6 +137,14 @@ impl FluidType {
             Self::Dark   => 0.997,
             Self::Water  => 0.996,
         }
+    }
+
+    /// [`FluidType::decay`] converted to the per-second factor the engine
+    /// applies (`decay.powf(dt)` each step). Passing the per-frame value
+    /// straight through made fire keep 88% of its density after 8 seconds
+    /// instead of fading out.
+    pub fn decay_per_second(self) -> f32 {
+        self.decay().powf(60.0)
     }
 
     /// Gravity bias for this fluid type.
@@ -179,7 +190,7 @@ impl FluidLayer {
     fn new(fluid_type: FluidType, width: usize, height: usize, dx: f32) -> Self {
         let mut grid = FluidGrid::new(width, height, dx);
         grid.viscosity = fluid_type.viscosity();
-        grid.decay = fluid_type.decay();
+        grid.decay = fluid_type.decay_per_second();
         grid.gravity = fluid_type.gravity_bias();
         grid.vorticity_strength = fluid_type.vorticity();
         Self {
@@ -614,11 +625,10 @@ impl ArenaFluid {
             if gx >= layer.grid.width || gy >= layer.grid.height { continue; }
             let idx = gy * layer.grid.width + gx;
             let d = layer.grid.density[idx];
-            if d > RENDER_THRESHOLD {
-                if best.map_or(true, |(_, bd)| d > bd) {
+            if d > RENDER_THRESHOLD
+                && best.is_none_or(|(_, bd)| d > bd) {
                     best = Some((*ft, d));
                 }
-            }
         }
         best
     }

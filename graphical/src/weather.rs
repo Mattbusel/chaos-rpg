@@ -220,7 +220,7 @@ impl Weather {
             let g = (p.col.1 as f32 * alpha) as u8;
             let b = (p.col.2 as f32 * alpha) as u8;
             if r < 3 && g < 3 && b < 3 { continue; }
-            ctx.print_color(x, y, RGB::from_u8(r, g, b), bg_rgb, &p.ch.to_string());
+            ctx.print_color(x, y, RGB::from_u8(r, g, b), bg_rgb, p.ch.to_string());
         }
 
         // Storm flash: drawn by caller via storm_flash field

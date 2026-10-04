@@ -7,47 +7,70 @@ use std::collections::HashMap;
 // ── Diplomatic Relations ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+/// How two factions stand with each other.
 pub enum DiplomaticRelation {
+    /// Formal allies.
     Allied,
+    /// On good terms.
     Friendly,
+    /// Neither friends nor enemies.
     Neutral,
+    /// Openly unfriendly.
     Hostile,
+    /// At war.
     AtWar,
 }
 
 // ── Faction ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// A faction in the world, such as a guild or an order.
 pub struct Faction {
+    /// Unique faction id.
     pub id: u32,
+    /// Display name.
     pub name: String,
+    /// Military and political power; multiplied by alliances in `faction_strength`.
     pub power: f64,
+    /// Gold in the treasury (starts at 0).
     pub gold: u64,
+    /// Free-form alignment label, such as "Neutral".
     pub alignment: String,
 }
 
 // ── FactionRelation ───────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// The relationship between two factions (order of the pair does not matter).
 pub struct FactionRelation {
+    /// First faction id.
     pub faction_a: u32,
+    /// Second faction id.
     pub faction_b: u32,
+    /// Diplomatic state.
     pub relation: DiplomaticRelation,
+    /// Relationship score, clamped to -100 to 100.
     pub score: i32,
 }
 
 // ── PlayerFactionStanding ─────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// How one player stands with one faction.
 pub struct PlayerFactionStanding {
+    /// Player id.
     pub player_id: String,
+    /// Faction id.
     pub faction_id: u32,
+    /// Reputation, clamped to -100 to 100.
     pub reputation: i32,
+    /// Title for the reputation, from `reputation_title`.
     pub title: String,
 }
 
 // ── Reputation Title ──────────────────────────────────────────────────────
 
+/// Title for a reputation value: Hated below -30, then Hostile, Unfriendly, Neutral (0 to 9), Friendly, Honored, Revered, and Exalted from 90.
 pub fn reputation_title(rep: i32) -> &'static str {
     if rep >= 90 {
         "Exalted"
@@ -71,18 +94,25 @@ pub fn reputation_title(rep: i32) -> &'static str {
 // ── FactionSystem ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Default)]
+/// All factions, their relations and every player's standing with them.
 pub struct FactionSystem {
+    /// Factions by id.
     pub factions: HashMap<u32, Faction>,
+    /// Relations between pairs of factions.
     pub relations: Vec<FactionRelation>,
+    /// Player standings keyed by (player id, faction id).
     pub standings: HashMap<(String, u32), PlayerFactionStanding>,
+    /// Id the next added faction will get.
     pub next_id: u32,
 }
 
 impl FactionSystem {
+    /// An empty faction system.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Add a faction with no gold and return its new id.
     pub fn add_faction(&mut self, name: &str, power: f64, alignment: &str) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
@@ -99,6 +129,7 @@ impl FactionSystem {
         id
     }
 
+    /// Set the relation between `a` and `b`, replacing any existing one; the score is clamped to -100 to 100.
     pub fn set_relation(&mut self, a: u32, b: u32, relation: DiplomaticRelation, score: i32) {
         // Remove existing relation between a and b if present
         self.relations.retain(|r| {
@@ -113,6 +144,7 @@ impl FactionSystem {
         });
     }
 
+    /// The relation between `a` and `b` in either order, if one was set.
     pub fn get_relation(&self, a: u32, b: u32) -> Option<&FactionRelation> {
         self.relations.iter().find(|r| {
             (r.faction_a == a && r.faction_b == b)
@@ -120,6 +152,7 @@ impl FactionSystem {
         })
     }
 
+    /// Change a player's reputation with a faction by `delta` (clamped to -100 to 100) and update the title.
     pub fn modify_standing(&mut self, player_id: &str, faction_id: u32, delta: i32) {
         let key = (player_id.to_string(), faction_id);
         let entry = self.standings.entry(key).or_insert_with(|| PlayerFactionStanding {
@@ -132,10 +165,12 @@ impl FactionSystem {
         entry.title = reputation_title(entry.reputation).to_string();
     }
 
+    /// A player's standing with a faction, if they have one.
     pub fn player_standing(&self, player_id: &str, faction_id: u32) -> Option<&PlayerFactionStanding> {
         self.standings.get(&(player_id.to_string(), faction_id))
     }
 
+    /// Ids of the factions allied with `faction_id`.
     pub fn allied_factions(&self, faction_id: u32) -> Vec<u32> {
         self.relations
             .iter()
@@ -152,6 +187,7 @@ impl FactionSystem {
             .collect()
     }
 
+    /// Put `a` and `b` at war (score -100) and make their allies Hostile to each other (score -50).
     pub fn declare_war(&mut self, a: u32, b: u32) {
         // Set A-B to AtWar
         self.set_relation(a, b, DiplomaticRelation::AtWar, -100);
@@ -169,10 +205,12 @@ impl FactionSystem {
         }
     }
 
+    /// Set `a` and `b` back to Neutral with score 0.
     pub fn make_peace(&mut self, a: u32, b: u32) {
         self.set_relation(a, b, DiplomaticRelation::Neutral, 0);
     }
 
+    /// Power of the faction plus 10% per ally; 0.0 for an unknown id.
     pub fn faction_strength(&self, faction_id: u32) -> f64 {
         if let Some(faction) = self.factions.get(&faction_id) {
             let ally_count = self.allied_factions(faction_id).len() as f64;

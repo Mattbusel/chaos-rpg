@@ -2,19 +2,29 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Section of the Codex an entry is filed under.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CodexCategory {
+    /// The Proof itself, the world's underlying mathematics.
     TheProof,
+    /// The ages of the world's history.
     TheEpochs,
+    /// The ten chaos engines.
     TheEngines,
+    /// The three factions.
     TheFactions,
+    /// The Mathematician and their fragments.
     TheMathematician,
+    /// Materials and items.
     Materials,
+    /// Strange events in the world.
     Phenomena,
+    /// In-world theories about how it all works.
     Theories,
 }
 
 impl CodexCategory {
+    /// Section name shown to the player.
     pub fn display_name(self) -> &'static str {
         match self {
             CodexCategory::TheProof => "The Proof",
@@ -29,16 +39,24 @@ impl CodexCategory {
     }
 }
 
+/// One lore entry in the Codex.
 #[derive(Debug, Clone)]
 pub struct CodexEntry {
+    /// Unique entry identifier.
     pub id: &'static str,
+    /// Title shown to the player.
     pub title: &'static str,
+    /// Codex section.
     pub category: CodexCategory,
+    /// Full lore text.
     pub body: &'static str,
+    /// Hint shown while the entry is still locked.
     pub unlock_hint: &'static str, // shown before unlocked
+    /// Internal key of the game event that unlocks it.
     pub unlock_condition: &'static str, // internal key
 }
 
+/// Every Codex entry in the game.
 pub const CODEX_ENTRIES: &[CodexEntry] = &[
     // ── THE PROOF ────────────────────────────────────────────────────────────
     CodexEntry {

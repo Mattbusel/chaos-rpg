@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// What the player has learned about one enemy type across all runs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncounterRecord {
     /// Enemy name as it appears in game.
@@ -38,6 +39,7 @@ pub struct EncounterRecord {
 }
 
 impl EncounterRecord {
+    /// A record for a first encounter: fought once, nothing killed, HP and damage ranges unknown; normal enemies have their lore unlocked at once, bosses on first kill.
     pub fn new(name: String, floor: u32, date: String, is_boss: bool) -> Self {
         Self {
             name,
@@ -56,6 +58,7 @@ impl EncounterRecord {
         }
     }
 
+    /// Count a finished fight and widen the HP range; a boss kill unlocks its lore, and its strategy hint once fought 3 or more times.
     pub fn record_fight(&mut self, enemy_hp: i64, player_killed: bool, enemy_killed: bool) {
         self.times_fought += 1;
         if enemy_killed {
@@ -74,6 +77,7 @@ impl EncounterRecord {
         self.max_hp_seen = self.max_hp_seen.max(enemy_hp);
     }
 
+    /// Widen the observed damage range with one hit (ignored if 0 or less).
     pub fn record_damage(&mut self, damage: i64) {
         if damage > 0 {
             self.min_damage_seen = self.min_damage_seen.min(damage);
@@ -81,6 +85,7 @@ impl EncounterRecord {
         }
     }
 
+    /// Observed HP as text: one value, a "min to max" range, or "unknown".
     pub fn hp_range_display(&self) -> String {
         if self.min_hp_seen == i64::MAX {
             "unknown".to_string()
@@ -91,6 +96,7 @@ impl EncounterRecord {
         }
     }
 
+    /// Observed damage per hit as text: one value, a "min to max" range, or "unknown".
     pub fn damage_range_display(&self) -> String {
         if self.min_damage_seen == i64::MAX {
             "unknown".to_string()
@@ -102,12 +108,15 @@ impl EncounterRecord {
     }
 }
 
+/// All enemies the player has met, saved between runs.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PlayerBestiary {
+    /// Records keyed by enemy name.
     pub entries: HashMap<String, EncounterRecord>,
 }
 
 impl PlayerBestiary {
+    /// Load from `chaos_rpg_bestiary.json` in the data folder, or start empty.
     pub fn load() -> Self {
         if let Ok(data) = std::fs::read_to_string(Self::path()) {
             if let Ok(b) = serde_json::from_str::<PlayerBestiary>(&data) {
@@ -117,6 +126,7 @@ impl PlayerBestiary {
         Self::default()
     }
 
+    /// Save to `chaos_rpg_bestiary.json` in the data folder, ignoring write errors.
     pub fn save(&self) {
         if let Ok(json) = serde_json::to_string_pretty(self) {
             let _ = std::fs::write(Self::path(), json);
@@ -146,6 +156,7 @@ impl PlayerBestiary {
         is_new
     }
 
+    /// Record the end of a fight with a known enemy (ignored for unknown names).
     pub fn record_fight_result(
         &mut self,
         name: &str,
@@ -158,12 +169,14 @@ impl PlayerBestiary {
         }
     }
 
+    /// Record a hit taken from a known enemy (ignored for unknown names).
     pub fn record_damage_received(&mut self, enemy_name: &str, damage: i64) {
         if let Some(rec) = self.entries.get_mut(enemy_name) {
             rec.record_damage(damage);
         }
     }
 
+    /// Look up a record by enemy name.
     pub fn get(&self, name: &str) -> Option<&EncounterRecord> {
         self.entries.get(name)
     }
@@ -186,34 +199,21 @@ impl PlayerBestiary {
         records
     }
 
+    /// Number of different enemies met.
     pub fn total_encountered(&self) -> usize {
         self.entries.len()
     }
 
+    /// Total kills across all enemies.
     pub fn total_killed(&self) -> u32 {
         self.entries.values().map(|r| r.times_killed).sum()
     }
 
     fn path() -> PathBuf {
-        let mut p = std::env::current_exe().unwrap_or_default();
-        p.pop();
-        p.push("chaos_rpg_bestiary.json");
-        p
+        crate::paths::data_file("chaos_rpg_bestiary.json")
     }
 }
 
 fn current_date_string() -> String {
-    // Simple date from system time — no chrono dependency needed
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let days = secs / 86400;
-    // Days since Unix epoch → approximate date (good enough for display)
-    let year = 1970 + days / 365;
-    let day_of_year = days % 365;
-    let month = day_of_year / 30 + 1;
-    let day = day_of_year % 30 + 1;
-    format!("{:04}-{:02}-{:02}", year, month.min(12), day.min(31))
+    crate::time_util::today_utc()
 }

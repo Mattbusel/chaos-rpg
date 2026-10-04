@@ -52,11 +52,10 @@ impl CodexProgress {
             if self.unlocked_fragments.insert(frag_id) {
                 new_fragments.push(frag_id);
                 // Check if all 7 non-final fragments are unlocked → unlock fragment 8
-                if (1u8..=7).all(|id| self.unlocked_fragments.contains(&id)) {
-                    if self.unlocked_fragments.insert(8) {
+                if (1u8..=7).all(|id| self.unlocked_fragments.contains(&id))
+                    && self.unlocked_fragments.insert(8) {
                         new_fragments.push(8);
                     }
-                }
             }
         }
 
@@ -144,10 +143,7 @@ impl CodexProgress {
     }
 
     fn path() -> PathBuf {
-        let mut p = std::env::current_exe().unwrap_or_default();
-        p.pop();
-        p.push("chaos_rpg_codex.json");
-        p
+        crate::paths::data_file("chaos_rpg_codex.json")
     }
 }
 

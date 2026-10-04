@@ -13,15 +13,20 @@ use std::collections::HashMap;
 /// A single achievement definition.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Achievement {
+    /// Unique achievement identifier.
     pub id:          String,
+    /// Name shown to the player.
     pub name:        String,
+    /// What earns it.
     pub description: String,
+    /// Achievement points it is worth.
     pub points:      u32,
     /// Hidden achievements are not shown until unlocked.
     pub hidden:      bool,
 }
 
 impl Achievement {
+    /// An achievement definition.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -46,10 +51,15 @@ impl Achievement {
 /// The event type that can unlock an achievement.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AchievementTrigger {
+    /// Kill this many enemies.
     KillCount(u32),
+    /// Reach this character level.
     LevelReached(u32),
+    /// Earn this much gold.
     GoldEarned(u64),
+    /// Complete the quest with this id.
     QuestCompleted(String),
+    /// Craft the named item.
     ItemCrafted(String),
 }
 
@@ -60,15 +70,20 @@ pub enum AchievementTrigger {
 /// Progress record for one achievement, per player.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AchievementProgress {
+    /// Id of the achievement this tracks.
     pub achievement_id: String,
+    /// Progress so far.
     pub current:        u64,
+    /// Progress needed to unlock.
     pub required:       u64,
+    /// Whether it is unlocked.
     pub unlocked:       bool,
     /// Unix-style timestamp (seconds) when the achievement was unlocked.
     pub unlocked_at:    Option<u64>,
 }
 
 impl AchievementProgress {
+    /// Fresh progress toward `achievement_id`, needing `required` to unlock.
     pub fn new(achievement_id: impl Into<String>, required: u64) -> Self {
         Self {
             achievement_id: achievement_id.into(),
@@ -99,6 +114,7 @@ pub struct AchievementManager {
 }
 
 impl AchievementManager {
+    /// A manager with no achievements registered.
     pub fn new() -> Self {
         Self {
             definitions: HashMap::new(),
@@ -171,17 +187,14 @@ impl AchievementManager {
                         false
                     }
                 }
-                (AchievementTrigger::ItemCrafted(item), AchievementTrigger::ItemCrafted(req)) => {
-                    if item == req {
+                (AchievementTrigger::ItemCrafted(item), AchievementTrigger::ItemCrafted(req))
+                    if item == req => {
                         let prog = player.progress
                             .entry(achievement_id.clone())
                             .or_insert_with(|| AchievementProgress::new(achievement_id, 1));
                         prog.current = 1;
                         true
-                    } else {
-                        false
                     }
-                }
                 _ => false,
             };
 
@@ -213,12 +226,14 @@ impl Default for AchievementManager {
 /// All achievement progress for a single player.
 #[derive(Debug, Clone, Default)]
 pub struct PlayerAchievements {
+    /// Player this progress belongs to.
     pub player_id: String,
     /// Progress keyed by achievement id.
     pub progress:  HashMap<String, AchievementProgress>,
 }
 
 impl PlayerAchievements {
+    /// Empty progress for a player.
     pub fn new(player_id: impl Into<String>) -> Self {
         Self {
             player_id: player_id.into(),
@@ -317,7 +332,7 @@ fn json_string(s: &str) -> String {
     format!("\"{}\"", escaped)
 }
 
-fn extract_json_string<'a>(json: &'a str, key: &str) -> Option<String> {
+fn extract_json_string(json: &str, key: &str) -> Option<String> {
     let search = format!("\"{}\":\"", key);
     let start = json.find(&search)? + search.len();
     let rest  = &json[start..];

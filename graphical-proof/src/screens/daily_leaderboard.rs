@@ -61,12 +61,5 @@ pub fn render(state: &GameState, engine: &mut ProofEngine) {
 
 /// Simple date string (YYYY-MM-DD) without external chrono dependency.
 fn chrono_date_string() -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let days = secs / 86400;
-    let year = 1970 + (days / 365);
-    let day_of_year = days % 365;
-    let month = day_of_year / 30 + 1;
-    let day = day_of_year % 30 + 1;
-    format!("{:04}-{:02}-{:02}", year, month.min(12), day.min(31))
+    chaos_rpg_core::time_util::today_utc()
 }

@@ -14,17 +14,26 @@ use serde::{Deserialize, Serialize};
 // ─── COMBAT ACTIONS ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// What the player does on their turn.
 pub enum CombatAction {
+    /// Normal attack.
     Attack,
+    /// Stronger, riskier attack.
     HeavyAttack,
+    /// Brace to reduce incoming damage.
     Defend,
+    /// Cast the known spell at this index.
     UseSpell(usize), // spell index
+    /// Use the inventory item at this index.
     UseItem(usize),  // item index
+    /// Try to run away.
     Flee,
+    /// Provoke the enemy.
     Taunt,
 }
 
 impl CombatAction {
+    /// Menu label with its key, e.g. "[A] Attack".
     pub fn display_name(&self) -> String {
         match self {
             CombatAction::Attack => "[A] Attack".to_string(),
@@ -41,53 +50,87 @@ impl CombatAction {
 // ─── COMBAT EVENTS (LOG) ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// One entry in the combat log.
 pub enum CombatEvent {
+    /// The player hit the enemy.
     PlayerAttack {
+        /// Damage dealt.
         damage: i64,
+        /// True for a critical hit.
         is_crit: bool,
     },
+    /// The enemy hit the player.
     EnemyAttack {
+        /// Damage dealt.
         damage: i64,
+        /// True for a critical hit.
         is_crit: bool,
     },
+    /// The player defended.
     PlayerDefend {
+        /// Damage the defence absorbed.
         damage_reduced: i64,
     },
+    /// The player escaped.
     PlayerFled,
+    /// The escape attempt failed.
     PlayerFleeFailed,
+    /// The player cast a spell.
     SpellCast {
+        /// Spell name.
         name: String,
+        /// Damage dealt, or taken if it backfired.
         damage: i64,
+        /// True if the spell hurt the caster instead.
         backfired: bool,
     },
+    /// The enemy died.
     EnemyDied {
+        /// XP earned.
         xp: u64,
+        /// Gold earned.
         gold: i64,
     },
+    /// The player regained HP.
     PlayerHealed {
+        /// HP restored.
         amount: i64,
     },
+    /// A status effect was applied.
     StatusApplied {
+        /// Name of the effect.
         name: String,
     },
+    /// A random chaos event happened.
     ChaosEvent {
+        /// What happened.
         description: String,
     },
+    /// An item was equipped.
     ItemEquipped {
+        /// Item name.
         name: String,
+        /// Slot it went into.
         slot: String,
     },
+    /// An equipped item wore down.
     ItemDurabilityLost {
+        /// Item name.
         name: String,
+        /// Durability left.
         durability: u8,
+        /// Durability when new.
         max_durability: u8,
     },
+    /// An equipped item broke and is gone.
     ItemDestroyed {
+        /// Item name.
         name: String,
     },
 }
 
 impl CombatEvent {
+    /// The log line shown to the player for this event.
     pub fn to_display_string(&self) -> String {
         match self {
             CombatEvent::PlayerAttack { damage, is_crit } => {
@@ -150,18 +193,27 @@ impl CombatEvent {
 // ─── COMBAT STATE ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// State of one fight that lasts across turns.
 pub struct CombatState {
+    /// Turn number, starting at 0 and counted up before each action.
     pub turn: u32,
+    /// True if the player chose Defend this turn.
     pub player_defending: bool,
+    /// True if the enemy is stunned and skips its next attack.
     pub enemy_stunned: bool,
+    /// Number of chaos events triggered in this fight.
     pub chaos_events: u32,
+    /// Everything that happened in this fight, in order.
     pub log: Vec<CombatEvent>,
     /// The player's chaos roll for the most recent action — shown in the trace.
     pub last_roll: Option<ChaosRollResult>,
     /// The enemy's chaos roll for their counterattack — shown in compact trace.
     pub enemy_last_roll: Option<ChaosRollResult>,
+    /// Seed for this fight's rolls; advanced before every roll.
     pub seed: u64,
+    /// Consecutive successful player attacks.
     pub combo_streak: u32,
+    /// True until the player's first attack of the fight.
     pub is_first_attack: bool,
     /// EngineTheft: number of engines stolen from player's next roll chain.
     pub engines_stolen: u32,
@@ -170,6 +222,7 @@ pub struct CombatState {
 }
 
 impl CombatState {
+    /// A fresh fight using `seed` for its rolls.
     pub fn new(seed: u64) -> Self {
         CombatState {
             turn: 0,
@@ -249,10 +302,15 @@ fn null_aura_roll(seed: u64) -> ChaosRollResult {
 // ─── COMBAT OUTCOMES ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Result of a turn: the fight goes on or ends.
 pub enum CombatOutcome {
+    /// Nobody has won yet.
     Ongoing,
+    /// The enemy died; the player earns this XP and gold.
     PlayerWon { xp: u64, gold: i64 },
+    /// The player died.
     PlayerDied,
+    /// The player escaped.
     PlayerFled,
 }
 

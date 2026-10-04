@@ -1053,7 +1053,7 @@ mod tests {
     fn test_pseudo_f32_range() {
         for i in 0..100 {
             let v = pseudo_f32(i, 0);
-            assert!(v >= 0.0 && v <= 1.0);
+            assert!((0.0..=1.0).contains(&v));
         }
     }
 

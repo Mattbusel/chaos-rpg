@@ -1,40 +1,77 @@
 //! Dungeon generation: BSP tree room placement + corridor carving
 
 #[derive(Clone, Debug)]
+/// An axis-aligned rectangle of tiles.
 pub struct Rect {
-    pub x: u32, pub y: u32, pub w: u32, pub h: u32,
+    /// Left column.
+    pub x: u32,
+    /// Top row.
+    pub y: u32,
+    /// Width in tiles.
+    pub w: u32,
+    /// Height in tiles.
+    pub h: u32,
 }
 
 impl Rect {
+    /// A rectangle with its top-left corner at (x, y).
     pub fn new(x: u32, y: u32, w: u32, h: u32) -> Self { Rect { x, y, w, h } }
+    /// Centre tile, rounded down.
     pub fn center(&self) -> (u32, u32) { (self.x + self.w / 2, self.y + self.h / 2) }
+    /// Area in tiles.
     pub fn area(&self) -> u32 { self.w * self.h }
+    /// Whether the two rectangles overlap.
     pub fn intersects(&self, other: &Rect) -> bool {
         self.x < other.x + other.w && self.x + self.w > other.x &&
         self.y < other.y + other.h && self.y + self.h > other.y
     }
+    /// The rectangle inset by `margin` on every side, or `None` if that would leave it too small.
     pub fn shrink(&self, margin: u32) -> Option<Rect> {
         if self.w <= margin * 2 + 2 || self.h <= margin * 2 + 2 { return None; }
         Some(Rect::new(self.x + margin, self.y + margin, self.w - margin * 2, self.h - margin * 2))
     }
 }
 
-pub enum RoomType { Start, Boss, Treasure, Monster, Empty, Shop }
+/// Purpose of a generated room.
+pub enum RoomType {
+    /// Where the player begins.
+    Start,
+    /// Holds the floor boss.
+    Boss,
+    /// Holds loot.
+    Treasure,
+    /// Holds enemies.
+    Monster,
+    /// Nothing in it.
+    Empty,
+    /// Holds a merchant.
+    Shop,
+}
 
+/// A room in a generated dungeon.
 pub struct Room {
+    /// Tiles the room covers.
     pub rect: Rect,
+    /// What the room is for.
     pub room_type: RoomType,
+    /// Indices of the rooms it connects to.
     pub connections: Vec<usize>,
 }
 
+/// A generated dungeon: a grid of floor and wall tiles.
 pub struct DungeonMap {
+    /// Width in tiles.
     pub width: u32,
+    /// Height in tiles.
     pub height: u32,
+    /// One entry per tile, row by row: true is floor, false is wall.
     pub tiles: Vec<bool>, // true = floor
+    /// Rooms on the map (not filled in by `DungeonGenerator::generate`, which only carves tiles).
     pub rooms: Vec<Room>,
 }
 
 impl DungeonMap {
+    /// A map of the given size, all wall.
     pub fn new(width: u32, height: u32) -> Self {
         DungeonMap {
             width, height,
@@ -43,12 +80,14 @@ impl DungeonMap {
         }
     }
 
+    /// Make (x, y) floor; out-of-range coordinates are ignored.
     pub fn set_floor(&mut self, x: u32, y: u32) {
         if x < self.width && y < self.height {
             self.tiles[(y * self.width + x) as usize] = true;
         }
     }
 
+    /// Whether (x, y) is floor; false outside the map.
     pub fn is_floor(&self, x: u32, y: u32) -> bool {
         x < self.width && y < self.height && self.tiles[(y * self.width + x) as usize]
     }
@@ -78,6 +117,7 @@ impl DungeonMap {
         }
     }
 
+    /// The map as text, '.' for floor and '#' for wall, one line per row.
     pub fn render_ascii(&self) -> String {
         let mut out = String::new();
         for y in 0..self.height {
@@ -170,19 +210,27 @@ impl BspNode {
     }
 }
 
+/// Binary space partition dungeon generator settings.
 pub struct DungeonGenerator {
+    /// Map width in tiles.
     pub width: u32,
+    /// Map height in tiles.
     pub height: u32,
+    /// Smallest room side in tiles.
     pub min_room_size: u32,
+    /// Largest room side in tiles.
     pub max_room_size: u32,
+    /// How many times space is split; more means more, smaller rooms.
     pub bsp_depth: u32,
 }
 
 impl DungeonGenerator {
+    /// A generator for a map of this size, rooms 4 to 12 tiles wide, split depth 5.
     pub fn new(width: u32, height: u32) -> Self {
         DungeonGenerator { width, height, min_room_size: 4, max_room_size: 12, bsp_depth: 5 }
     }
 
+    /// Carve rooms and connecting corridors from `seed`; the same seed gives the same map.
     pub fn generate(&self, seed: u64) -> DungeonMap {
         let mut state = seed;
         let mut root = BspNode::new(Rect::new(0, 0, self.width, self.height));

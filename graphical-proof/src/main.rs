@@ -2,6 +2,15 @@
 //!
 //! Full graphical frontend powered by the mathematical rendering engine.
 //! Every visual is the output of a mathematical function.
+// Many draw helpers take a context plus several colors, and much of the UI is
+// still being built out; keep clippy focused on lints that find bugs.
+#![allow(
+    dead_code,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::if_same_then_else,
+    clippy::type_complexity
+)]
 
 use proof_engine::prelude::*;
 use proof_engine::integration::ProofGame;

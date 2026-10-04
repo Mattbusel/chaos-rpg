@@ -9,36 +9,52 @@ use std::collections::VecDeque;
 /// Shape of a dungeon room.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoomShape {
+    /// Rectangular room.
     Rect,
+    /// Round room.
     Circle,
+    /// Regular polygon with this many sides.
     Polygon(usize), // number of sides
 }
 
 /// A single dungeon room.
 #[derive(Debug, Clone)]
 pub struct Room {
+    /// Room id.
     pub id: u32,
+    /// Centre position (x, y).
     pub center: (f32, f32),
+    /// Width.
     pub width: f32,
+    /// Height.
     pub height: f32,
+    /// Shape.
     pub shape: RoomShape,
+    /// Ids of rooms joined to this one by corridors.
     pub connections: Vec<u32>,
 }
 
 /// A corridor connecting two rooms.
 #[derive(Debug, Clone)]
 pub struct Corridor {
+    /// Room the corridor starts at.
     pub from_room: u32,
+    /// Room the corridor ends at.
     pub to_room: u32,
+    /// Points the corridor passes through, in order.
     pub waypoints: Vec<(f32, f32)>,
 }
 
 /// A Voronoi-based dungeon.
 #[derive(Debug, Clone)]
 pub struct VoronoiDungeon {
+    /// All rooms.
     pub rooms: Vec<Room>,
+    /// All corridors.
     pub corridors: Vec<Corridor>,
+    /// Width of the dungeon area.
     pub width: f32,
+    /// Height of the dungeon area.
     pub height: f32,
 }
 
@@ -77,7 +93,7 @@ pub fn generate_sites(n: usize, width: f32, height: f32, seed: u64) -> Vec<(f32,
 /// Move each site toward the centroid of its Voronoi cell using a grid of
 /// sample points.
 pub fn lloyd_relaxation(
-    sites: &mut Vec<(f32, f32)>,
+    sites: &mut [(f32, f32)],
     width: f32,
     height: f32,
     iterations: usize,

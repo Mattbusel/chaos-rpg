@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 // ─── Error ────────────────────────────────────────────────────────────────────
 
+/// Why a quest log operation failed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum QuestError {
     /// The quest ID does not exist in the log.
@@ -32,39 +33,63 @@ impl std::fmt::Display for QuestError {
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 
+/// Where a quest stands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum QuestStatus {
+    /// Registered but not started.
     NotStarted,
+    /// Started and not yet finished.
     InProgress,
+    /// All required objectives done.
     Completed,
+    /// Failed and can no longer be completed.
     Failed,
+    /// Given up by the player.
     Abandoned,
 }
 
 // ─── Objective types ─────────────────────────────────────────────────────────
 
+/// What an objective asks for, with its progress so far.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ObjectiveType {
+    /// Kill a number of enemies of one type.
     KillEnemies {
+        /// Enemy type to kill.
         enemy_type: String,
+        /// How many kills are needed.
         count: u32,
+        /// Kills so far.
         killed: u32,
     },
+    /// Collect a number of one item.
     CollectItems {
+        /// Item to collect.
         item_name: String,
+        /// How many are needed.
         count: u32,
+        /// How many have been collected.
         collected: u32,
     },
+    /// Reach a named place.
     ReachLocation {
+        /// Place to reach.
         location: String,
+        /// Whether it has been reached.
         reached: bool,
     },
+    /// Talk to a named NPC.
     TalkToNpc {
+        /// NPC to talk to.
         npc_name: String,
+        /// Whether the conversation has happened.
         talked: bool,
     },
+    /// Survive a number of enemy waves.
     SurviveWaves {
+        /// Waves to survive.
         waves: u32,
+        /// Waves survived so far.
         survived: u32,
     },
 }
@@ -109,16 +134,21 @@ impl ObjectiveType {
 
 // ─── Objective ────────────────────────────────────────────────────────────────
 
+/// One step of a quest.
 #[derive(Debug, Clone)]
 pub struct Objective {
+    /// Identifier, unique within its quest.
     pub id: String,
+    /// Text shown to the player.
     pub description: String,
+    /// What the objective asks for and its progress.
     pub objective_type: ObjectiveType,
     /// If true, this objective is not required to complete the quest.
     pub optional: bool,
 }
 
 impl Objective {
+    /// A required objective.
     pub fn new(id: impl Into<String>, description: impl Into<String>, objective_type: ObjectiveType) -> Self {
         Self {
             id: id.into(),
@@ -128,11 +158,13 @@ impl Objective {
         }
     }
 
+    /// Mark the objective as optional.
     pub fn optional(mut self) -> Self {
         self.optional = true;
         self
     }
 
+    /// Whether the objective's target has been met.
     pub fn is_complete(&self) -> bool {
         self.objective_type.is_complete()
     }
@@ -140,29 +172,44 @@ impl Objective {
 
 // ─── Reward ───────────────────────────────────────────────────────────────────
 
+/// What completing a quest pays out.
 #[derive(Debug, Clone)]
 pub struct QuestReward {
+    /// Gold awarded.
     pub gold: u32,
+    /// Experience awarded.
     pub xp: u32,
+    /// Item names awarded.
     pub items: Vec<String>,
 }
 
 // ─── Quest ────────────────────────────────────────────────────────────────────
 
+/// A quest: objectives, status, rewards and the quests it depends on.
 #[derive(Debug, Clone)]
 pub struct Quest {
+    /// Unique quest identifier.
     pub id: String,
+    /// Name shown to the player.
     pub name: String,
+    /// Description shown to the player.
     pub description: String,
+    /// Steps of the quest.
     pub objectives: Vec<Objective>,
+    /// Current status.
     pub status: QuestStatus,
+    /// Gold paid on completion.
     pub reward_gold: u32,
+    /// Experience paid on completion.
     pub reward_xp: u32,
+    /// Item names given on completion.
     pub reward_items: Vec<String>,
+    /// Quest ids that must be completed before this one can start.
     pub prerequisites: Vec<String>,
 }
 
 impl Quest {
+    /// A new, not started quest with no objectives.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -183,16 +230,19 @@ impl Quest {
         }
     }
 
+    /// Add an objective.
     pub fn with_objective(mut self, obj: Objective) -> Self {
         self.objectives.push(obj);
         self
     }
 
+    /// Add a prerequisite quest id.
     pub fn with_prerequisite(mut self, prereq: impl Into<String>) -> Self {
         self.prerequisites.push(prereq.into());
         self
     }
 
+    /// Add an item to the reward.
     pub fn with_reward_item(mut self, item: impl Into<String>) -> Self {
         self.reward_items.push(item.into());
         self
@@ -208,6 +258,7 @@ impl Quest {
 
     // ── Built-in quests ──────────────────────────────────────────────────────
 
+    /// The built-in tutorial quest: kill an enemy, pick up an item, talk to an NPC.
     pub fn tutorial() -> Self {
         Self::new(
             "tutorial",
@@ -247,6 +298,7 @@ impl Quest {
         )
     }
 
+    /// The built-in "Into the Glitch" quest: reach floor 5 and kill 10 enemies.
     pub fn first_dungeon() -> Self {
         Self::new(
             "first_dungeon",
@@ -287,6 +339,7 @@ impl Quest {
         .with_reward_item("Chaos Crystal")
     }
 
+    /// The built-in "The Equation Must Be Solved" quest: defeat the boss on floor 10.
     pub fn slay_the_boss() -> Self {
         Self::new(
             "slay_the_boss",
@@ -320,12 +373,14 @@ impl Quest {
 
 // ─── Quest Log ────────────────────────────────────────────────────────────────
 
+/// All quests the player knows about, keyed by id.
 #[derive(Debug, Default)]
 pub struct QuestLog {
     quests: HashMap<String, Quest>,
 }
 
 impl QuestLog {
+    /// An empty quest log.
     pub fn new() -> Self {
         Self::default()
     }
@@ -404,6 +459,7 @@ impl QuestLog {
         }
     }
 
+    /// Quests in progress.
     pub fn active_quests(&self) -> Vec<&Quest> {
         self.quests
             .values()
@@ -411,6 +467,7 @@ impl QuestLog {
             .collect()
     }
 
+    /// Quests completed.
     pub fn completed_quests(&self) -> Vec<&Quest> {
         self.quests
             .values()
@@ -428,6 +485,7 @@ impl QuestLog {
         })
     }
 
+    /// Look up a quest by id.
     pub fn get(&self, quest_id: &str) -> Option<&Quest> {
         self.quests.get(quest_id)
     }

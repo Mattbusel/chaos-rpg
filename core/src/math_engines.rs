@@ -307,8 +307,10 @@ pub fn modular_exp_hash(input: f64, seed: u64) -> f64 {
 }
 
 // ─── ENGINE REGISTRY ─────────────────────────────────────────────────────────
+/// A chaos engine: takes an input in -1 to 1 and a seed, returns a value in -1 to 1.
 pub type MathEngine = fn(f64, u64) -> f64;
 
+/// All ten engines, in the order of [`ENGINE_NAMES`].
 pub const ALL_ENGINES: [MathEngine; 10] = [
     lorenz_attractor,
     fourier_harmonic,
@@ -322,6 +324,7 @@ pub const ALL_ENGINES: [MathEngine; 10] = [
     modular_exp_hash,
 ];
 
+/// Display names of the engines in [`ALL_ENGINES`], same order.
 pub const ENGINE_NAMES: [&str; 10] = [
     "Lorenz Attractor",
     "Fourier Harmonic",
@@ -346,7 +349,7 @@ mod tests {
                 for input in [-1.0f64, -0.5, 0.0, 0.3, 0.7, 1.0] {
                     let result = engine(input, seed);
                     assert!(
-                        result >= -1.0 && result <= 1.0,
+                        (-1.0..=1.0).contains(&result),
                         "Engine {} ({}) out of range: input={}, seed={}, result={}",
                         i,
                         ENGINE_NAMES[i],

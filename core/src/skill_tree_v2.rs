@@ -10,24 +10,32 @@ use serde::{Deserialize, Serialize};
 // ─── ERRORS ───────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Error, Clone, PartialEq)]
+/// Why a skill tree operation failed.
 pub enum SkillError {
     #[error("skill '{0}' not found")]
+    /// No skill has this id.
     NotFound(String),
     #[error("skill '{0}' is already unlocked")]
+    /// The skill is already unlocked.
     AlreadyUnlocked(String),
     #[error("insufficient XP: need {need}, have {have}")]
+    /// Not enough XP: the skill needs `need` and the player has `have`.
     InsufficientXp { need: u32, have: u32 },
     #[error("prerequisites not met for skill '{0}'")]
+    /// A prerequisite skill is not unlocked yet.
     PrerequisitesNotMet(String),
     #[error("skill '{0}' is already at max level")]
+    /// The skill is already at its maximum level.
     AlreadyMaxLevel(String),
     #[error("skill '{0}' is not unlocked")]
+    /// The skill must be unlocked first.
     NotUnlocked(String),
 }
 
 // ─── SKILL EFFECT ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// What a skill grants.
 pub enum SkillEffect {
     /// Flat additive bonus to damage (multiplicative factor, e.g. 0.1 = +10%).
     DamageBonus(f64),
@@ -44,33 +52,47 @@ pub enum SkillEffect {
 // ─── SKILL ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Definition of a skill.
 pub struct Skill {
+    /// Unique skill id.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Description shown to the player.
     pub description: String,
+    /// XP needed to unlock it.
     pub xp_cost: u32,
+    /// Highest level the skill can reach.
     pub max_level: u8,
+    /// Ids of skills that must be unlocked first.
     pub prerequisites: Vec<String>,
 }
 
 // ─── SKILL NODE ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A skill in the tree with its progress.
 pub struct SkillNode {
+    /// The skill definition.
     pub skill: Skill,
+    /// Current level (0 until unlocked).
     pub current_level: u8,
+    /// True once unlocked.
     pub unlocked: bool,
+    /// What the skill grants.
     pub effects: Vec<SkillEffect>,
 }
 
 // ─── SKILL TREE ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Default, Serialize, Deserialize)]
+/// XP-gated skill tree with prerequisites, separate from the passive tree.
 pub struct SkillTree {
     nodes: HashMap<String, SkillNode>,
 }
 
 impl SkillTree {
+    /// An empty skill tree.
     pub fn new() -> Self {
         Self::default()
     }

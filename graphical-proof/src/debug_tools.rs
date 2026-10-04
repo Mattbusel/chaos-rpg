@@ -253,6 +253,12 @@ pub struct ProfilerOverlay {
     smoothed_fps: f32,
 }
 
+impl Default for ProfilerOverlay {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProfilerOverlay {
     pub fn new() -> Self {
         Self {
@@ -456,6 +462,12 @@ struct FieldSample {
     magnitude: f32,
 }
 
+impl Default for ForceFieldOverlay {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ForceFieldOverlay {
     pub fn new() -> Self {
         Self {
@@ -649,6 +661,12 @@ pub struct EntityInspector {
     cached_formation: String,
     cached_cohesion: f32,
     cached_status_effects: Vec<String>,
+}
+
+impl Default for EntityInspector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl EntityInspector {
@@ -919,6 +937,12 @@ struct LightInfo {
     shadow_dir: Option<Vec2>,
 }
 
+impl Default for LightingOverlay {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LightingOverlay {
     pub fn new() -> Self {
         Self {
@@ -947,17 +971,14 @@ impl LightingOverlay {
 
         // Scan force fields for heat sources (which produce light)
         for (_, field) in &engine.scene.fields {
-            match field {
-                ForceField::HeatSource { center, temperature, radius } => {
-                    self.lights.push(LightInfo {
-                        position: *center,
-                        color: Vec4::new(1.0, 0.7 + temperature * 0.001, 0.4, 1.0),
-                        radius: *radius,
-                        shadow_dir: Some(Vec2::new(0.0, -1.0)),
-                    });
-                    self.light_count += 1;
-                }
-                _ => {}
+            if let ForceField::HeatSource { center, temperature, radius } = field {
+                self.lights.push(LightInfo {
+                    position: *center,
+                    color: Vec4::new(1.0, 0.7 + temperature * 0.001, 0.4, 1.0),
+                    radius: *radius,
+                    shadow_dir: Some(Vec2::new(0.0, -1.0)),
+                });
+                self.light_count += 1;
             }
         }
 
@@ -1071,6 +1092,12 @@ pub struct ShaderGraphOverlay {
     pub connection_count: usize,
     pub estimated_instructions: usize,
     pub intermediate_values: Vec<(String, f32)>,
+}
+
+impl Default for ShaderGraphOverlay {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ShaderGraphOverlay {
@@ -1227,6 +1254,12 @@ const MUSIC_VIBES: &[&str] = &[
 /// Timeline names known to the `timeline play` command.
 const TIMELINE_NAMES: &[&str] = &["death", "victory", "boss_intro"];
 
+impl Default for DebugConsole {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DebugConsole {
     pub fn new() -> Self {
         Self {
@@ -1308,8 +1341,7 @@ impl DebugConsole {
         }
 
         // For specific sub-commands, add argument completions
-        if input_lower.starts_with("spawn boss ") {
-            let partial = &input_lower["spawn boss ".len()..];
+        if let Some(partial) = input_lower.strip_prefix("spawn boss ") {
             self.autocomplete_suggestions.clear();
             for &name in BOSS_NAMES {
                 if name.starts_with(partial) {
@@ -1317,8 +1349,7 @@ impl DebugConsole {
                         .push(format!("spawn boss {}", name));
                 }
             }
-        } else if input_lower.starts_with("music vibe ") {
-            let partial = &input_lower["music vibe ".len()..];
+        } else if let Some(partial) = input_lower.strip_prefix("music vibe ") {
             self.autocomplete_suggestions.clear();
             for &name in MUSIC_VIBES {
                 if name.starts_with(partial) {
@@ -1326,8 +1357,7 @@ impl DebugConsole {
                         .push(format!("music vibe {}", name));
                 }
             }
-        } else if input_lower.starts_with("timeline play ") {
-            let partial = &input_lower["timeline play ".len()..];
+        } else if let Some(partial) = input_lower.strip_prefix("timeline play ") {
             self.autocomplete_suggestions.clear();
             for &name in TIMELINE_NAMES {
                 if name.starts_with(partial) {
@@ -1534,7 +1564,7 @@ impl DebugConsole {
     /// Execute a command string, modifying game state as needed.
     /// Returns the response message.
     pub fn execute(&mut self, command: &str, state: &mut GameState, engine: &mut ProofEngine) {
-        let parts: Vec<&str> = command.trim().split_whitespace().collect();
+        let parts: Vec<&str> = command.split_whitespace().collect();
         if parts.is_empty() {
             return;
         }
@@ -2103,6 +2133,12 @@ pub struct DebugMode {
     pub console: DebugConsole,
 }
 
+impl Default for DebugMode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DebugMode {
     pub fn new() -> Self {
         Self {
@@ -2148,6 +2184,12 @@ pub struct DebugToolsManager {
     pub shader_graph: ShaderGraphOverlay,
     /// Pending command to execute (set when Enter is pressed in console).
     pending_command: Option<String>,
+}
+
+impl Default for DebugToolsManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DebugToolsManager {

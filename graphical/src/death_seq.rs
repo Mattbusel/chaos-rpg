@@ -142,7 +142,7 @@ impl DeathSeq {
                         // Alternate red-orange and bright orange for visual variety
                         let (r, g) = if dir_i % 2 == 0 { (b, b/6) } else { (b, b/3) };
                         ctx.print_color(x, y, RGB::from_u8(r, g, 0), bg_rgb,
-                            &line_chars[dir_i].to_string());
+                            line_chars[dir_i].to_string());
                     }
                 }
             }
@@ -189,7 +189,7 @@ impl DeathSeq {
                         RGB::from_u8(ember_v, ember_v/8, 0), bg_rgb, "·");
                 }
                 // Faint "..." pulsing in center
-                let pulse = ((f as f32 * 0.15).sin() * 0.5 + 0.5);
+                let pulse = (f as f32 * 0.15).sin() * 0.5 + 0.5;
                 let pv = (pulse * 35.0) as u8;
                 ctx.print_color(cx - 1, cy, RGB::from_u8(pv, pv/6, 0), bg_rgb, "...");
             }
@@ -201,7 +201,7 @@ impl DeathSeq {
                 let title_shown: String = title.chars().take(title_len).collect();
 
                 // Bright pulsing red title
-                let pulse = ((self.frame as f32 * 0.12).sin() * 0.2 + 0.8);
+                let pulse = (self.frame as f32 * 0.12).sin() * 0.2 + 0.8;
                 let tr = (pulse * 255.0) as u8;
                 let tg = (pulse * 30.0) as u8;
                 ctx.print_color(cx - title.len() as i32 / 2, cy - 5,

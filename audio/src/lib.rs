@@ -1,6 +1,22 @@
-// CHAOS RPG Audio — rodio-based native audio backend.
-// Uses only synthesized sounds from chaos_rpg_core::audio_synth.
-// Fully optional: if no audio device is available, all calls are silent no-ops.
+//! Sound for [CHAOS RPG](https://gitlab.com/mattbusel/chaos-rpg): every
+//! sound effect and music loop is synthesized at runtime by
+//! `chaos_rpg_core::audio_synth` and played through [rodio]. There are no
+//! audio files.
+//!
+//! If there is no audio device, [`AudioSystem::try_new`] returns `None` and
+//! the game runs silently.
+//!
+//! ```no_run
+//! use chaos_rpg_audio::AudioSystem;
+//! use chaos_rpg_core::audio_events::AudioEvent;
+//!
+//! if let Some(audio) = AudioSystem::try_new() {
+//!     audio.emit(AudioEvent::PlayerAttack); // queued; never blocks
+//! }
+//! ```
+//!
+//! To get the sounds without playing them, build a [`SoundBank`]: every field
+//! is a ready-to-save WAV file (see the `export_sounds` example).
 
 mod sound_bank;
 mod music_system;

@@ -33,6 +33,7 @@ pub enum CinematicKind {
 }
 
 /// Extra data needed for specific cinematics.
+#[derive(Default)]
 pub struct CinematicData {
     pub text_primary: String,
     pub text_secondary: String,
@@ -44,14 +45,6 @@ pub struct CinematicData {
     pub milestone: u32, // misery milestone value
 }
 
-impl Default for CinematicData {
-    fn default() -> Self {
-        Self {
-            text_primary: String::new(), text_secondary: String::new(),
-            boss_id: None, phase: 0, floor_num: 0, level: 0, rarity: 0, milestone: 0,
-        }
-    }
-}
 
 impl CinematicState {
     pub fn new(kind: CinematicKind, duration: f32, data: CinematicData) -> Self {
@@ -137,7 +130,7 @@ pub fn render_boss_entrance(cin: &CinematicState, engine: &mut ProofEngine, stat
     }
 
     // Phase 2 (1.0 - 2.0s): Boss name typewriter
-    if t >= 1.0 && t < 2.0 {
+    if (1.0..2.0).contains(&t) {
         let phase_t = t - 1.0;
         let name = &cin.data.text_primary;
         let chars_revealed = ((phase_t * 20.0) as usize).min(name.len());

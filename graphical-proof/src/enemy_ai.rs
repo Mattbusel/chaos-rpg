@@ -175,7 +175,7 @@ pub fn committee_tick(turn: u32, seed: u64) -> (Vec<bool>, bool, &'static str) {
     let mut votes = Vec::with_capacity(5);
     for j in 0..5u64 {
         let hash = seed.wrapping_mul(j + 1).wrapping_add(turn as u64 * 7919);
-        votes.push((hash >> 16) % 3 != 0); // ~67% chance of approval
+        votes.push(!(hash >> 16).is_multiple_of(3)); // ~67% chance of approval
     }
     let approved = votes.iter().filter(|&&v| v).count();
     let passed = approved >= 3;
@@ -221,7 +221,7 @@ pub fn algorithm_reborn_plan(
         _ => {
             // Phase 3: Counter-specialization — all-out
             if boss_hp_frac < 0.3 { return "regenerate"; }
-            if turn % 3 == 0 { return "counter_attack"; }
+            if turn.is_multiple_of(3) { return "counter_attack"; }
             "heavy_counter"
         }
     }

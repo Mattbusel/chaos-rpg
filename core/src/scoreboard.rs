@@ -8,39 +8,61 @@ const MISERY_FILE: &str = "chaos_rpg_misery.json";
 const MAX_ENTRIES: usize = 20;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// One run on the local high-score table.
 pub struct ScoreEntry {
+    /// Character name.
     pub name: String,
+    /// Class name.
     pub class: String,
+    /// Final score.
     pub score: u64,
+    /// Deepest floor reached.
     pub floor_reached: u32,
+    /// Enemies killed.
     pub enemies_defeated: u32,
+    /// Integer overflows that happened during the run.
     pub overflow_events: u32,
+    /// When the run ended, UTC, as "YYYY-MM-DD HH:MMZ".
     pub timestamp: String,
     // New fields — default for backward compat with old saves
     #[serde(default)]
+    /// Power tier name at the end of the run (empty in saves from before tiers).
     pub power_tier: String,
     #[serde(default)]
+    /// Misery index at the end of the run.
     pub misery_index: f64,
     #[serde(default)]
+    /// Underdog score multiplier (1.0 for a new entry; 0.0 in older saves that lack it).
     pub underdog_mult: f64,
 }
 
 /// Hall of Misery entry — sorted by misery score, not power score.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MiseryEntry {
+    /// Character name.
     pub name: String,
+    /// Class name.
     pub class: String,
+    /// Misery index at death.
     pub misery_index: f64,
+    /// Deepest floor reached.
     pub floor_reached: u32,
+    /// Power tier name at death.
     pub power_tier: String,
+    /// Spite spent during the run.
     pub spite_spent: f64,
+    /// Defiance rolls made during the run.
     pub defiance_rolls: u64,
+    /// What killed the character.
     pub cause_of_death: String,
+    /// Ranking score: misery index times floor times underdog multiplier.
     pub misery_score: u64,  // misery × floor × underdog_mult
+    /// When the run ended, UTC, as "YYYY-MM-DD HH:MMZ".
     pub timestamp: String,
 }
 
 impl ScoreEntry {
+    /// A new entry stamped with the current time.
     pub fn new(
         name: impl Into<String>,
         class: impl Into<String>,
@@ -71,9 +93,11 @@ impl ScoreEntry {
         }
     }
 
+    /// Set the power tier name.
     pub fn with_tier(mut self, tier: impl Into<String>) -> Self {
         self.power_tier = tier.into(); self
     }
+    /// Set the misery index and underdog multiplier.
     pub fn with_misery(mut self, misery: f64, underdog: f64) -> Self {
         self.misery_index = misery;
         self.underdog_mult = underdog;
@@ -82,6 +106,7 @@ impl ScoreEntry {
 }
 
 impl MiseryEntry {
+    /// A new Hall of Misery entry stamped with the current time; the misery score is computed here.
     pub fn new(
         name: impl Into<String>,
         class: impl Into<String>,
@@ -118,48 +143,15 @@ impl MiseryEntry {
 }
 
 fn format_unix_timestamp(secs: u64) -> String {
-    // Rough UTC date from unix timestamp (no chrono dependency)
-    let days_since_epoch = secs / 86400;
-    let mut year = 1970u32;
-    let mut days = days_since_epoch as u32;
-    loop {
-        let year_days =
-            if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) {
-                366
-            } else {
-                365
-            };
-        if days < year_days {
-            break;
-        }
-        days -= year_days;
-        year += 1;
-    }
-    let month_days = [31u32, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-    let is_leap = year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400));
-    let mut month = 1u32;
-    for &md in &month_days {
-        let md = if month == 2 && is_leap { 29 } else { md };
-        if days < md {
-            break;
-        }
-        days -= md;
-        month += 1;
-    }
-    let day = days + 1;
-    let hour = (secs % 86400) / 3600;
-    let minute = (secs % 3600) / 60;
-    format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}Z")
+    crate::time_util::timestamp_from_unix(secs as i64)
 }
 
 fn score_path() -> PathBuf {
     // Save next to executable, or in current dir
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(SCOREBOARD_FILE)))
-        .unwrap_or_else(|| PathBuf::from(SCOREBOARD_FILE))
+    crate::paths::data_file(SCOREBOARD_FILE)
 }
 
+/// Read the high-score table; empty if there is no readable file.
 pub fn load_scores() -> Vec<ScoreEntry> {
     let path = score_path();
     let Ok(data) = std::fs::read_to_string(&path) else {
@@ -168,10 +160,11 @@ pub fn load_scores() -> Vec<ScoreEntry> {
     serde_json::from_str(&data).unwrap_or_default()
 }
 
+/// Add an entry, keep the best 20 by score, save, and return the table.
 pub fn save_score(entry: ScoreEntry) -> Vec<ScoreEntry> {
     let mut scores = load_scores();
     scores.push(entry);
-    scores.sort_by(|a, b| b.score.cmp(&a.score));
+    scores.sort_by_key(|e| std::cmp::Reverse(e.score));
     scores.truncate(MAX_ENTRIES);
     let json = serde_json::to_string_pretty(&scores).unwrap_or_default();
     let _ = std::fs::write(score_path(), json);
@@ -179,22 +172,21 @@ pub fn save_score(entry: ScoreEntry) -> Vec<ScoreEntry> {
 }
 
 fn misery_path() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(MISERY_FILE)))
-        .unwrap_or_else(|| PathBuf::from(MISERY_FILE))
+    crate::paths::data_file(MISERY_FILE)
 }
 
+/// Read the Hall of Misery; empty if there is no readable file.
 pub fn load_misery_scores() -> Vec<MiseryEntry> {
     let path = misery_path();
     let Ok(data) = std::fs::read_to_string(&path) else { return Vec::new(); };
     serde_json::from_str(&data).unwrap_or_default()
 }
 
+/// Add an entry, keep the 20 most miserable, save, and return the list.
 pub fn save_misery_score(entry: MiseryEntry) -> Vec<MiseryEntry> {
     let mut scores = load_misery_scores();
     scores.push(entry);
-    scores.sort_by(|a, b| b.misery_score.cmp(&a.misery_score));
+    scores.sort_by_key(|e| std::cmp::Reverse(e.misery_score));
     scores.truncate(MAX_ENTRIES);
     let json = serde_json::to_string_pretty(&scores).unwrap_or_default();
     let _ = std::fs::write(misery_path(), json);

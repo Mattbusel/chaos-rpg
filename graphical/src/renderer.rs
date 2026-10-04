@@ -55,7 +55,7 @@ pub fn draw_subpanel(ctx: &mut BTerm, x: i32, y: i32, w: i32, h: i32, title: &st
         ctx.print_color(x + 1, y,
             RGB::from_u8(t.accent.0, t.accent.1, t.accent.2),
             bg,
-            &format!(" {} ", title));
+            format!(" {} ", title));
     }
 }
 
@@ -128,7 +128,7 @@ pub fn draw_separator(ctx: &mut BTerm, x: i32, y: i32, w: i32, t: &Theme) {
 
 /// Animated cursor indicator (pulses between ► and a dim version based on frame).
 pub fn cursor_char(frame: u64) -> char {
-    if (frame / 15) % 2 == 0 { '►' } else { '▶' }
+    if (frame / 15).is_multiple_of(2) { '►' } else { '▶' }
 }
 
 /// Selection row: draws prefix + text with highlighted or dim styling.
@@ -151,7 +151,7 @@ pub fn print_selectable(ctx: &mut BTerm, x: i32, y: i32, selected: bool,
             RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg, text);
     } else {
         ctx.print_color(x, y, RGB::from_u8(t.dim.0, t.dim.1, t.dim.2), bg,
-            &format!("  {}", text));
+            format!("  {}", text));
     }
 }
 
@@ -166,7 +166,7 @@ pub fn draw_minimap_cell(ctx: &mut BTerm, rx: i32, ry: i32,
         MinimapState::Current => {
             ctx.print_color(rx, ry,
                 RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg,
-                &format!("[{}]", sym.trim_matches(|c| c == '[' || c == ']')));
+                format!("[{}]", sym.trim_matches(|c| c == '[' || c == ']')));
         }
         MinimapState::Visited => {
             ctx.print_color(rx, ry, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg, "···");

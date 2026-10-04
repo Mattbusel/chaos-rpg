@@ -7,17 +7,25 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 // ─── ROOM TYPE ────────────────────────────────────────────────────────────────
 
+/// What kind of place a world map room is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoomType {
+    /// A dungeon.
     Dungeon,
+    /// A town.
     Town,
+    /// Open wilderness.
     Wilderness,
+    /// A cave.
     Cave,
+    /// A temple.
     Temple,
+    /// A port.
     Port,
 }
 
 impl RoomType {
+    /// Name shown to the player.
     pub fn name(&self) -> &str {
         match self {
             RoomType::Dungeon => "Dungeon",
@@ -32,19 +40,29 @@ impl RoomType {
 
 // ─── ROOM ─────────────────────────────────────────────────────────────────────
 
+/// A place on the overworld map.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Room {
+    /// Unique room identifier.
     pub id: String,
+    /// Name shown to the player.
     pub name: String,
+    /// Description shown to the player.
     pub description: String,
+    /// What kind of place it is.
     pub room_type: RoomType,
+    /// Ids of rooms reachable from here.
     pub connections: Vec<String>,
+    /// Whether the player has been here.
     pub visited: bool,
+    /// NPCs present, by name.
     pub npcs: Vec<String>,
+    /// Items lying here, by name.
     pub items: Vec<String>,
 }
 
 impl Room {
+    /// An unvisited room with no connections, NPCs or items.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -66,10 +84,14 @@ impl Room {
 
 // ─── MAP ERROR ────────────────────────────────────────────────────────────────
 
+/// Why a world map operation failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MapError {
+    /// No room with that id.
     RoomNotFound(String),
+    /// The two rooms are already connected.
     AlreadyConnected(String, String),
+    /// No route between the two rooms.
     NoPath(String, String),
 }
 
@@ -87,8 +109,11 @@ impl std::fmt::Display for MapError {
 
 // ─── WORLD MAP ────────────────────────────────────────────────────────────────
 
+/// The overworld: rooms connected as a graph, plus where the player is.
 pub struct WorldMap {
+    /// Rooms keyed by id.
     pub rooms: HashMap<String, Room>,
+    /// Id of the room the player is in.
     pub current_room: String,
 }
 

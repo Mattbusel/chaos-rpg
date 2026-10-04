@@ -12,23 +12,38 @@ use std::collections::HashMap;
 // ─── BODY PARTS ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// A part of the body that can be hit and injured.
 pub enum BodyPart {
+    /// Head; destroying it kills instantly.
     Head,
+    /// Torso.
     Torso,
+    /// Neck.
     Neck,
+    /// Left arm.
     LeftArm,
+    /// Right arm.
     RightArm,
+    /// Left hand.
     LeftHand,
+    /// Right hand.
     RightHand,
+    /// Left leg.
     LeftLeg,
+    /// Right leg.
     RightLeg,
+    /// Left foot.
     LeftFoot,
+    /// Right foot.
     RightFoot,
+    /// Left eye.
     LeftEye,
+    /// Right eye.
     RightEye,
 }
 
 impl BodyPart {
+    /// Every body part, in display order.
     pub const ALL: &'static [BodyPart] = &[
         BodyPart::Head,
         BodyPart::Torso,
@@ -45,6 +60,7 @@ impl BodyPart {
         BodyPart::RightEye,
     ];
 
+    /// Display name of the part.
     pub fn name(self) -> &'static str {
         match self {
             BodyPart::Head => "Head",
@@ -101,6 +117,7 @@ impl BodyPart {
         }
     }
 
+    /// Name of the armour slot that protects this part, e.g. "Helmet" for the head.
     pub fn armor_slot(self) -> &'static str {
         match self {
             BodyPart::Head => "Helmet",
@@ -118,15 +135,22 @@ impl BodyPart {
 // ─── INJURY SEVERITY ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// How badly a body part is hurt, by the share of its HP lost.
 pub enum InjurySeverity {
+    /// Under 25% of the part's HP lost.
     Bruised,              // <25% of part max HP lost
+    /// 25% to 50% lost.
     Fractured,            // 25–50%
+    /// 50% to 75% lost.
     Shattered,            // 50–75%
+    /// 75% to 99% lost.
     Severed,              // 75–99%
+    /// All HP lost: still attached but cursed, and drains HP every turn.
     MathematicallyAbsent, // HP ≤ 0 — attached but cursed
 }
 
 impl InjurySeverity {
+    /// Display name of the injury.
     pub fn name(&self) -> &'static str {
         match self {
             InjurySeverity::Bruised => "Bruised",
@@ -137,6 +161,7 @@ impl InjurySeverity {
         }
     }
 
+    /// ANSI colour for the injury in the terminal.
     pub fn color_code(&self) -> &'static str {
         match self {
             InjurySeverity::Bruised => "\x1b[33m",
@@ -157,6 +182,7 @@ impl InjurySeverity {
         }
     }
 
+    /// Injury for `damage_taken` out of `max_hp`; `None` if no damage was taken.
     pub fn from_damage_ratio(damage_taken: i64, max_hp: i64) -> Option<Self> {
         if damage_taken <= 0 || max_hp <= 0 {
             return None;
@@ -191,12 +217,17 @@ impl Ord for InjurySeverity {
 // ─── BODY PART STATE ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Health and armour of one body part.
 pub struct BodyPartState {
+    /// HP the part has left.
     pub current_hp: i64,
+    /// HP the part has when unhurt.
     pub max_hp: i64,
+    /// Current injury, if any.
     pub injury: Option<InjurySeverity>,
     /// Defense from armor equipped to this slot.
     pub armor_defense: i64,
+    /// Name of the armour equipped on this part, if any.
     pub armor_name: Option<String>,
 }
 
@@ -206,12 +237,19 @@ pub struct BodyPartState {
 /// a circular dependency between body.rs and character.rs.
 #[derive(Debug, Clone, Default)]
 pub struct BodyPenalties {
+    /// Vitality change from injuries (usually negative).
     pub vitality: i64,
+    /// Force change from injuries.
     pub force: i64,
+    /// Mana change from injuries.
     pub mana: i64,
+    /// Cunning change from injuries.
     pub cunning: i64,
+    /// Precision change from injuries.
     pub precision: i64,
+    /// Entropy change from injuries.
     pub entropy: i64,
+    /// Luck change from injuries.
     pub luck: i64,
 }
 
@@ -311,7 +349,9 @@ impl BodyPenalties {
 // ─── BODY ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// The whole body: state of every part.
 pub struct Body {
+    /// State of each body part.
     pub parts: HashMap<BodyPart, BodyPartState>,
 }
 

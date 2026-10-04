@@ -789,11 +789,12 @@ mod tests {
 
     #[test]
     fn enemy_glyph_estimation() {
-        assert_eq!(estimate_enemy_glyph_count(0), 15);
-        assert_eq!(estimate_enemy_glyph_count(1), 15);
-        assert_eq!(estimate_enemy_glyph_count(3), 25);
-        assert_eq!(estimate_enemy_glyph_count(5), 35);
-        assert_eq!(estimate_enemy_glyph_count(10), 50);
+        use chaos_rpg_core::enemy::EnemyTier as T;
+        assert_eq!(estimate_enemy_glyph_count(&T::Minion), 15);
+        assert_eq!(estimate_enemy_glyph_count(&T::Elite), 25);
+        assert_eq!(estimate_enemy_glyph_count(&T::Champion), 35);
+        assert_eq!(estimate_enemy_glyph_count(&T::Boss), 50);
+        assert_eq!(estimate_enemy_glyph_count(&T::Abomination), 50);
     }
 
     #[test]

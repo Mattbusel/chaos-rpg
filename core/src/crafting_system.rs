@@ -277,17 +277,14 @@ impl CraftingSystem {
         _station: CraftingStation,
         seed: u64,
     ) -> CraftResult {
-        match self.can_craft(recipe_id, inventory, skill_level) {
-            Err(msg) => return CraftResult {
-                success: false,
-                item_name: String::new(),
-                quantity: 0,
-                quality: 0,
-                experience_gained: 0,
-                message: msg,
-            },
-            Ok(()) => {}
-        }
+        if let Err(msg) = self.can_craft(recipe_id, inventory, skill_level) { return CraftResult {
+            success: false,
+            item_name: String::new(),
+            quantity: 0,
+            quality: 0,
+            experience_gained: 0,
+            message: msg,
+        } }
 
         let recipe = &self.recipes[recipe_id];
 
@@ -309,7 +306,7 @@ impl CraftingSystem {
                 recipe.output_name, quality, _station
             )
         } else {
-            format!("The crafting attempt fails — the materials are wasted.")
+            "The crafting attempt fails — the materials are wasted.".to_string()
         };
 
         CraftResult {

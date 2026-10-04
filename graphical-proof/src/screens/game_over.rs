@@ -32,7 +32,7 @@ pub fn update(state: &mut GameState, engine: &mut ProofEngine, dt: f32) {
     let elapsed = CINEMATIC_DUR - state.title_logo_timer.max(0.0);
     if !state.death_cinematic_done {
         if elapsed < P1 { engine.add_trauma(0.3 * dt); }
-        if elapsed >= P1 && elapsed < P2 { engine.add_trauma(0.1 * dt); }
+        if (P1..P2).contains(&elapsed) { engine.add_trauma(0.1 * dt); }
         if state.title_logo_timer <= 0.0 { state.death_cinematic_done = true; }
         return;
     }

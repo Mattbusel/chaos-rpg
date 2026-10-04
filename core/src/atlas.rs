@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 // ─── ZONE MODIFIER ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A rule that changes how an atlas zone plays; zones get 1 to 3 of them.
 pub enum ZoneModifier {
     /// All Collatz chains start from even numbers
     CollatzEven,
@@ -43,6 +44,7 @@ pub enum ZoneModifier {
 }
 
 impl ZoneModifier {
+    /// Display name of the modifier.
     pub fn name(&self) -> &'static str {
         match self {
             ZoneModifier::CollatzEven => "Collatz: Even Start",
@@ -62,6 +64,7 @@ impl ZoneModifier {
         }
     }
 
+    /// One-line description of what the modifier does.
     pub fn description(&self) -> &'static str {
         match self {
             ZoneModifier::CollatzEven => {
@@ -95,6 +98,7 @@ impl ZoneModifier {
         }
     }
 
+    /// Whether the modifier helps the player (shown in green) rather than hurting them (red).
     pub fn is_beneficial(&self) -> bool {
         matches!(
             self,
@@ -105,6 +109,7 @@ impl ZoneModifier {
         )
     }
 
+    /// ANSI colour for the modifier: green if beneficial, red otherwise.
     pub fn color(&self) -> &'static str {
         if self.is_beneficial() {
             "\x1b[32m"
@@ -113,6 +118,7 @@ impl ZoneModifier {
         }
     }
 
+    /// A modifier picked from the full list by `seed`.
     pub fn generate(seed: u64) -> Self {
         let modifiers = [
             ZoneModifier::CollatzEven,
@@ -138,29 +144,47 @@ impl ZoneModifier {
 // ─── ZONE ─────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// One zone of the atlas map.
 pub struct Zone {
+    /// Zone id.
     pub id: u32,
+    /// Column on the atlas grid.
     pub x: i32,
+    /// Row on the atlas grid.
     pub y: i32,
+    /// Depth (distance from the start); every 10th is a conqueror zone and depth 100 is the final boss.
     pub depth: u32,
+    /// Modifiers active in this zone.
     pub modifiers: Vec<ZoneModifier>,
+    /// What kind of zone it is.
     pub zone_type: ZoneType,
+    /// Whether the player has cleared it.
     pub cleared: bool,
+    /// Whether it shows on the map (secret anomalies start hidden).
     pub revealed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// What kind of encounter an atlas zone holds.
 pub enum ZoneType {
+    /// A normal fight (about 70% of zones).
     Combat,
+    /// A boss fight (about 10%).
     Boss,
+    /// A crafting zone (about 10%).
     Crafting,
+    /// An engine-themed conqueror boss, at every 10th depth.
     Conqueror,         // engine-themed boss every 10 clears
+    /// The final boss, at depth 100.
     TheFinalAlgorithm, // depth 100
+    /// A hub with NPCs (about 5%).
     NpcHub,
+    /// A hidden zone (about 5%), not revealed on the map at first.
     SecretAnomaly,
 }
 
 impl ZoneType {
+    /// Display name of the zone type.
     pub fn name(self) -> &'static str {
         match self {
             ZoneType::Combat => "Combat",
@@ -173,6 +197,7 @@ impl ZoneType {
         }
     }
 
+    /// Map icon for the zone type.
     pub fn icon(self) -> &'static str {
         match self {
             ZoneType::Combat => "[x]",
@@ -187,6 +212,7 @@ impl ZoneType {
 }
 
 impl Zone {
+    /// A new uncleared zone at (x, y) and `depth`, with its type and modifiers rolled from `seed`.
     pub fn generate(id: u32, x: i32, y: i32, depth: u32, seed: u64) -> Self {
         // Zone type determined by depth and seed
         let zone_type = if depth == 100 {
@@ -231,14 +257,20 @@ impl Zone {
 // ─── ATLAS ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// The endgame atlas: a growing grid of zones.
 pub struct Atlas {
+    /// Every zone generated so far.
     pub zones: Vec<Zone>,
+    /// Zones cleared so far; a conqueror appears every 10.
     pub zones_cleared: u32,
+    /// Id of the zone the player is in.
     pub current_zone: u32,
+    /// Seed the atlas is generated from.
     pub seed: u64,
 }
 
 impl Atlas {
+    /// A new atlas with the starting zone and its first neighbours.
     pub fn new(seed: u64) -> Self {
         let mut atlas = Atlas {
             zones: Vec::new(),
@@ -376,12 +408,17 @@ impl Atlas {
 /// Engine-themed boss, spawns every 10 atlas zones.
 #[derive(Debug, Clone)]
 pub struct Conqueror {
+    /// Chaos engine the conqueror is themed on.
     pub engine: &'static str,
+    /// Display name.
     pub name: &'static str,
+    /// How it attacks.
     pub mechanic: &'static str,
+    /// How its HP behaves.
     pub hp_behavior: &'static str,
 }
 
+/// The conqueror bosses, one per chaos engine, in the order they appear.
 pub const CONQUERORS: &[Conqueror] = &[
     Conqueror {
         engine: "Lorenz Attractor",
@@ -445,6 +482,7 @@ pub const CONQUERORS: &[Conqueror] = &[
     },
 ];
 
+/// The conqueror for the current clear count: the first at 10 clears, then cycling through the list (panics on overflow below 10 clears in debug builds).
 pub fn conqueror_for_zone(zones_cleared: u32) -> &'static Conqueror {
     let idx = ((zones_cleared / 10 - 1) as usize) % CONQUERORS.len();
     &CONQUERORS[idx]

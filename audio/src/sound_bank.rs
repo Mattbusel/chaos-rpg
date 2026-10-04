@@ -1,48 +1,86 @@
-// Pre-generated sound bank — all sounds synthesized at startup.
-// Each entry is a WAV byte buffer ready to hand to rodio.
+//! Pre-generated sound bank: all sounds synthesized at startup.
+//! Each entry is a complete WAV file in memory (16-bit mono, 44.1 kHz).
 
 use chaos_rpg_core::audio_events::AudioEvent;
 use chaos_rpg_core::audio_synth as synth;
 use rodio::{OutputStreamHandle, Decoder, Sink};
 use std::io::Cursor;
 
+/// Every sound effect, synthesized once, as in-memory WAV files.
 pub struct SoundBank {
+    /// Normal attack swing.
     pub attack:            Vec<u8>,
+    /// Heavy attack swing.
     pub heavy_attack:      Vec<u8>,
+    /// A normal hit landing.
     pub hit_normal:        Vec<u8>,
+    /// A critical hit landing.
     pub hit_crit:          Vec<u8>,
+    /// Healing.
     pub heal:              Vec<u8>,
+    /// The player dying.
     pub death_player:      Vec<u8>,
+    /// An enemy dying.
     pub death_enemy:       Vec<u8>,
+    /// Level up.
     pub level_up:          Vec<u8>,
+    /// Moving through a menu.
     pub menu_nav:          Vec<u8>,
+    /// Confirming a menu choice.
     pub menu_confirm:      Vec<u8>,
+    /// Cancelling or going back in a menu.
     pub menu_cancel:       Vec<u8>,
+    /// Picking up an item.
     pub item_pickup:       Vec<u8>,
+    /// Entering a shop.
     pub shop_enter:        Vec<u8>,
+    /// Stepping on a trap.
     pub trap_hit:          Vec<u8>,
+    /// Disarming a trap.
     pub trap_disarmed:     Vec<u8>,
+    /// Going to the next floor.
     pub floor_transition:  Vec<u8>,
+    /// Winning the run.
     pub victory:           Vec<u8>,
+    /// Game over.
     pub game_over:         Vec<u8>,
+    /// The Hunger mechanic triggering.
     pub hunger:            Vec<u8>,
+    /// A tier 1 boss appearing.
     pub boss_tier1:        Vec<u8>,
+    /// A tier 2 boss appearing.
     pub boss_tier2:        Vec<u8>,
+    /// A tier 3 boss appearing.
     pub boss_tier3:        Vec<u8>,
+    /// The nemesis appearing.
     pub nemesis:           Vec<u8>,
+    /// Choosing a boon.
     pub boon:              Vec<u8>,
+    /// An item's volatility rerolling it.
     pub volatility_reroll: Vec<u8>,
+    /// A chaos cascade.
     pub chaos_cascade:     Vec<u8>,
     // Per-engine rolls: 10 entries
+    /// One sound per chaos engine (10), played as it rolls.
     pub engine_rolls:      [Vec<u8>; 10],
     // Per-spell SFX: 8 variants
+    /// One sound per spell type (8).
     pub spells:            [Vec<u8>; 8],
     // Per-craft SFX: 6 ops × 2 (success/fail)
+    /// Successful craft, one per crafting operation (6).
     pub craft_success:     [Vec<u8>; 6],
+    /// Failed craft, one per crafting operation (6).
     pub craft_fail:        [Vec<u8>; 6],
 }
 
+impl Default for SoundBank {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SoundBank {
+    /// Synthesize every sound effect.
     pub fn new() -> Self {
         let engine_rolls = std::array::from_fn(|i| {
             synth::encode_wav(&synth::sfx_engine_roll(i as u8))

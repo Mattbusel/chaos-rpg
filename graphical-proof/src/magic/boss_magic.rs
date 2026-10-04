@@ -57,6 +57,12 @@ pub struct BossMagicRenderer {
     pub scramble_seed: u64,
 }
 
+impl Default for BossMagicRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BossMagicRenderer {
     pub fn new() -> Self {
         Self {
@@ -233,7 +239,7 @@ fn render_null(engine: &mut ProofEngine, state: &GameState, frame: u64, turn: u3
     // "NULL" text glitching
     if turn >= 5 {
         let glitch = ((frame as f32 * 0.5).sin() * 0.5 + 0.5).max(0.0);
-        let null_text = if (frame / 10) % 3 == 0 { "N U L L" } else if (frame / 10) % 3 == 1 { "N_L_" } else { "      " };
+        let null_text = if (frame / 10).is_multiple_of(3) { "N U L L" } else if (frame / 10) % 3 == 1 { "N_L_" } else { "      " };
         render_boss_text(engine, null_text, -2.0, 0.0,
             Vec4::new(0.3, 0.3, 0.3, glitch * 0.5),
             glitch * 0.2);
@@ -312,7 +318,7 @@ fn render_committee(engine: &mut ProofEngine, state: &GameState, frame: u64, tur
     }
 
     // "DELIBERATING" text
-    if (frame / 60) % 2 == 0 {
+    if (frame / 60).is_multiple_of(2) {
         let dots = ".".repeat(((frame / 15) % 4) as usize);
         let text = format!("DELIBERATING{}", dots);
         render_boss_text(engine, &text, -2.5, 3.5,
@@ -411,7 +417,7 @@ fn render_fibonacci_hydra(engine: &mut ProofEngine, state: &GameState, frame: u6
     }
 
     // Golden ratio spiral in background
-    let phi: f32 = 1.618033988749895;
+    let phi: f32 = 1.618_034;
     for i in 0..20 {
         let angle = i as f32 * 2.399963; // golden angle
         let r = (i as f32).sqrt() * 0.8;
@@ -437,7 +443,7 @@ fn render_eigenstate(engine: &mut ProofEngine, state: &GameState, frame: u64) {
     let boss_y = 2.0;
 
     // Two superimposed states
-    let is_observed = (frame / 8) % 2 == 0;
+    let is_observed = (frame / 8).is_multiple_of(2);
     let state_a_alpha = if is_observed { 0.8 } else { 0.3 };
     let state_b_alpha = if is_observed { 0.3 } else { 0.8 };
 
@@ -471,7 +477,7 @@ fn render_eigenstate(engine: &mut ProofEngine, state: &GameState, frame: u64) {
         let qy = boss_y + ((frame as f32 * 0.06 + i as f32 * 1.1).cos()) * 1.0;
         let interference = ((frame as f32 * 0.1 + i as f32 * 3.0).sin() * 0.5 + 0.5).max(0.0);
         engine.spawn_glyph(Glyph {
-            character: if (frame + i as u64) % 3 == 0 { '░' } else { '▒' },
+            character: if (frame + i as u64).is_multiple_of(3) { '░' } else { '▒' },
             position: Vec3::new(qx, qy, 0.0),
             color: Vec4::new(0.5, 0.3, 0.8, interference * 0.3),
             emission: interference * 0.2,
@@ -481,7 +487,7 @@ fn render_eigenstate(engine: &mut ProofEngine, state: &GameState, frame: u64) {
     }
 
     // Observation collapse flash
-    if (frame % 16) == 0 {
+    if frame.is_multiple_of(16) {
         engine.spawn_glyph(Glyph {
             character: '*',
             position: Vec3::new(boss_x, boss_y, 0.0),
@@ -909,7 +915,7 @@ fn render_prime_factorial(engine: &mut ProofEngine, state: &GameState, frame: u6
     let mut d: u64 = 2;
     let mut temp = n;
     while d * d <= temp && factors.len() < 8 {
-        while temp % d == 0 {
+        while temp.is_multiple_of(d) {
             factors.push(d);
             temp /= d;
         }
@@ -1035,10 +1041,10 @@ fn render_boss_text_centered(
 fn is_prime_number(n: u64) -> bool {
     if n < 2 { return false; }
     if n < 4 { return true; }
-    if n % 2 == 0 || n % 3 == 0 { return false; }
+    if n.is_multiple_of(2) || n.is_multiple_of(3) { return false; }
     let mut i = 5u64;
     while i * i <= n {
-        if n % i == 0 || n % (i + 2) == 0 { return false; }
+        if n.is_multiple_of(i) || n.is_multiple_of(i + 2) { return false; }
         i += 6;
     }
     true

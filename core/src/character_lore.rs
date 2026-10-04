@@ -7,12 +7,17 @@ use serde::{Deserialize, Serialize};
 
 /// Field length limits (in characters).
 pub const MAX_ORIGIN: usize = 500;
+/// Maximum length of the motivation field, in characters.
 pub const MAX_MOTIVATION: usize = 300;
+/// Maximum length of the personality field, in characters.
 pub const MAX_PERSONALITY: usize = 300;
+/// Maximum length of the epitaph override, in characters.
 pub const MAX_EPITAPH: usize = 200;
+/// Maximum length of the notes field, in characters.
 pub const MAX_NOTES: usize = 1000;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Backstory the player writes for a character, saved with the character.
 pub struct CharacterLore {
     /// Where the character comes from / how they entered The Proof.
     #[serde(default)]
@@ -36,6 +41,7 @@ pub struct CharacterLore {
 }
 
 impl CharacterLore {
+    /// Whether every field is blank.
     pub fn is_empty(&self) -> bool {
         self.origin.is_empty()
             && self.motivation.is_empty()
@@ -70,20 +76,29 @@ fn truncate_chars(s: &str, max: usize) -> String {
 /// The lore editor state — tracks which field is being edited and the cursor.
 #[derive(Debug, Clone)]
 pub struct LoreEditorState {
+    /// The lore being edited.
     pub lore: CharacterLore,
+    /// Field the typing goes into.
     pub active_field: LoreField,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One editable field of the character lore.
 pub enum LoreField {
+    /// Where the character comes from.
     Origin,
+    /// Why they are here.
     Motivation,
+    /// How they approach the chaos.
     Personality,
+    /// Custom graveyard epitaph.
     EpitaphOverride,
+    /// Free-form notes.
     Notes,
 }
 
 impl LoreField {
+    /// Every field, in editor order.
     pub const ALL: &'static [LoreField] = &[
         LoreField::Origin,
         LoreField::Motivation,
@@ -92,6 +107,7 @@ impl LoreField {
         LoreField::Notes,
     ];
 
+    /// Field name shown in the editor.
     pub fn label(self) -> &'static str {
         match self {
             LoreField::Origin => "Origin",
@@ -102,6 +118,7 @@ impl LoreField {
         }
     }
 
+    /// Prompt shown under the field, including its length limit.
     pub fn hint(self) -> &'static str {
         match self {
             LoreField::Origin => "Where you came from. How you entered The Proof. (500 chars)",
@@ -114,6 +131,7 @@ impl LoreField {
         }
     }
 
+    /// Maximum length of the field, in characters.
     pub fn max_len(self) -> usize {
         match self {
             LoreField::Origin => MAX_ORIGIN,
@@ -124,7 +142,8 @@ impl LoreField {
         }
     }
 
-    pub fn get<'a>(self, lore: &'a CharacterLore) -> &'a str {
+    /// The field's text in `lore`.
+    pub fn get(self, lore: &CharacterLore) -> &str {
         match self {
             LoreField::Origin => &lore.origin,
             LoreField::Motivation => &lore.motivation,
@@ -134,7 +153,8 @@ impl LoreField {
         }
     }
 
-    pub fn get_mut<'a>(self, lore: &'a mut CharacterLore) -> &'a mut String {
+    /// Mutable access to the field's text in `lore`.
+    pub fn get_mut(self, lore: &mut CharacterLore) -> &mut String {
         match self {
             LoreField::Origin => &mut lore.origin,
             LoreField::Motivation => &mut lore.motivation,
@@ -144,6 +164,7 @@ impl LoreField {
         }
     }
 
+    /// The next field, wrapping from Notes back to Origin.
     pub fn next(self) -> Self {
         match self {
             LoreField::Origin => LoreField::Motivation,
@@ -154,6 +175,7 @@ impl LoreField {
         }
     }
 
+    /// The previous field, wrapping from Origin to Notes.
     pub fn prev(self) -> Self {
         match self {
             LoreField::Origin => LoreField::Notes,
@@ -166,6 +188,7 @@ impl LoreField {
 }
 
 impl LoreEditorState {
+    /// An editor for `lore`, starting on the Origin field.
     pub fn new(lore: CharacterLore) -> Self {
         Self {
             lore,
@@ -173,10 +196,12 @@ impl LoreEditorState {
         }
     }
 
+    /// Text of the field being edited.
     pub fn active_text(&self) -> &str {
         self.active_field.get(&self.lore)
     }
 
+    /// Type a character into the active field, unless it is full.
     pub fn push_char(&mut self, ch: char) {
         let field = self.active_field;
         let max = field.max_len();
@@ -186,15 +211,18 @@ impl LoreEditorState {
         }
     }
 
+    /// Delete the last character of the active field.
     pub fn pop_char(&mut self) {
         let field = self.active_field;
         field.get_mut(&mut self.lore).pop();
     }
 
+    /// Move to the next field.
     pub fn next_field(&mut self) {
         self.active_field = self.active_field.next();
     }
 
+    /// Move to the previous field.
     pub fn prev_field(&mut self) {
         self.active_field = self.active_field.prev();
     }

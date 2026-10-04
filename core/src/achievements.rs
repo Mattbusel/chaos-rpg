@@ -6,17 +6,26 @@ use serde::{Deserialize, Serialize};
 // ── Rarity ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// How rare an achievement is, from Common up to Omega.
 pub enum AchievementRarity {
+    /// The easiest tier.
     Common,
+    /// A little harder than Common.
     Uncommon,
+    /// Takes a good run or some luck.
     Rare,
+    /// Takes a strong run.
     Epic,
+    /// Takes an exceptional run.
     Legendary,
+    /// Very hard or very unlikely.
     Mythic,
+    /// The hardest tier.
     Omega,
 }
 
 impl AchievementRarity {
+    /// Display name of the rarity in capitals, such as "LEGENDARY".
     pub fn name(&self) -> &'static str {
         match self {
             Self::Common   => "COMMON",
@@ -28,6 +37,7 @@ impl AchievementRarity {
             Self::Omega    => "OMEGA",
         }
     }
+    /// Star badge shown next to the achievement, from "[*]" to "[OMEGA]".
     pub fn stars(&self) -> &'static str {
         match self {
             Self::Common   => "[*]",
@@ -44,16 +54,24 @@ impl AchievementRarity {
 // ── Achievement definition ────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// One achievement and whether this player has unlocked it.
 pub struct Achievement {
+    /// Stable id used to unlock and save the achievement.
     pub id:          String,
+    /// Display name.
     pub name:        String,
+    /// What the player has to do to earn it.
     pub description: String,
+    /// Rarity tier.
     pub rarity:      AchievementRarity,
+    /// Whether the player has unlocked it.
     pub unlocked:    bool,
+    /// UTC date it was unlocked (YYYY-MM-DD), empty while locked.
     pub unlock_date: String,
 }
 
 impl Achievement {
+    /// A locked achievement with the given id, name, description and rarity.
     pub fn new(id: &'static str, name: &'static str, description: &'static str, rarity: AchievementRarity) -> Self {
         Self {
             id:          id.to_string(),
@@ -67,7 +85,9 @@ impl Achievement {
 // ── Achievement store ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Every achievement and its unlock state, saved across runs.
 pub struct AchievementStore {
+    /// All achievements, locked and unlocked.
     pub achievements: Vec<Achievement>,
     /// Achievements unlocked this session (cleared on new session). Used for banner display.
     #[serde(default)]
@@ -88,6 +108,7 @@ impl Default for AchievementStore {
 }
 
 impl AchievementStore {
+    /// Load the saved store, adding any achievements introduced since it was saved; a fresh store if there is no readable save.
     pub fn load() -> Self {
         let path = Self::path();
         if let Ok(data) = std::fs::read_to_string(&path) {
@@ -106,6 +127,7 @@ impl AchievementStore {
         Self::default()
     }
 
+    /// Save the store to disk; errors are ignored.
     pub fn save(&self) {
         if let Ok(json) = serde_json::to_string_pretty(self) {
             let _ = std::fs::write(Self::path(), json);
@@ -113,10 +135,7 @@ impl AchievementStore {
     }
 
     fn path() -> std::path::PathBuf {
-        let mut p = std::env::current_exe().unwrap_or_default();
-        p.pop();
-        p.push("chaos_rpg_achievements.json");
-        p
+        crate::paths::data_file("chaos_rpg_achievements.json")
     }
 
     /// Unlock an achievement by id. Returns true if newly unlocked.
@@ -134,22 +153,27 @@ impl AchievementStore {
         false
     }
 
+    /// Whether the achievement with this id is unlocked.
     pub fn is_unlocked(&self, id: &str) -> bool {
         self.achievements.iter().any(|a| a.id == id && a.unlocked)
     }
 
+    /// Number of unlocked achievements.
     pub fn unlocked_count(&self) -> usize {
         self.achievements.iter().filter(|a| a.unlocked).count()
     }
 
+    /// Number of achievements in the game.
     pub fn total_count(&self) -> usize {
         self.achievements.len()
     }
 
+    /// All achievements of one rarity tier.
     pub fn by_rarity(&self, rarity: AchievementRarity) -> Vec<&Achievement> {
         self.achievements.iter().filter(|a| a.rarity == rarity).collect()
     }
 
+    /// Take the next "achievement unlocked" banner text waiting to be shown, if any.
     pub fn pop_banner(&mut self) -> Option<String> {
         if self.pending_banners.is_empty() { None } else { Some(self.pending_banners.remove(0)) }
     }
@@ -168,14 +192,7 @@ impl AchievementStore {
 }
 
 fn chrono_date() -> String {
-    // Simple date without chrono dependency
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let days  = secs / 86400;
-    let year  = 1970 + days / 365;
-    let month = (days % 365) / 30 + 1;
-    let day   = (days % 365) % 30 + 1;
-    format!("{}-{:02}-{:02}", year, month, day)
+    crate::time_util::today_utc()
 }
 
 // ── Event types for checking ──────────────────────────────────────────────────
@@ -183,47 +200,84 @@ fn chrono_date() -> String {
 /// A snapshot of end-of-run data for achievement checking.
 #[derive(Debug, Clone)]
 pub struct RunSummary {
+    /// Deepest floor reached.
     pub floor:            u32,
+    /// Enemies killed.
     pub kills:            u64,
+    /// Character level at the end.
     pub level:            u32,
+    /// Character class name.
     pub class:            String,
+    /// Difficulty name.
     pub difficulty:       String,
+    /// Total damage dealt.
     pub damage_dealt:     i64,
+    /// Total damage taken.
     pub damage_taken:     i64,
+    /// Largest single hit dealt.
     pub highest_hit:      i64,
+    /// Spells cast.
     pub spells_cast:      u32,
+    /// Items used.
     pub items_used:       u32,
+    /// Gold held at the end.
     pub gold:             i64,
+    /// Misery index at the end of the run.
     pub misery_index:     f64,
+    /// Corruption level at the end.
     pub corruption:       u32,
+    /// Power tier name at the end.
     pub power_tier:       String,
+    /// Sum of all character stats.
     pub total_stats:      i64,
+    /// What ended the run.
     pub cause_of_death:   String,
+    /// Rooms cleared.
     pub rooms_cleared:    u32,
+    /// Deaths during the run (revives included).
     pub deaths_in_run:    u32,
+    /// Times the player fled.
     pub fled_count:       u32,
+    /// Whether every stat was negative.
     pub all_stats_negative: bool,
+    /// Runs played in total across all saves.
     pub total_runs:       u32,
+    /// Deaths in total across all runs.
     pub total_deaths:     u32,
+    /// Whether the run was won.
     pub won:              bool,
+    /// Seed of the run.
     pub seed:             u64,
 }
 
 /// A snapshot of a single combat round for achievement checking.
 #[derive(Debug, Clone, Default)]
 pub struct CombatSnapshot {
+    /// Damage dealt this round.
     pub damage_dealt:   i64,
+    /// Whether the hit was a critical.
     pub is_crit:        bool,
+    /// Whether the hit came from a spell.
     pub is_spell:       bool,
+    /// Name of the spell used, empty for weapon attacks.
     pub spell_name:     String,
+    /// Enemy HP left after the round.
     pub enemy_remaining_hp: i64,
+    /// Player HP as a fraction of max HP, 0.0 to 1.0.
     pub player_hp_pct:  f32,
+    /// Round number within the fight.
     pub round:          u32,
+    /// Final chaos roll value of the round, from -1.0 to 1.0.
     pub roll_value:     f64,
+    /// Name of the enemy.
     pub enemy_name:     String,
+    /// Whether the enemy is a boss.
     pub is_boss:        bool,
+    /// Whether the player fled this round.
     pub fled:           bool,
+    /// Whether the player won the fight this round.
     pub won_combat:     bool,
+    /// Whether the player took no damage in the whole fight.
     pub took_no_damage: bool,
 }
 
@@ -254,7 +308,7 @@ impl AchievementStore {
         // Golden Ratio
         if (s.roll_value - 1.618).abs() < 0.005 { self.unlock("golden_ratio"); }
         // Euler's Number
-        if (s.roll_value - 2.718).abs() < 0.005 { self.unlock("eulers_number"); }
+        if (s.roll_value - std::f64::consts::E).abs() < 0.005 { self.unlock("eulers_number"); }
         // Perfectly Balanced
         if s.roll_value.abs() < 0.005 { self.unlock("perfectly_balanced"); }
         // Tactical Retreat
@@ -440,6 +494,7 @@ impl AchievementStore {
 
 // ── Full achievement list ─────────────────────────────────────────────────────
 
+/// The full list of achievements in the game, all locked.
 pub fn all_achievements() -> Vec<Achievement> {
     use AchievementRarity::*;
     vec![

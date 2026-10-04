@@ -5,50 +5,76 @@ use std::collections::HashMap;
 /// Classification of the relationship between two entities.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RelationshipType {
+    /// Barely know each other (trust and affection both below 10).
     Stranger,
+    /// Trust or affection of at least 10.
     Acquaintance,
+    /// Trust 50+ and affection 30+.
     Friend,
+    /// Trust 70+ and affection 50+.
     CloseFriend,
+    /// Trust 60+ without enough affection for friendship.
     Ally,
+    /// Trust and affection both -20 or lower.
     Rival,
+    /// Trust or affection of -60 or lower.
     Enemy,
+    /// Trust and affection both 80+.
     Romantic,
+    /// Family (never assigned from scores; set it directly).
     Family,
 }
 
 /// The type of interaction that occurred between two entities.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InteractionType {
+    /// Said hello.
     Greeting,
+    /// Gave a gift.
     Gift,
+    /// Traded.
     Trade,
+    /// Finished a quest for the other.
     QuestComplete,
+    /// Betrayed the other.
     Betrayal,
+    /// Fought (with or against).
     Combat,
+    /// Rescued the other.
     Rescue,
+    /// Talked.
     Conversation,
 }
 
 /// A single recorded interaction between two entities.
 #[derive(Debug, Clone)]
 pub struct Interaction {
+    /// What happened.
     pub interaction_type: InteractionType,
+    /// Change to trust.
     pub delta_trust: i32,
+    /// Change to affection.
     pub delta_affection: i32,
+    /// When it happened, in milliseconds (caller-defined clock).
     pub timestamp_ms: u64,
+    /// Free-form note for the log.
     pub note: String,
 }
 
 /// A bilateral relationship between two entities.
 #[derive(Debug, Clone)]
 pub struct Relationship {
+    /// First entity id (the lexicographically smaller one).
     pub entity_a: String,
+    /// Second entity id.
     pub entity_b: String,
     /// Trust score in the range [-100, 100].
     pub trust: i32,
     /// Affection score in the range [-100, 100].
     pub affection: i32,
+    /// Every interaction recorded between the two, oldest first.
     pub history: Vec<Interaction>,
+    /// Current label, recomputed from trust and affection after each interaction.
     pub relationship_type: RelationshipType,
 }
 
@@ -85,10 +111,12 @@ fn saturate(v: i32) -> i32 {
 
 /// The relationship manager for all entity pairs.
 pub struct RelationshipSystem {
+    /// Relationships keyed by the sorted pair of entity ids.
     pub relationships: HashMap<(String, String), Relationship>,
 }
 
 impl RelationshipSystem {
+    /// An empty relationship system.
     pub fn new() -> Self {
         Self { relationships: HashMap::new() }
     }
@@ -124,6 +152,7 @@ impl RelationshipSystem {
         rel.history.push(interaction);
     }
 
+    /// The relationship between `a` and `b` in either order, if one exists.
     pub fn relationship_between(&self, a: &str, b: &str) -> Option<&Relationship> {
         let key = Self::relationship_key(a, b);
         self.relationships.get(&key)

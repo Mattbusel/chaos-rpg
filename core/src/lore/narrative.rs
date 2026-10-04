@@ -4,62 +4,108 @@ use serde::{Deserialize, Serialize};
 
 // ─── EVENT TYPES ──────────────────────────────────────────────────────────────
 
+/// A notable moment in a run, used to write the end-of-run story.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NarrativeEvent {
+    /// The first enemy killed in the run.
     FirstKill {
+        /// Name of the enemy.
         enemy: String,
+        /// Floor where it happened.
         floor: u32,
+        /// Combat rounds the fight took.
         rounds: u32,
     },
+    /// The biggest single hit of the run.
     BiggestHit {
+        /// Damage dealt.
         damage: i64,
+        /// Enemy that took the hit.
         enemy: String,
+        /// Floor where it happened.
         floor: u32,
+        /// Name of the chaos engine that finished the roll.
         engine: String,
+        /// Whether the hit was a critical.
         was_crit: bool,
     },
+    /// The player survived with very little HP.
     NearDeath {
+        /// HP left after the hit.
         hp_remaining: i32,
+        /// Enemy that nearly killed the player.
         enemy: String,
+        /// Floor where it happened.
         floor: u32,
+        /// Short description of how the player survived.
         survived_how: String,
     },
+    /// A meeting with the player's nemesis.
     NemesisEncounter {
+        /// Name of the nemesis.
         nemesis_name: String,
+        /// Floor where it happened.
         floor: u32,
+        /// The nemesis's special ability.
         ability: String,
+        /// How it ended: "defeated", "survived" or "fled".
         outcome: String, // "defeated" | "survived" | "fled"
     },
+    /// A boss was killed.
     BossKill {
+        /// Name of the boss.
         boss: String,
+        /// Floor where it happened.
         floor: u32,
+        /// Combat rounds the fight took.
         rounds: u32,
     },
+    /// A notable item was found.
     ItemFound {
+        /// Name of the item.
         item_name: String,
+        /// Rarity label of the item.
         rarity: String,
+        /// Floor where it was found.
         floor: u32,
     },
+    /// Corruption reached a milestone.
     CorruptionMilestone {
+        /// Corruption stacks at the milestone.
         stacks: u32,
+        /// Note on which engine parameter the corruption changed.
         parameter_note: String,
     },
+    /// The Misery Index reached a milestone.
     MiseryMilestone {
+        /// Misery Index value at the milestone.
         index: u64,
+        /// Name of the milestone.
         milestone_name: String,
     },
+    /// An achievement was unlocked during the run.
     AchievementUnlock {
+        /// Achievement name.
         name: String,
+        /// Achievement description.
         description: String,
     },
+    /// The player died.
     Death {
+        /// Enemy that dealt the killing blow.
         enemy: String,
+        /// Damage of the killing blow.
         damage: i64,
+        /// Floor of death.
         floor: u32,
+        /// Whether the killing blow was a critical.
         was_crit: bool,
     },
+    /// The player won the run.
     Victory {
+        /// Game mode won.
         mode: String,
+        /// Final floor.
         floor: u32,
     },
 }
@@ -104,23 +150,41 @@ impl NarrativeEvent {
 
 // ─── NARRATIVE BUILDER ────────────────────────────────────────────────────────
 
+/// Everything needed to write a run's story: who the character was, how the run went, and its notable events.
 pub struct RunNarrative {
+    /// Character name.
     pub character_name: String,
+    /// Character class name.
     pub character_class: String,
+    /// Character background name.
     pub character_background: String,
+    /// Difficulty name.
     pub difficulty: String,
+    /// Game mode name.
     pub game_mode: String,
+    /// Final value of the destiny roll from character creation (-1 to 1).
     pub destiny_roll_value: f64,
+    /// Stats that started positive, as (name, value).
     pub positive_stats: Vec<(String, i64)>,
+    /// Stats that started negative, as (name, value).
     pub negative_stats: Vec<(String, i64)>,
+    /// Boon chosen at character creation, if any.
     pub boon_name: Option<String>,
+    /// Last floor reached.
     pub final_floor: u32,
+    /// Power tier at the end.
     pub final_tier: String,
+    /// Enemies killed.
     pub total_kills: u64,
+    /// Total damage dealt.
     pub total_damage: i64,
+    /// Notable events, in order.
     pub events: Vec<NarrativeEvent>,
+    /// Player-written origin story used instead of the generated one.
     pub custom_origin: Option<String>,
+    /// Epitaph for the character.
     pub epitaph: String,
+    /// Whether the run was won.
     pub won: bool,
 }
 
@@ -138,7 +202,7 @@ impl RunNarrative {
             .iter()
             .filter(|e| !matches!(e, NarrativeEvent::Death { .. } | NarrativeEvent::Victory { .. }))
             .collect();
-        events.sort_by(|a, b| b.significance().cmp(&a.significance()));
+        events.sort_by_key(|b| std::cmp::Reverse(b.significance()));
         events.truncate(5);
 
         for event in events {

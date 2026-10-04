@@ -1,34 +1,56 @@
 use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Overworld terrain type.
 pub enum Biome {
+    /// Water below elevation 0.2 ('O'); impassable.
     Ocean,
+    /// Dry land ('D').
     Desert,
+    /// Wet land ('F').
     Forest,
+    /// Open land ('.').
     Grassland,
+    /// High ground above elevation 0.8 ('^').
     Mountain,
+    /// Cold high ground ('T').
     Tundra,
+    /// Wet lowland ('S').
     Swamp,
+    /// Dry peaks ('V'); impassable.
     Volcano,
 }
 
 #[derive(Debug, Clone)]
+/// One square of the overworld map.
 pub struct TerrainTile {
+    /// Column.
     pub x: u32,
+    /// Row.
     pub y: u32,
+    /// Height from 0.0 (deep water) to 1.0 (peaks).
     pub elevation: f32,
+    /// Wetness from 0.0 to 1.0.
     pub moisture: f32,
+    /// Biome chosen from elevation and moisture.
     pub biome: Biome,
+    /// True if the tile can be walked on (not ocean or volcano).
     pub passable: bool,
 }
 
+/// A generated overworld map.
 pub struct WorldMap {
+    /// Width in tiles.
     pub width: u32,
+    /// Height in tiles.
     pub height: u32,
+    /// All tiles, row by row.
     pub tiles: Vec<TerrainTile>,
+    /// Seed the map was generated from.
     pub seed: u64,
 }
 
+/// Biome for an elevation and moisture (both 0.0 to 1.0).
 pub fn classify_biome(elevation: f32, moisture: f32) -> Biome {
     if elevation > 0.8 {
         if moisture < 0.2 {
@@ -60,6 +82,7 @@ pub fn classify_biome(elevation: f32, moisture: f32) -> Biome {
     Biome::Grassland
 }
 
+/// Advance the LCG state and return the next value in 0.0 up to (not including) 1.0.
 pub fn lcg_next(state: &mut u64) -> f64 {
     *state = state
         .wrapping_mul(6364136223846793005)
@@ -67,12 +90,14 @@ pub fn lcg_next(state: &mut u64) -> f64 {
     (*state >> 33) as f64 / (u32::MAX as f64 + 1.0)
 }
 
+/// Deterministic hash of a tile position and seed, in 0.0 up to 1.0.
 pub fn integer_hash(x: u32, y: u32, seed: u64) -> f64 {
     let h = (x.wrapping_mul(374761393) ^ y.wrapping_mul(668265263) ^ seed as u32)
         .wrapping_mul(2246822519);
     h as f64 / (u32::MAX as f64 + 1.0)
 }
 
+/// Value noise at (x, y) in 0.0 to 1.0, summing `octaves` layers at doubling frequency; `width` and `height` are unused.
 pub fn generate_noise(x: u32, y: u32, width: u32, height: u32, seed: u64, octaves: u32) -> f32 {
     let _ = (width, height); // unused params kept for API compatibility
     let mut value = 0.0f64;
@@ -98,6 +123,7 @@ pub fn generate_noise(x: u32, y: u32, width: u32, height: u32, seed: u64, octave
 }
 
 impl WorldMap {
+    /// Generate a `width` x `height` overworld from `seed` using 4-octave value noise for elevation and moisture.
     pub fn generate(width: u32, height: u32, seed: u64) -> Self {
         let mut tiles = Vec::with_capacity((width * height) as usize);
 
@@ -121,6 +147,7 @@ impl WorldMap {
         WorldMap { width, height, tiles, seed }
     }
 
+    /// The tile at (x, y), or `None` outside the map.
     pub fn tile_at(&self, x: u32, y: u32) -> Option<&TerrainTile> {
         if x >= self.width || y >= self.height {
             return None;
@@ -128,6 +155,7 @@ impl WorldMap {
         self.tiles.get((y * self.width + x) as usize)
     }
 
+    /// Number of tiles of each biome, keyed by biome name.
     pub fn biome_counts(&self) -> HashMap<String, usize> {
         let mut counts = HashMap::new();
         for tile in &self.tiles {
@@ -137,6 +165,7 @@ impl WorldMap {
         counts
     }
 
+    /// Passable tiles directly up, down, left and right of (x, y).
     pub fn passable_neighbors(&self, x: u32, y: u32) -> Vec<(u32, u32)> {
         let mut result = Vec::new();
         let dirs: &[(i64, i64)] = &[(0, -1), (0, 1), (-1, 0), (1, 0)];
@@ -157,6 +186,7 @@ impl WorldMap {
         result
     }
 
+    /// Shortest 4-directional path over passable tiles (breadth-first search), including both ends; `None` if unreachable.
     pub fn find_path(&self, start: (u32, u32), end: (u32, u32)) -> Option<Vec<(u32, u32)>> {
         if start == end {
             return Some(vec![start]);
@@ -189,8 +219,8 @@ impl WorldMap {
                 return Some(path);
             }
             for neighbor in self.passable_neighbors(current.0, current.1) {
-                if !visited.contains_key(&neighbor) {
-                    visited.insert(neighbor, current);
+                if let std::collections::hash_map::Entry::Vacant(e) = visited.entry(neighbor) {
+                    e.insert(current);
                     queue.push_back(neighbor);
                 }
             }
@@ -198,6 +228,7 @@ impl WorldMap {
         None
     }
 
+    /// The map as a grid of one-character biome symbols, row by row.
     pub fn to_ascii(&self) -> Vec<Vec<char>> {
         let mut grid = vec![vec![' '; self.width as usize]; self.height as usize];
         for tile in &self.tiles {
@@ -234,7 +265,7 @@ mod tests {
         let map = WorldMap::generate(32, 32, 7);
         let counts = map.biome_counts();
         assert!(!counts.is_empty());
-        for (_biome, count) in &counts {
+        for count in counts.values() {
             assert!(*count > 0);
         }
     }

@@ -12,25 +12,39 @@ use serde::{Deserialize, Serialize};
 // ─── CLASSES ──────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The twelve playable classes; each has its own stat weights and passive ability.
 pub enum CharacterClass {
     // Original four
+    /// Spell caster: high mana and entropy; critical spells deal bonus damage.
     Mage,
+    /// Melee bruiser: high vitality and force; stronger below 30% HP.
     Berserker,
+    /// Archer: high precision, with bonus accuracy on every attack.
     Ranger,
+    /// Rogue: high cunning, with a chance to dodge incoming hits.
     Thief,
     // New four
+    /// Death mage: drains 8% of an enemy's max HP on each kill.
     Necromancer,
+    /// Potion user: items and potions are 50% stronger.
     Alchemist,
+    /// Holy warrior: regenerates HP at the start of each round.
     Paladin,
+    /// Phase walker: chance to phase-dodge any attack.
     VoidWalker,
     // Extended roster
+    /// Commander: gains +3 force and +3 vitality every 5 kills.
     Warlord,
+    /// Trickster: chance to redirect an incoming hit back at the enemy.
     Trickster,
+    /// Rune crafter: each kill etches +10% weapon damage (up to 10 stacks).
     Runesmith,
+    /// Time mage: chance to take an extra action each round.
     Chronomancer,
 }
 
 impl CharacterClass {
+    /// Display name of the class.
     pub fn name(&self) -> &'static str {
         match self {
             CharacterClass::Mage => "Mage",
@@ -48,6 +62,7 @@ impl CharacterClass {
         }
     }
 
+    /// Description of the class shown at character creation.
     pub fn description(&self) -> &'static str {
         match self {
             CharacterClass::Mage => {
@@ -89,6 +104,7 @@ impl CharacterClass {
         }
     }
 
+    /// Small ASCII portrait of the class.
     pub fn ascii_art(&self) -> &'static str {
         match self {
             CharacterClass::Mage => "   /\\\n  (o)\n   ||",
@@ -106,6 +122,7 @@ impl CharacterClass {
         }
     }
 
+    /// Name of the class passive ability, e.g. "Arcane Overflow" for the Mage.
     pub fn passive_name(&self) -> &'static str {
         match self {
             CharacterClass::Mage => "Arcane Overflow",
@@ -123,6 +140,7 @@ impl CharacterClass {
         }
     }
 
+    /// One-line description of what the class passive does in combat.
     pub fn passive_desc(&self) -> &'static str {
         match self {
             CharacterClass::Mage => "Critical spells deal ENTROPY/10 bonus damage",
@@ -140,6 +158,7 @@ impl CharacterClass {
         }
     }
 
+    /// Relative stat weights (roughly 20 to 90) used when rolling this class's starting stats and level-up gains.
     pub fn stat_weights(&self) -> StatBlock {
         match self {
             CharacterClass::Mage => StatBlock {
@@ -263,18 +282,28 @@ impl std::fmt::Display for CharacterClass {
 // ─── BACKGROUNDS ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Character background chosen at creation; adds a fixed stat bonus.
 pub enum Background {
+    /// +15 mana, +10 entropy.
     Scholar,   // +MANA +ENTROPY
+    /// +15 luck, +10 precision.
     Wanderer,  // +LUCK +PRECISION
+    /// +15 force, +10 vitality.
     Gladiator, // +FORCE +VITALITY
+    /// +15 cunning, +10 entropy.
     Outcast,   // +CUNNING +ENTROPY
+    /// +15 cunning, +10 luck.
     Merchant,  // +LUCK +CUNNING
+    /// +20 mana, +20 entropy, -10 vitality.
     Cultist,   // +MANA +ENTROPY (extreme, -VIT)
+    /// +20 cunning, +10 entropy, -10 mana.
     Exile,     // +CUNNING +ENTROPY, -MANA
+    /// +20 luck, +10 mana, -15 force.
     Oracle,    // +LUCK +MANA, -FORCE
 }
 
 impl Background {
+    /// Display name of the background.
     pub fn name(&self) -> &'static str {
         match self {
             Background::Scholar => "Scholar",
@@ -288,6 +317,7 @@ impl Background {
         }
     }
 
+    /// Short description of the stat bonus, e.g. "+15 MANA, +10 ENTROPY".
     pub fn description(&self) -> &'static str {
         match self {
             Background::Scholar => "+15 MANA, +10 ENTROPY",
@@ -301,6 +331,7 @@ impl Background {
         }
     }
 
+    /// The background's stat bonus as a `StatBlock` (unlisted stats are 0).
     pub fn stat_bonus(&self) -> StatBlock {
         match self {
             Background::Scholar => StatBlock {
@@ -353,17 +384,26 @@ impl Background {
 // ─── STATS ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// The seven character stats.
 pub struct StatBlock {
+    /// Health stat; drives max HP.
     pub vitality: i64,
+    /// Physical power; adds to melee damage and max HP.
     pub force: i64,
+    /// Magic power for spells.
     pub mana: i64,
+    /// Cleverness; drives dodges, tricks and some class passives.
     pub cunning: i64,
+    /// Accuracy and critical hits.
     pub precision: i64,
+    /// Affinity for chaos; boosts chaos-driven effects.
     pub entropy: i64,
+    /// Fortune; tilts rolls, loot and some passives.
     pub luck: i64,
 }
 
 impl StatBlock {
+    /// All seven stats at 0.
     pub fn zero() -> Self {
         StatBlock {
             vitality: 0,
@@ -376,6 +416,7 @@ impl StatBlock {
         }
     }
 
+    /// Stat-by-stat sum of two blocks.
     pub fn add(&self, other: &StatBlock) -> StatBlock {
         StatBlock {
             vitality: self.vitality + other.vitality,
@@ -388,6 +429,7 @@ impl StatBlock {
         }
     }
 
+    /// Sum of all seven stats.
     pub fn total(&self) -> i64 {
         self.vitality
             + self.force
@@ -398,6 +440,7 @@ impl StatBlock {
             + self.luck
     }
 
+    /// Power tier for this stat total.
     pub fn power_level(&self) -> PowerTier {
         PowerTier::from_total(self.total())
     }
@@ -409,18 +452,30 @@ pub use crate::power_tier::PowerTier;
 // ─── STATUS EFFECTS ───────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A timed effect on a character; the number is turns left (or shield HP for `Shielded`).
 pub enum StatusEffect {
     // ── Original 11 ───────────────────────────────────────────────────────────
+    /// Takes 8 damage per turn.
     Burning(u32),
+    /// Takes 3 damage per turn.
     Poisoned(u32),
+    /// Stunned for the given number of turns.
     Stunned(u32),
+    /// Cursed for the given number of turns.
     Cursed(u32),
+    /// Blessed for the given number of turns.
     Blessed(u32),
+    /// Absorbs this much incoming damage before HP is hit.
     Shielded(i64),
+    /// Enraged for the given number of turns.
     Enraged(u32),
+    /// Frozen for the given number of turns.
     Frozen(u32),
+    /// Heals 3 + vitality/20 HP per turn.
     Regenerating(u32),
+    /// Phasing for the given number of turns.
     Phasing(u32),
+    /// Empowered for the given number of turns.
     Empowered(u32),
     // ── Deep Ailments ─────────────────────────────────────────────────────────
     /// A portion of chaos rolls use only 1 engine instead of 4-10. Extremely volatile.
@@ -438,6 +493,7 @@ pub enum StatusEffect {
 }
 
 impl StatusEffect {
+    /// Upper-case display name, e.g. "BURNING".
     pub fn name(&self) -> &'static str {
         match self {
             StatusEffect::Burning(_) => "BURNING",
@@ -460,6 +516,7 @@ impl StatusEffect {
         }
     }
 
+    /// Short badge such as "[FIRE]" for compact status lines.
     pub fn badge(&self) -> &'static str {
         match self {
             StatusEffect::Burning(_) => "[FIRE]",
@@ -482,6 +539,7 @@ impl StatusEffect {
         }
     }
 
+    /// ANSI colour code used for this effect in the terminal.
     pub fn color(&self) -> &'static str {
         match self {
             StatusEffect::Burning(_) => "\x1b[91m",
@@ -504,6 +562,7 @@ impl StatusEffect {
         }
     }
 
+    /// Explanation of the deep ailments (`Fracture` and later); empty for the basic effects.
     pub fn describe(&self) -> &'static str {
         match self {
             StatusEffect::Fracture(_) => "Some rolls use only 1 engine (extreme volatility)",
@@ -518,6 +577,7 @@ impl StatusEffect {
         }
     }
 
+    /// Damage this effect deals each turn (Burning 8, Poisoned 3, otherwise 0).
     pub fn tick_damage(&self) -> i64 {
         match self {
             StatusEffect::Burning(_) => 8,
@@ -526,6 +586,7 @@ impl StatusEffect {
         }
     }
 
+    /// HP this effect restores each turn for a character with `vit` vitality.
     pub fn tick_heal(&self, vit: i64) -> i64 {
         match self {
             StatusEffect::Regenerating(_) => (3 + vit / 20).max(1),
@@ -533,6 +594,7 @@ impl StatusEffect {
         }
     }
 
+    /// Count down one turn; returns true when the effect has expired.
     pub fn tick(&mut self) -> bool {
         match self {
             StatusEffect::Burning(n)
@@ -565,14 +627,20 @@ impl StatusEffect {
 // ─── DIFFICULTY ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Difficulty level; scales enemy damage, gold, XP and score.
 pub enum Difficulty {
+    /// Enemies deal 70% damage, 130% gold, score x1.
     Easy,
+    /// Standard balance, score x2.
     Normal,
+    /// Enemies deal 140% damage, 75% gold, score x4.
     Brutal,
+    /// Enemies deal 200% damage, 50% gold, score x10.
     Chaos,
 }
 
 impl Difficulty {
+    /// Display name of the difficulty.
     pub fn name(&self) -> &'static str {
         match self {
             Difficulty::Easy => "Easy",
@@ -582,6 +650,7 @@ impl Difficulty {
         }
     }
 
+    /// One-line description shown when picking the difficulty.
     pub fn description(&self) -> &'static str {
         match self {
             Difficulty::Easy => "Enemies deal 70% damage. Extra gold. Score x1.",
@@ -591,6 +660,7 @@ impl Difficulty {
         }
     }
 
+    /// Enemy damage multiplier in percent (70 to 200).
     pub fn enemy_damage_mult(&self) -> i64 {
         match self {
             Difficulty::Easy => 70,
@@ -600,6 +670,7 @@ impl Difficulty {
         }
     }
 
+    /// Gold multiplier in percent (50 to 130).
     pub fn gold_mult(&self) -> i64 {
         match self {
             Difficulty::Easy => 130,
@@ -609,6 +680,7 @@ impl Difficulty {
         }
     }
 
+    /// XP multiplier in percent (80 to 200).
     pub fn xp_mult(&self) -> i64 {
         match self {
             Difficulty::Easy => 80,
@@ -618,6 +690,7 @@ impl Difficulty {
         }
     }
 
+    /// Score multiplier (1, 2, 4 or 10).
     pub fn score_mult(&self) -> u64 {
         match self {
             Difficulty::Easy => 1,
@@ -631,15 +704,22 @@ impl Difficulty {
 // ─── COLOR THEME ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Terminal colour theme.
 pub enum ColorTheme {
+    /// Cyan and red classic look.
     Classic,
+    /// Bright neon colours.
     Neon,
+    /// Reds.
     Blood,
+    /// Purples.
     Void,
+    /// White only.
     Monochrome,
 }
 
 impl ColorTheme {
+    /// Display name of the theme.
     pub fn name(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "Classic",
@@ -650,6 +730,7 @@ impl ColorTheme {
         }
     }
 
+    /// ANSI code for primary text.
     pub fn primary(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "\x1b[36m",
@@ -660,6 +741,7 @@ impl ColorTheme {
         }
     }
 
+    /// ANSI code for danger and damage text.
     pub fn danger(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "\x1b[31m",
@@ -670,6 +752,7 @@ impl ColorTheme {
         }
     }
 
+    /// ANSI code for success text.
     pub fn success(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "\x1b[32m",
@@ -680,6 +763,7 @@ impl ColorTheme {
         }
     }
 
+    /// ANSI code for warnings.
     pub fn warning(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "\x1b[33m",
@@ -690,6 +774,7 @@ impl ColorTheme {
         }
     }
 
+    /// ANSI code for magic and spell text.
     pub fn magic(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "\x1b[35m",
@@ -700,6 +785,7 @@ impl ColorTheme {
         }
     }
 
+    /// ANSI code for titles.
     pub fn title(&self) -> &'static str {
         match self {
             ColorTheme::Classic => "\x1b[31m",
@@ -714,22 +800,36 @@ impl ColorTheme {
 // ─── BOONS ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Starting boon picked from three at character creation.
 pub enum Boon {
+    /// +50 max HP, but lose 2 HP in every room.
     BloodPact,       // +50 max HP, take 2 HP per room
+    /// +10 luck and more favourable chaos rolls.
     ChaosBlessing,   // luck +10, chaos rolls more favourable
+    /// Start with 200 gold.
     GoldVein,        // start with 200 gold
+    /// Start with 3 extra spells.
     ScholarGift,     // 3 extra starting spells
+    /// +20 force and +15 vitality.
     WarriorBlessing, // +20 Force, +15 Vitality
+    /// +30 luck.
     LuckyBirth,      // +30 Luck
+    /// Double entropy and mana, half vitality.
     EntropicSoul,    // 2x Entropy+Mana, 0.5x Vitality
+    /// Start with an 80 HP shield.
     CrystalSkin,     // start with 80 HP shield
+    /// All spell damage x1.75.
     MathSavant,      // all spell damage ×1.75
+    /// All stats x1.5.
     VoidTouched,     // all stats ×1.5
+    /// Each kill adds +1 to your highest stat.
     PrimeBlood,      // each kill: +1 to highest stat
+    /// Start at 50% HP but earn 3x XP.
     ShadowStart,     // 50% HP, 3x XP
 }
 
 impl Boon {
+    /// Display name of the boon.
     pub fn name(self) -> &'static str {
         match self {
             Boon::BloodPact => "Blood Pact",
@@ -747,6 +847,7 @@ impl Boon {
         }
     }
 
+    /// One-line description of the boon's effect.
     pub fn description(self) -> &'static str {
         match self {
             Boon::BloodPact => "+50 max HP. Take 2 HP damage entering each room.",
@@ -764,6 +865,7 @@ impl Boon {
         }
     }
 
+    /// ANSI colour used when listing the boon.
     pub fn color_code(self) -> &'static str {
         match self {
             Boon::BloodPact | Boon::ShadowStart => "\x1b[31m",
@@ -775,6 +877,7 @@ impl Boon {
         }
     }
 
+    /// Three boons chosen from the seed, offered at character creation.
     pub fn random_three(seed: u64) -> [Boon; 3] {
         use Boon::*;
         const ALL: [Boon; 12] = [
@@ -805,11 +908,17 @@ impl Boon {
 pub use crate::items::EquipSlot;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Items currently equipped; each contributes its stat bonuses.
 pub struct EquipmentSlots {
+    /// Equipped weapon.
     pub weapon: Option<crate::items::Item>,
+    /// Equipped body armour.
     pub body:   Option<crate::items::Item>,
+    /// First ring slot.
     pub ring1:  Option<crate::items::Item>,
+    /// Second ring slot.
     pub ring2:  Option<crate::items::Item>,
+    /// Amulet slot.
     pub amulet: Option<crate::items::Item>,
 }
 
@@ -896,62 +1005,100 @@ impl EquipmentSlots {
 // ─── CHARACTER ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// The player character and everything tracked about the current run.
 pub struct Character {
+    /// Character name.
     pub name: String,
+    /// Class.
     pub class: CharacterClass,
+    /// Background.
     pub background: Background,
+    /// Current stats.
     pub stats: StatBlock,
+    /// Maximum HP.
     pub max_hp: i64,
+    /// Current HP (0 means dead).
     pub current_hp: i64,
+    /// Character level, starting at 1.
     pub level: u32,
+    /// Total XP earned.
     pub xp: u64,
+    /// Current dungeon floor.
     pub floor: u32,
+    /// Gold carried.
     pub gold: i64,
+    /// Enemies killed this run.
     pub kills: u32,
+    /// Seed for this character's chaos rolls.
     pub seed: u64,
+    /// Unequipped items carried.
     pub inventory: Vec<crate::items::Item>,
+    /// Spells the character can cast.
     pub known_spells: Vec<crate::spells::Spell>,
+    /// Active status effects.
     pub status_effects: Vec<StatusEffect>,
+    /// Bonus stat points spent.
     pub bonus_points_spent: u32,
+    /// Total damage dealt this run.
     pub total_damage_dealt: i64,
+    /// Total damage taken this run.
     pub total_damage_taken: i64,
+    /// Spells cast this run.
     pub spells_cast: u32,
+    /// Items used this run.
     pub items_used: u32,
+    /// Rooms cleared this run.
     pub rooms_cleared: u32,
+    /// Difficulty of this run.
     pub difficulty: Difficulty,
     // Boon system
+    /// Boon chosen at creation, if any.
     pub boon: Option<Boon>,
+    /// Multiplier on spell damage (1.0 is normal).
     pub spell_damage_mult: f64,
+    /// Multiplier on XP gained (1.0 is normal).
     pub xp_mult: f64,
     // Body system
+    /// Per-body-part health and injuries.
     pub body: Body,
     // Skill points for passive tree
+    /// Unspent passive tree skill points.
     pub skill_points: u32,
+    /// IDs of passive tree nodes taken.
     pub allocated_nodes: Vec<u32>,
     // Faction reputation
+    /// Standing with each faction.
     pub faction_rep: crate::factions::FactionRep,
     // Chaos Corruption — every kill adds a stack; every 50 mutates engines permanently
+    /// Chaos corruption stacks: +1 per kill; every 50 permanently mutate the chaos engines.
     pub corruption: u32,
     // The Hunger — rooms without a kill (floor 50+: every 5 → lose 5% max HP)
+    /// Rooms in a row without a kill (from floor 50, every 5 costs 5% max HP).
     pub rooms_without_kill: u32,
     // Misery / Spite / Defiance system (negative-tier runs)
     #[serde(default)]
+    /// Misery, spite and defiance tracking for runs with negative stats.
     pub misery: MiseryState,
     // Per-run statistics tracker
     #[serde(default)]
+    /// Statistics for this run.
     pub run_stats: RunStats,
     // Equipment slots — items equipped here contribute passive stat bonuses
     #[serde(default)]
+    /// Equipped items.
     pub equipped: EquipmentSlots,
     // Player-authored lore for this character
     #[serde(default)]
+    /// Player-written lore for this character.
     pub character_lore: crate::character_lore::CharacterLore,
     // Narrative events tracked during the run (for auto-generated run narrative)
     #[serde(default)]
+    /// Notable events recorded for the generated run narrative.
     pub narrative_events: Vec<crate::lore::narrative::NarrativeEvent>,
 }
 
 impl Character {
+    /// Roll a new level-1 character from class, background, seed and difficulty.
     pub fn roll_new(
         name: String,
         class: CharacterClass,
@@ -1150,14 +1297,17 @@ impl Character {
         }
     }
 
+    /// True while the character has more than 0 HP.
     pub fn is_alive(&self) -> bool {
         self.current_hp > 0
     }
 
+    /// Current HP as a fraction of max HP, clamped to 0.0 to 1.0.
     pub fn hp_percent(&self) -> f64 {
         (self.current_hp as f64 / self.max_hp as f64).clamp(0.0, 1.0)
     }
 
+    /// Power tier for the character's current stat total.
     pub fn power_tier(&self) -> PowerTier {
         self.stats.power_level()
     }
@@ -1171,6 +1321,7 @@ impl Character {
         (attack_seed.wrapping_mul(1_000_003) % 100) < dodge_pct
     }
 
+    /// Take `amount` damage: shields absorb first, then the hit lands on a chaos-chosen body part.
     pub fn take_damage(&mut self, amount: i64) {
         self.take_damage_to_part(amount, self.seed.wrapping_add(amount as u64));
     }
@@ -1216,15 +1367,18 @@ impl Character {
         (hit_part, body_dmg, injury)
     }
 
+    /// Apply a status effect, replacing any existing effect with the same name.
     pub fn add_status(&mut self, effect: StatusEffect) {
         self.status_effects.retain(|e| e.name() != effect.name());
         self.status_effects.push(effect);
     }
 
+    /// True if a status effect with this display name (e.g. "BURNING") is active.
     pub fn has_status(&self, name: &str) -> bool {
         self.status_effects.iter().any(|e| e.name() == name)
     }
 
+    /// Apply one turn of status effects (damage, regen, expiry, cursed-part drain); returns net damage taken and log lines.
     pub fn tick_status_effects(&mut self) -> (i64, Vec<String>) {
         let mut net_dmg = 0i64;
         let mut msgs = Vec::new();
@@ -1274,10 +1428,12 @@ impl Character {
         (net_dmg, msgs)
     }
 
+    /// Put an item in the inventory.
     pub fn add_item(&mut self, item: crate::items::Item) {
         self.inventory.push(item);
     }
 
+    /// Learn a spell.
     pub fn add_spell(&mut self, spell: crate::spells::Spell) {
         self.known_spells.push(spell);
     }
@@ -1329,6 +1485,7 @@ impl Character {
         messages
     }
 
+    /// Remove and return the inventory item at `idx` (counted as used), or `None` if out of range.
     pub fn use_item(&mut self, idx: usize) -> Option<crate::items::Item> {
         if idx < self.inventory.len() {
             self.items_used += 1;
@@ -1431,6 +1588,7 @@ impl Character {
         self.equipped.weapon.as_ref()
     }
 
+    /// Restore up to `amount` HP (capped at max HP) and heal every body part by 5% of its max.
     pub fn heal(&mut self, amount: i64) {
         self.current_hp = (self.current_hp + amount).min(self.max_hp);
         // Distribute a fraction of healing to injured body parts (5% of each part's max HP)
@@ -1549,6 +1707,7 @@ impl Character {
         }
     }
 
+    /// Add XP (scaled by difficulty and the XP multiplier) and level up when the threshold is reached.
     pub fn gain_xp(&mut self, xp: u64) {
         let base = xp * self.difficulty.xp_mult() as u64 / 100;
         let scaled = (base as f64 * self.xp_mult) as u64;
@@ -1587,6 +1746,7 @@ impl Character {
         self.skill_points += sp;
     }
 
+    /// Level up (chaos-rolled stat gains and skill points) and learn one new generated spell.
     pub fn level_up_and_learn_spell(&mut self) {
         self.level_up();
         let spell_seed = self
@@ -1597,6 +1757,7 @@ impl Character {
             .push(crate::spells::Spell::generate(spell_seed));
     }
 
+    /// Run score: stats, floor, level, kills, rooms, spells and gold, times the difficulty score multiplier.
     pub fn score(&self) -> u64 {
         let stat_total = self.stats.total().max(0) as u64;
         let floor_bonus = self.floor as u64 * 200;
@@ -1614,6 +1775,7 @@ impl Character {
         base * self.difficulty.score_mult()
     }
 
+    /// Lines for the end-of-run summary screen.
     pub fn run_summary(&self) -> Vec<String> {
         vec![
             format!("  Floor reached:    {}", self.floor),
@@ -1630,6 +1792,7 @@ impl Character {
         ]
     }
 
+    /// Coloured terminal HP bar `width` cells wide, followed by "current/max".
     pub fn hp_bar(&self, width: usize) -> String {
         let filled = ((self.hp_percent() * width as f64) as usize).min(width);
         let hp_color = if self.hp_percent() > 0.6 {
@@ -1662,6 +1825,7 @@ impl Character {
         MiseryState::underdog_multiplier(self.stats.total())
     }
 
+    /// Status effect badges with ANSI colours, for the terminal frontend.
     pub fn status_badge_line(&self) -> String {
         if self.status_effects.is_empty() {
             return String::new();
@@ -1685,6 +1849,7 @@ impl Character {
 
 // ─── STAT DISPLAY ─────────────────────────────────────────────────────────────
 
+/// ANSI colour for a stat value: magenta below 0, red, yellow, green, cyan, then bright magenta from 150.
 pub fn stat_color(value: i64) -> &'static str {
     match value {
         i64::MIN..=-1 => "\x1b[35m",
@@ -1696,6 +1861,7 @@ pub fn stat_color(value: i64) -> &'static str {
     }
 }
 
+/// One terminal line showing a stat's name, coloured value and a 20-cell bar (0 to 100).
 pub fn display_stat(name: &str, value: i64) -> String {
     let color = stat_color(value);
     let reset = "\x1b[0m";

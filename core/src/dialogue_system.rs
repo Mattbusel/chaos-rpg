@@ -9,20 +9,30 @@ use std::collections::HashMap;
 /// A condition that must be true for a dialogue option to be available.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DialogueCondition {
+    /// The player carries the named item.
     HasItem(String),
+    /// The named quest is complete.
     QuestComplete(String),
+    /// Reputation is strictly above the value.
     ReputationAbove(i32),
+    /// Reputation is strictly below the value.
     ReputationBelow(i32),
+    /// Always true.
     Always,
 }
 
 /// An effect applied when a dialogue option is selected.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DialogueEffect {
+    /// Add the named item to the inventory.
     GiveItem(String),
+    /// Set the named flag.
     SetFlag(String),
+    /// Add the value to reputation (may be negative).
     ModifyReputation(i32),
+    /// Start the named quest (recorded as a "quest_started:NAME" flag).
     StartQuest(String),
+    /// End the conversation right away.
     EndDialogue,
 }
 
@@ -33,34 +43,48 @@ pub enum DialogueEffect {
 /// A single dialogue option presented to the player.
 #[derive(Debug, Clone)]
 pub struct DialogueOption {
+    /// Text the player picks.
     pub text: String,
+    /// All must hold for the option to be shown.
     pub conditions: Vec<DialogueCondition>,
+    /// Applied, in order, when the option is picked.
     pub effects: Vec<DialogueEffect>,
+    /// Node to go to next, or `None` to end the conversation.
     pub next_node_id: Option<u32>,
 }
 
 /// A single node in the dialogue tree.
 #[derive(Debug, Clone)]
 pub struct DialogueNode {
+    /// Node id.
     pub id: u32,
+    /// Who is talking.
     pub speaker: String,
+    /// What they say.
     pub text: String,
+    /// Replies the player can choose from.
     pub options: Vec<DialogueOption>,
 }
 
 /// A complete branching dialogue tree.
 #[derive(Debug, Clone)]
 pub struct DialogueTree {
+    /// Nodes by id.
     pub nodes: HashMap<u32, DialogueNode>,
+    /// Node the conversation starts at.
     pub root_id: u32,
 }
 
 /// Runtime context for evaluating dialogue conditions.
 #[derive(Debug, Clone, Default)]
 pub struct DialogueContext {
+    /// Item names the player carries.
     pub inventory: Vec<String>,
+    /// Names of completed quests.
     pub completed_quests: Vec<String>,
+    /// Reputation with the speaker's side.
     pub reputation: i32,
+    /// Flags set by earlier dialogue.
     pub active_flags: Vec<String>,
 }
 

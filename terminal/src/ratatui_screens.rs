@@ -12,23 +12,20 @@
 //! The rest of the game (room text, shop, etc.) stays as imperative println! output.
 
 use chaos_rpg_core::{
-    character::{Character, CharacterClass, ColorTheme, PowerTier, StatusEffect},
+    character::{Character, CharacterClass, ColorTheme, StatusEffect},
     chaos_pipeline::ChaosRollResult,
     enemy::Enemy,
     scoreboard::ScoreEntry,
 };
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style, Stylize},
-    symbols,
+    style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{
-        block::Title, Block, Borders, Clear, Gauge, List, ListItem, Paragraph, Scrollbar,
-        ScrollbarOrientation, ScrollbarState, Sparkline, Table, Row, Cell, Wrap,
+        Block, Borders, List, ListItem, Paragraph, Table, Row, Cell, Wrap,
     },
     Frame,
 };
-use std::collections::VecDeque;
 
 // ─── UNICODE ART CONSTANTS ────────────────────────────────────────────────────
 
@@ -385,7 +382,7 @@ fn engine_bar(value: f64, width: usize) -> Line<'static> {
             chars[i] = '█';
         }
     } else {
-        let start = (half.saturating_sub(filled)).max(0);
+        let start = half.saturating_sub(filled);
         for i in start..half {
             chars[i] = '█';
         }
@@ -555,7 +552,7 @@ fn enemy_sprite_lines(enemy: &Enemy) -> &'static [&'static str] {
     use chaos_rpg_core::enemy::EnemyTier;
     match enemy.tier {
         EnemyTier::Minion => {
-            if enemy.seed % 2 == 0 {
+            if enemy.seed.is_multiple_of(2) {
                 SPRITE_FRACTAL_IMP
             } else {
                 SPRITE_ENTROPY_SPRITE

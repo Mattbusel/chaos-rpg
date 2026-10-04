@@ -120,10 +120,7 @@ pub struct SaveState {
 }
 
 pub fn save_path() -> std::path::PathBuf {
-    let mut p = std::env::current_exe().unwrap_or_default();
-    p.pop();
-    p.push("chaos_rpg_save.json");
-    p
+    chaos_rpg_core::paths::data_file("chaos_rpg_save.json")
 }
 
 pub fn write_save(s: &SaveState) {
@@ -329,6 +326,12 @@ pub struct GameState {
 
     // ── Proof-engine boss bridge ──
     pub boss_bridge: BossBridge,
+}
+
+impl Default for GameState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GameState {

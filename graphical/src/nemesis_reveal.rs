@@ -167,7 +167,7 @@ impl NemesisReveal {
                 (bx + bw + 2, by + 3), (bx + bw + 3, by + 6), (bx + bw + 2, by + 9),
             ];
             for (px, py) in &particle_positions {
-                let pulse = (frame / 6 + (*px as u64)) % 2 == 0;
+                let pulse = (frame / 6 + (*px as u64)).is_multiple_of(2);
                 let v = if pulse { pfield_v } else { pfield_v / 2 };
                 if *px > 0 && *px < 159 && *py > 0 && *py < 79 {
                     ctx.print_color(*px, *py, RGB::from_u8(v, v/5, v/5), bg_rgb, "·");

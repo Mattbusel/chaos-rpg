@@ -74,6 +74,12 @@ pub struct QuickSlotItem {
     pub count: u32,
 }
 
+impl Default for CombatHudState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CombatHudState {
     pub fn new() -> Self {
         Self {

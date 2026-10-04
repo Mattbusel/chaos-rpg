@@ -43,7 +43,7 @@ pub fn text_z(engine: &mut ProofEngine, s: &str, x: f32, y: f32, z: f32, color: 
         if ch == ' ' { continue; }
         let gx = snap(x + i as f32 * sp);
         let gy = snap(-y);
-        if gx < -9.0 || gx > 9.0 || gy < -6.0 || gy > 6.0 { continue; }
+        if !(-9.0..=9.0).contains(&gx) || !(-6.0..=6.0).contains(&gy) { continue; }
         engine.spawn_glyph(Glyph {
             character: ch,
             position: Vec3::new(gx, gy, z),
@@ -293,13 +293,12 @@ pub fn text_wrapped(engine: &mut ProofEngine, s: &str, x: f32, y: f32, max_chars
     let mut line = String::new();
 
     for word in words {
-        if line.len() + word.len() + 1 > max_chars {
-            if !line.is_empty() {
+        if line.len() + word.len() + 1 > max_chars
+            && !line.is_empty() {
                 text(engine, &line, x, cy, color, scale, emission);
                 cy -= row_h;
                 line.clear();
             }
-        }
         if !line.is_empty() { line.push(' '); }
         line.push_str(word);
     }

@@ -1,10 +1,10 @@
+# CHAOS RPG
+
+**A roguelike for anyone who likes dice games and maths: every hit, heal and loot drop is decided by chaining real math (the Lorenz attractor, the Mandelbrot set, the Collatz sequence) instead of a random number.**
+
 <p align="center">
   <img src="assets/banner.png" alt="CHAOS RPG: a roguelike where every roll is a chain of real math" width="100%"/>
 </p>
-
-# CHAOS RPG
-
-**A roguelike where every hit, heal and loot drop is decided by chaining real math (the Lorenz attractor, the Mandelbrot set, the Collatz sequence) instead of a random number.**
 
 <p align="center">
   <img src="assets/proof-frontend.gif" alt="CHAOS RPG running: title screen, character creation, then auto-pilot clears rooms and wins a fight while the combat log shows the math chain behind each roll" width="100%"/>
@@ -21,7 +21,7 @@
 | **macOS / Linux** (script) | `curl -fsSL https://gitlab.com/mattbusel/chaos-rpg/-/raw/master/install.sh \| sh` |
 | **Rust**, prebuilt | `cargo binstall chaos-rpg-graphical` (also `chaos-rpg`, `chaos-rpg-proof`) |
 | **Rust**, from source | `cargo install chaos-rpg-graphical` |
-| Nothing, just a zip | [Latest release](https://gitlab.com/mattbusel/chaos-rpg/-/releases): Windows `.zip`, macOS and Linux `.tar.gz`, with `SHA256SUMS.txt` |
+| Nothing, just a zip | [Latest release](https://github.com/Mattbusel/chaos-rpg/releases/latest): Windows `.zip`, macOS and Linux `.tar.gz`, with `SHA256SUMS.txt` |
 | A browser account | [mattbusel.itch.io/chaos-rpg](https://mattbusel.itch.io/chaos-rpg) |
 
 Every method gives you the same three programs:
@@ -47,7 +47,7 @@ CHAOS_SEED=666 chaos-rpg          # macOS / Linux
 $env:CHAOS_SEED=666; chaos-rpg    # Windows PowerShell
 ```
 
-Each program answers `--help` and `--version`. Settings (music, difficulty tweaks, visuals) live in `chaos_config.toml` next to the program; see [Configuration](#configuration).
+Each program answers `--help` and `--version`. Settings (music, difficulty tweaks, visuals) live in `chaos_config.toml`; see [Configuration](#configuration) and [Where your files live](#where-your-files-live).
 
 ## Results: the math is real
 
@@ -84,6 +84,46 @@ Destiny roll (all 10 engines, used for character creation), seed 666
 
 Run it again with the same seed and you get exactly the same numbers. That is why seeded runs are reproducible.
 
+### Use the dice in your own program
+
+```sh
+cargo add chaos-rpg-core
+```
+
+```rust
+use chaos_rpg_core::chaos_pipeline::chaos_roll_verbose;
+
+fn main() {
+    // Same input and seed, same chain, every time.
+    let roll = chaos_roll_verbose(0.5, 666);
+    for step in &roll.chain {
+        println!("{:<24} {:>6.3} -> {:>6.3}", step.engine_name, step.input, step.output);
+    }
+    println!("d20 = {}", roll.as_d20());
+}
+```
+
+This is `core/examples/quickstart.rs`; run it with `cargo run -p chaos-rpg-core --example quickstart`. More examples, none of which open a window or play sound:
+
+| Example | What it shows |
+| --- | --- |
+| `cargo run -p chaos-rpg-core --example roll -- 666` | An attack roll and a destiny roll with the full engine chain |
+| `cargo run -p chaos-rpg-core --example dice_stats -- 100000` | How the chaos d20 is distributed over many seeds, next to a fair d20 |
+| `cargo run -p chaos-rpg-core --example quickstart` | The snippet above |
+
+Already using [`rand`](https://crates.io/crates/rand)? `ChaosDie` is a `rand` distribution, so any generator can roll chaos dice:
+
+```rust
+use chaos_rpg_core::dice::ChaosDie;
+use rand::Rng;
+
+let face: u8 = rand::thread_rng().sample(ChaosDie::d20());
+```
+
+Chaos dice are deliberately not fair. Over 100,000 seeds (`dice_stats` above) a 20 comes up 10.2% of the time and a 19 only 1.0%, where a fair d20 gives 5% each. That lopsidedness is the game.
+
+`chaos-rpg-core` has no optional features. It pulls in `ureq` (rustls) for the daily leaderboard client, `time` and `directories`; no window or audio code.
+
 <details>
 <summary><b>Screenshots of the stable frontend (chaos-rpg-graphical)</b></summary>
 
@@ -107,7 +147,7 @@ Run it again with the same seed and you get exactly the same numbers. That is wh
 
 ## Build from Source
 
-Requires Rust 1.75+ from [rustup.rs](https://rustup.rs). Proof Engine comes from crates.io, so one clone is enough:
+Requires Rust 1.88+ from [rustup.rs](https://rustup.rs). Proof Engine comes from crates.io, so one clone is enough:
 
 ```bash
 git clone https://gitlab.com/mattbusel/chaos-rpg
@@ -182,21 +222,16 @@ All frontends share the same core library (`chaos-rpg-core`), so the game plays 
 
 ### Proof Engine frontend (preview)
 
-Built on [Proof Engine](https://gitlab.com/mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust.
+Built on [Proof Engine](https://gitlab.com/mattbusel/proof-engine), a mathematical rendering engine written from scratch in Rust. What the game runs today:
 
-- **PBR Lighting**: per-room presets (combat red, shrine blue, boss spotlight), per-entity point lights, attack/crit/spell flash lights, status effect lights (burn flicker, freeze steady, poison pulse, stun strobe), floor-depth ambient scaling (warm → cold → void)
-- **Shader Graph**: 5 per-theme presets (VOID chromatic+vignette, BLOOD contrast+red, EMERALD CRT+green, SOLAR warm+bloom, GLACIAL desat+blue), floor-depth visual degradation (clean → grain → distortion → VHS), corruption glitch effects, 6 boss-specific shader overrides (Null progressive strip, Paradox hue inversion, Algorithm glitch storm)
-- **12 Boss Visuals**: Mirror symmetry line, Accountant gold coins, Fibonacci Hydra golden spiral, Eigenstate form flicker, Taxman gold drain, Null progressive blackout, Ouroboros cycle ring, Collatz live sequence, Committee vote indicators, Recursion stack bar, Paradox reality inversion, Algorithm Reborn 3-phase chaos takeover
-- **Cinematics**: 5-phase death sequence, 3-phase victory celebration, 12 unique boss entrance sequences, floor transitions, level-up gold pillar, achievement unlocks (Common→Omega), misery milestones, corruption milestones, nemesis reveal
-- **Weather**: digital rain (floors 1-10), compute pulses (11-25), static noise (26-50), ash storms (51-75), electrical storms with lightning (76-99), void snow (100+), boss overrides
-- **AI Systems**: 6 steering archetypes, behavior trees (Accountant, Committee), GOAP (Algorithm Reborn), utility AI with logistic scoring
-- **Terrain**: isometric noise-based floor map, room-type elevation, epoch-specific glyph sets
-- **Economy**: supply/demand pricing, faction treasuries, reputation discounts
-- **Dialogue**: Archivist reputation-reactive greetings, boss combat dialogue, Mathematician Fragment codex trees with typewriter and emotion tints
-- **Modding**: script hooks (11 event types), mod.toml manifests, hot-reload
-- **Replay**: automatic recording, playback with speed control, ghost runs
-- **5 Save Slots**: visual state persistence, cloud sync ready
-- **Debug Tools**: profiler, field visualizer, inspector, console with 20+ commands
+- **Chaos field**: the animated background of mathematical glyphs behind every screen
+- **Combat lighting**: per-room lighting presets and element-tinted light on enemies
+- **12 boss overlays**: one visual overlay per unique boss (Mirror symmetry line, Fibonacci Hydra spiral, Null blackout and so on)
+- **Particles and effects**: hit, spell and status particles, debris, screen transitions
+- **Music**: the procedural soundtrack follows the screen and the fight
+- **Auto-pilot** (`Z`) and a **debug overlay** (profiler, inspector, console)
+
+The source tree also holds modules that are written and unit tested but **not wired into the game yet**: cinematics, weather, steering/behaviour-tree/GOAP AI, isometric terrain, economy, dialogue trees, mod loading, replays, extra save slots, shader presets and an audio-reactive layer. They compile with the frontend but nothing calls them.
 
 ### Graphical (bracket-lib OpenGL)
 - Fullscreen OpenGL window at **160×80 tiles**
@@ -437,7 +472,9 @@ Press **`[H]`** on the title screen to view a scrollable table of all past runs.
 
 ### Daily Leaderboard
 
-Press **`[D]`** on the title screen to view the daily leaderboard. Daily Seed mode uses the same dungeon for all players on a given UTC day. After completing a Daily Seed run, your score is submitted to the global leaderboard automatically.
+Press **`[D]`** on the title screen to view the daily leaderboard. Daily Seed mode uses the same dungeon for all players on a given UTC day. Your best score per day is always kept locally.
+
+Sharing scores needs a leaderboard server, and none is configured by default (the old default server no longer exists). `server/worker.js` is a complete one for Cloudflare Workers' free tier: deploy it with `wrangler deploy` (instructions at the top of the file) and put its URL in `[leaderboard] url` in `chaos_config.toml`. Daily Seed runs are then submitted automatically.
 
 - Today's seed is shown at the top of the screen
 - Your personal best for today is shown below the seed
@@ -458,7 +495,7 @@ Audio degrades gracefully - if no audio device is found, the game runs silently.
 
 ### Saving, Scoring, and Legacy
 
-**Per-run save:** Auto-saves between floors to the same folder as the executable
+**Per-run save:** Auto-saves between floors (see [Where your files live](#where-your-files-live))
 
 **Scoreboard:** Top scores saved locally
 ```
@@ -482,7 +519,7 @@ score = kills × floor × difficulty_multiplier × chaos_bonus × underdog_multi
 <details>
 <summary>Every setting in chaos_config.toml</summary>
 
-`chaos_config.toml` is read from the same folder as the executable on startup. All fields are optional - defaults are used for anything not specified.
+`chaos_config.toml` is read on startup (see [Where your files live](#where-your-files-live)). All fields are optional - defaults are used for anything not specified.
 
 ```toml
 [audio]
@@ -518,7 +555,7 @@ extra_inventory_slots = 0
 xp_multiplier = 0.0
 
 [leaderboard]
-url = "https://chaos-rpg-leaderboard.mfletcherdev.workers.dev"
+url = ""  # empty: local only; see "Daily Leaderboard" for running a server
 submit_daily = true
 fetch_on_open = true
 
@@ -530,6 +567,16 @@ player_name = ""
 </details>
 
 ---
+
+## Where your files live
+
+Saves, scores, achievements, the bestiary, run history and `chaos_config.toml` are looked up in this order:
+
+1. The folder in the `CHAOS_RPG_DATA_DIR` environment variable, if set.
+2. Next to the program, if the file is already there (older versions saved there, and the zip downloads ship `chaos_config.toml` there).
+3. Your user data folder, created on first use: `%APPDATA%\chaos-rpg\data` on Windows, `~/Library/Application Support/chaos-rpg` on macOS, `~/.local/share/chaos-rpg` on Linux.
+
+Before 2.3.0 everything was written next to the program, which failed silently when that folder was read-only and filled `~/.cargo/bin` after `cargo install`.
 
 ## Room Types
 
@@ -598,8 +645,6 @@ chaos-rpg/
 ├── audio/                        # chaos-rpg-audio: procedural synthesis
 ├── web/                          # web frontend: macroquad
 │
-├── src/                          # older single-crate version of the game (not a workspace member)
-├── dist/                         # older release builds (now only in git history; see Releases)
 │
 ├── server/                       # Cloudflare Worker leaderboard
 └── docs/                         # Guides, mechanics, boss docs

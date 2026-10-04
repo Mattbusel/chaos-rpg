@@ -21,63 +21,124 @@ use std::sync::OnceLock;
 // ─── NODE TYPES ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// What allocating a passive tree node does.
 pub enum NodeType {
     /// Flat bonus — amount is chaos-rolled on allocation (unknown until commit).
-    Stat { stat: &'static str, min: i64, max: i64 },
+    Stat {
+        /// Stat the bonus goes to, such as "force".
+        stat: &'static str,
+        /// Smallest possible bonus.
+        min: i64,
+        /// Largest possible bonus.
+        max: i64,
+    },
     /// Modifies a specific chaos engine's behaviour for this character.
-    Engine { engine: &'static str, effect: &'static str },
+    Engine {
+        /// Name of the chaos engine affected.
+        engine: &'static str,
+        /// Short tag naming the modification.
+        effect: &'static str,
+    },
     /// Major build-defining keystone with trade-off.
-    Keystone { id: &'static str },
+    Keystone {
+        /// Keystone id, one of the `KS_*` constants.
+        id: &'static str,
+    },
     /// Named notable with a fixed bonus and a special effect description.
-    Notable { stat: &'static str, bonus: i64, effect: &'static str },
+    Notable {
+        /// Stat the bonus goes to.
+        stat: &'static str,
+        /// Fixed bonus amount.
+        bonus: i64,
+        /// Description of the special effect.
+        effect: &'static str,
+    },
     /// Synergy cluster — weak alone, unlocks bonus when full cluster allocated.
-    Synergy { cluster: u8, bonus_desc: &'static str },
+    Synergy {
+        /// Cluster number; allocate every node in it to complete the synergy.
+        cluster: u8,
+        /// Description of the bonus the full cluster unlocks.
+        bonus_desc: &'static str,
+    },
 }
 
 // ─── TREE NODE ────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// One node of the passive skill tree.
 pub struct TreeNode {
+    /// Unique node id.
     pub id: u16,
+    /// Column on the tree map.
     pub x: i16,
+    /// Row on the tree map.
     pub y: i16,
+    /// Display name.
     pub name: String,
+    /// One-line description shown on the map.
     pub short_desc: String,
+    /// What the node does when allocated.
     pub node_type: NodeType,
+    /// Nodes that unlock this one: allocating any one of them is enough.
     pub requires: Vec<u16>,
+    /// Class whose starting node this is, if any.
     pub class_start: Option<CharacterClass>,
 }
 
 // ─── KEYSTONE CONSTANTS ───────────────────────────────────────────────────────
 
 // Existing keystones
+/// Keystone id: never take more than 50% of max HP in one hit.
 pub const KS_CHAOS_IMMUNITY: &str = "ChaosImmunity";
+/// Keystone id: negative rolls flip positive and positive rolls flip negative.
 pub const KS_ENTROPY_INVERSION: &str = "EntropyInversion";
+/// Keystone id: every roll uses exactly 4 engines, with no variance in chain length.
 pub const KS_MATH_CERTAINTY: &str = "MathCertainty";
+/// Keystone id: HP is set to 1 and the damage chain uses 15 engines.
 pub const KS_GLASS_CANNON: &str = "GlassCannon";
+/// Keystone id: each chaos roll feeds into the next roll's input.
 pub const KS_RESONANCE_ECHO: &str = "ResonanceEcho";
+/// Keystone id named Prime Blood.
 pub const KS_PRIME_BLOOD: &str = "PrimeBloodKeystone";
+/// Keystone id: the phase dodge keeps working after Phasing expires.
 pub const KS_VOID_STEP: &str = "VoidStep";
+/// Keystone id: die at 0 HP but deal your full HP as a death strike.
 pub const KS_DEATH_PACT: &str = "DeathPact";
 
 // Per-class ring 4 keystones
+/// Keystone id of the Mage's ring 4 keystone.
 pub const KS_ARCANE_SUPREMACY: &str = "ArcaneSupremacy";
+/// Keystone id of the Berserker's ring 4 keystone.
 pub const KS_BLOOD_FRENZY: &str = "BloodFrenzy";
+/// Keystone id of the Ranger's ring 4 keystone.
 pub const KS_EAGLE_EYE: &str = "EagleEye";
+/// Keystone id of the Thief's ring 4 keystone.
 pub const KS_SHADOW_CLONE: &str = "ShadowClone";
+/// Keystone id of the Necromancer's ring 4 keystone.
 pub const KS_PHYLACTERY: &str = "Phylactery";
+/// Keystone id of the Alchemist's ring 4 keystone.
 pub const KS_FORMULA_37X: &str = "Formula37X";
+/// Keystone id of the Paladin's ring 4 keystone.
 pub const KS_SHIELD_OF_FAITH: &str = "ShieldOfFaith";
+/// Keystone id of the VoidWalker's ring 4 keystone.
 pub const KS_PHASE_SHIFT: &str = "PhaseShift";
 
 // Per-class ring 5 keystones
+/// Keystone id of the Mage's ring 5 (apex) keystone.
 pub const KS_OVERLOAD_PROTOCOL: &str = "OverloadProtocol";
+/// Keystone id of the Berserker's ring 5 (apex) keystone.
 pub const KS_FURY_CORE: &str = "FuryCore";
+/// Keystone id of the Ranger's ring 5 (apex) keystone.
 pub const KS_PRIMED_SHOT: &str = "PrimedShot";
+/// Keystone id of the Thief's ring 5 (apex) keystone.
 pub const KS_DEATH_FROM_SHADOWS: &str = "DeathFromShadows";
+/// Keystone id of the Necromancer's ring 5 (apex) keystone.
 pub const KS_SOULBIND: &str = "Soulbind";
+/// Keystone id of the Alchemist's ring 5 (apex) keystone.
 pub const KS_GRAND_ELIXIR: &str = "GrandElixir";
+/// Keystone id of the Paladin's ring 5 (apex) keystone.
 pub const KS_DIVINE_SHIELD: &str = "DivineShield";
+/// Keystone id of the VoidWalker's ring 5 (apex) keystone.
 pub const KS_VOID_RIFT: &str = "VoidRift";
 
 // ─── CLASS CONFIGURATION ─────────────────────────────────────────────────────
@@ -597,16 +658,24 @@ pub fn nodes() -> &'static [TreeNode] {
 // ─── PLAYER PASSIVES ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// A character's progress through the passive tree: allocated nodes, rolled bonuses and unspent points.
 pub struct PlayerPassives {
+    /// Ids of the nodes allocated so far.
     pub allocated: HashSet<u16>,
+    /// Rolled or fixed stat bonus of each allocated stat or notable node, by node id.
     pub stat_bonuses: std::collections::HashMap<u16, i64>,
+    /// Unspent passive points.
     pub points: u32,
+    /// Ids of the keystones allocated.
     pub keystones: HashSet<String>,
+    /// Synergy clusters fully allocated.
     pub completed_synergies: HashSet<u8>,
+    /// Node currently selected on the map.
     pub cursor: u16,
 }
 
 impl PlayerPassives {
+    /// Passives for a new character of `class`, with its class start node allocated and selected.
     pub fn new_for_class(class: CharacterClass) -> Self {
         let mut p = PlayerPassives::default();
         if let Some(node) = nodes().iter().find(|n| n.class_start == Some(class)) {
@@ -616,6 +685,7 @@ impl PlayerPassives {
         p
     }
 
+    /// Whether `node_id` can be allocated: not taken yet and connected to an allocated node (or needing none).
     pub fn can_allocate(&self, node_id: u16) -> bool {
         if self.allocated.contains(&node_id) {
             return false;
@@ -630,6 +700,7 @@ impl PlayerPassives {
         node.requires.iter().any(|req| self.allocated.contains(req))
     }
 
+    /// Spend a point on `node_id`, rolling its bonus with the chaos pipeline; returns the message to show, or `None` if it cannot be allocated or no points are left.
     pub fn allocate(&mut self, node_id: u16, seed: u64) -> Option<String> {
         if !self.can_allocate(node_id) || self.points == 0 {
             return None;
@@ -684,6 +755,7 @@ impl PlayerPassives {
         Some(result)
     }
 
+    /// Sum of the bonuses from allocated stat and notable nodes for `stat`.
     pub fn total_stat_bonus(&self, stat: &str) -> i64 {
         self.allocated
             .iter()
@@ -699,6 +771,7 @@ impl PlayerPassives {
             .sum()
     }
 
+    /// Whether an allocated engine node applies `effect` to `engine`.
     pub fn engine_mod(&self, engine: &str, effect: &str) -> bool {
         self.allocated.iter().any(|id| {
             nodes().iter().any(|n| {
@@ -709,14 +782,17 @@ impl PlayerPassives {
         })
     }
 
+    /// Whether the keystone with this id is allocated.
     pub fn has_keystone(&self, id: &str) -> bool {
         self.keystones.contains(id)
     }
 
+    /// Whether synergy cluster `cluster` is complete.
     pub fn synergy_active(&self, cluster: u8) -> bool {
         self.completed_synergies.contains(&cluster)
     }
 
+    /// Move the map cursor by (dx, dy) to the nearest node in that direction and return its id.
     pub fn move_cursor(&mut self, dx: i16, dy: i16) -> u16 {
         let cur = match nodes().iter().find(|n| n.id == self.cursor) {
             Some(n) => n,
@@ -822,6 +898,7 @@ impl PlayerPassives {
         messages
     }
 
+    /// The passive tree drawn as coloured terminal lines (ANSI escapes) for `class`.
     pub fn display_map(&self, class: CharacterClass) -> Vec<String> {
         const RESET: &str = "\x1b[0m";
         const DIM: &str = "\x1b[2m";
@@ -937,6 +1014,7 @@ impl PlayerPassives {
         lines
     }
 
+    /// Nodes that can be allocated now, as (id, name, description).
     pub fn list_available(&self) -> Vec<(u16, &str, &str)> {
         nodes()
             .iter()

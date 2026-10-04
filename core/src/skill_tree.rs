@@ -9,11 +9,13 @@
 use crate::character::CharacterClass;
 use serde::{Deserialize, Serialize};
 
+/// Index of a node in the passive skill tree.
 pub type NodeId = u8;
 
 // ─── ENGINE MODIFIER ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// How a passive node changes one chaos engine for this character.
 pub enum EngineModifier {
     /// Clamp this engine's output to positive values only
     ForcePositive,
@@ -32,6 +34,7 @@ pub enum EngineModifier {
 }
 
 impl EngineModifier {
+    /// Short description of the modifier for the tree tooltip.
     pub fn describe(&self) -> &'static str {
         match self {
             EngineModifier::ForcePositive => "Output always positive",
@@ -48,6 +51,7 @@ impl EngineModifier {
 // ─── KEYSTONE ─────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// A build-defining keystone effect.
 pub enum Keystone {
     /// Never take > 50% max HP in one hit. Damage also capped at 50% enemy max HP.
     ChaosImmunity,
@@ -64,6 +68,7 @@ pub enum Keystone {
 }
 
 impl Keystone {
+    /// Display name of the keystone.
     pub fn name(self) -> &'static str {
         match self {
             Keystone::ChaosImmunity => "Chaos Immunity",
@@ -75,6 +80,7 @@ impl Keystone {
         }
     }
 
+    /// Description shown on the keystone's tooltip.
     pub fn description(self) -> &'static str {
         match self {
             Keystone::ChaosImmunity =>
@@ -96,16 +102,24 @@ impl Keystone {
 // ─── SYNERGY CLUSTER ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// A group of 5 passive nodes that grants an extra bonus when all are taken.
 pub enum SynergyCluster {
+    /// All 5 nodes: Mandelbrot and Fibonacci engine outputs doubled.
     FractalMastery,    // Mandelbrot + Fibonacci outputs doubled
+    /// All 5 nodes: Prime Density gets +0.3 on prime-numbered floors.
     PrimeConspiracy,   // Prime Density gains bonus for primes in floor number
+    /// All 5 nodes: the Lorenz attractor runs 2 extra steps.
     LorenzAmplifier,   // Lorenz chain gains 2 extra iterations
+    /// All 5 nodes: Riemann Zeta uses s = 1.1, close to the pole and very volatile.
     ZetaResonance,     // Riemann Zeta uses s values closer to 1 (volatile)
+    /// All 5 nodes: Collatz chains are capped at 50 steps.
     CollatzShortcut,   // Collatz chains capped at 50 steps
+    /// All 5 nodes: the final chain output gets +20%.
     EntropicHarmony,   // All engine outputs averaged with 20% bonus
 }
 
 impl SynergyCluster {
+    /// Display name of the cluster.
     pub fn name(self) -> &'static str {
         match self {
             SynergyCluster::FractalMastery => "Fractal Mastery",
@@ -117,6 +131,7 @@ impl SynergyCluster {
         }
     }
 
+    /// What the cluster grants once all 5 of its nodes are taken.
     pub fn bonus_description(self) -> &'static str {
         match self {
             SynergyCluster::FractalMastery =>
@@ -138,6 +153,7 @@ impl SynergyCluster {
 // ─── NODE EFFECT ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// What taking a passive tree node does.
 pub enum NodeEffect {
     /// Flat stat bonus; base_amount is chaos-rolled at allocation time
     StatBonus { stat: &'static str, base_amount: i64 },
@@ -150,6 +166,7 @@ pub enum NodeEffect {
 }
 
 impl NodeEffect {
+    /// Three-to-four character label drawn on the tree map, e.g. "+VIT" or "LRZ".
     pub fn short_label(&self) -> &'static str {
         match self {
             NodeEffect::StatBonus { stat, .. } => match *stat {
@@ -198,16 +215,23 @@ impl NodeEffect {
 // ─── SKILL NODE ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// One node of the passive skill tree.
 pub struct SkillNode {
+    /// Node index.
     pub id: NodeId,
     /// Position on the ASCII map (x=col, y=row in a 60x22 grid)
     pub x: u8,
+    /// Row on the 60x22 tree map.
     pub y: u8,
+    /// What the node does.
     pub effect: NodeEffect,
+    /// Nodes connected to this one.
     pub neighbors: &'static [NodeId],
     /// This is the class starting node for this class (None = universal)
     pub class_start: Option<CharacterClass>,
+    /// True for a larger "notable" node.
     pub is_notable: bool,
+    /// True for a build-defining keystone node.
     pub is_keystone: bool,
 }
 

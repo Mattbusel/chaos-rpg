@@ -61,10 +61,7 @@ impl NemesisRecord {
 }
 
 fn nemesis_path() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join(NEMESIS_FILE)))
-        .unwrap_or_else(|| PathBuf::from(NEMESIS_FILE))
+    crate::paths::data_file(NEMESIS_FILE)
 }
 
 pub fn load_nemesis() -> Option<NemesisRecord> {

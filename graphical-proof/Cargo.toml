@@ -2,11 +2,13 @@
 name = "chaos-rpg-proof"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://gitlab.com/mattbusel/chaos-rpg#readme"
+documentation = "https://docs.rs/chaos-rpg-proof"
 readme = "../README.md"
+include = ["src/**/*", "Cargo.toml"]
 keywords = ["roguelike", "game", "rpg", "proof-engine", "chaos"]
 categories = ["games"]
 description = "CHAOS RPG on the Proof Engine renderer (preview): a roguelike where every roll is a chain of real math"
@@ -16,8 +18,8 @@ name = "chaos-rpg-proof"
 path = "src/main.rs"
 
 [dependencies]
-chaos-rpg-core = { path = "../core", version = "2.2.1" }
-proof-engine = "0.2"
+chaos-rpg-core = { path = "../core", version = "2.3.0" }
+proof-engine = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 rand = { workspace = true }
@@ -25,7 +27,7 @@ glam = "0.25"
 
 # `cargo binstall chaos-rpg-proof` downloads the prebuilt release archive instead of compiling.
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/chaos-rpg-v{ version }-{ target }{ archive-suffix }"
+pkg-url = "https://github.com/Mattbusel/chaos-rpg/releases/download/v{ version }/chaos-rpg-v{ version }-{ target }{ archive-suffix }"
 bin-dir = "chaos-rpg-v{ version }-{ target }/{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
 

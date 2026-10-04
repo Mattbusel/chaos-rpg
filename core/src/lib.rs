@@ -1,4 +1,11 @@
 #![allow(dead_code, unused_variables, unused_imports, unused_mut, unused_parens, named_arguments_used_positionally)]
+// Style lints that would mean restructuring game code without changing behavior.
+#![allow(
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::type_complexity,
+    clippy::should_implement_trait
+)]
 
 //! Game logic for [CHAOS RPG](https://gitlab.com/mattbusel/chaos-rpg): every
 //! dice roll in the game is a chain of real math engines, and this crate is
@@ -22,7 +29,7 @@
 //!
 //! Where to look:
 //!
-//! - [`chaos_pipeline`]: [`chaos_roll_verbose`](chaos_pipeline::chaos_roll_verbose),
+//! - [`chaos_pipeline`][]: [`chaos_roll_verbose`](chaos_pipeline::chaos_roll_verbose),
 //!   [`destiny_roll`](chaos_pipeline::destiny_roll) and
 //!   [`ChaosRollResult`](chaos_pipeline::ChaosRollResult), the rolls behind everything.
 //! - [`math_engines`]: the 10 engines (Lorenz attractor, Fourier harmonic, prime
@@ -47,7 +54,10 @@ pub mod achievements;
 pub mod run_history;
 pub mod chaos_config;
 pub mod daily_leaderboard;
+pub mod dice;
 pub mod io_util;
+pub mod paths;
+pub mod time_util;
 pub mod atlas;
 pub mod body;
 pub mod bosses;

@@ -47,6 +47,12 @@ pub struct SaveManager {
     pub active_slot: Option<u8>,
 }
 
+impl Default for SaveManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SaveManager {
     pub fn new() -> Self {
         Self {
@@ -117,7 +123,7 @@ impl SaveManager {
     pub fn most_recent_slot(&self) -> Option<u8> {
         self.slots.iter().enumerate()
             .filter_map(|(i, s)| s.as_ref().map(|_| i as u8))
-            .last()
+            .next_back()
     }
 }
 
@@ -137,6 +143,12 @@ pub struct CloudSync {
     pub enabled: bool,
     pub last_sync: Option<String>,
     pub sync_status: String,
+}
+
+impl Default for CloudSync {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CloudSync {
@@ -205,7 +217,7 @@ pub fn rle_decompress(data: &[u8]) -> Vec<u8> {
     while i + 1 < data.len() {
         let count = data[i] as usize;
         let byte = data[i + 1];
-        result.extend(std::iter::repeat(byte).take(count));
+        result.extend(std::iter::repeat_n(byte, count));
         i += 2;
     }
     result

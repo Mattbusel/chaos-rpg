@@ -1,15 +1,22 @@
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Item rarity; sets the price multiplier.
 pub enum ItemRarity {
+    /// Common (1x price).
     Common,
+    /// Uncommon (2x price).
     Uncommon,
+    /// Rare (5x price).
     Rare,
+    /// Epic (15x price).
     Epic,
+    /// Legendary (50x price).
     Legendary,
 }
 
 impl ItemRarity {
+    /// Price multiplier for this rarity (1x Common up to 50x Legendary).
     pub fn base_price_multiplier(&self) -> f64 {
         match self {
             ItemRarity::Common => 1.0,
@@ -22,26 +29,41 @@ impl ItemRarity {
 }
 
 #[derive(Debug, Clone)]
+/// An item a merchant sells.
 pub struct MerchantItem {
+    /// Item id.
     pub id: u32,
+    /// Item name.
     pub name: String,
+    /// Price before rarity and demand are applied.
     pub base_price: u32,
+    /// Rarity; multiplies the price.
     pub rarity: ItemRarity,
+    /// Units in stock.
     pub stock: u32,
+    /// Demand factor (0.1 to 2.0) multiplied into the price.
     pub demand: f64,
 }
 
 #[derive(Debug, Clone)]
+/// How a merchant sets prices.
 pub enum PriceModel {
+    /// Price is base x rarity x demand.
     Fixed,
+    /// Like `Fixed`, plus random noise of up to 5% times `volatility` each time the price is checked.
     Dynamic { volatility: f64 },
+    /// Like `Fixed`, times 1 + `elasticity` / stock (doubled when out of stock).
     Supply { elasticity: f64 },
 }
 
 #[derive(Debug, Clone)]
+/// Why a purchase failed.
 pub enum MerchantError {
+    /// The merchant does not sell this item.
     ItemNotFound,
+    /// Not enough units in stock.
     InsufficientStock,
+    /// The player cannot afford it.
     InsufficientGold,
 }
 
@@ -55,12 +77,19 @@ impl std::fmt::Display for MerchantError {
     }
 }
 
+/// A shopkeeper with stock, gold and a pricing model.
 pub struct Merchant {
+    /// Merchant name.
     pub name: String,
+    /// Items for sale, by item id.
     pub items: HashMap<u32, MerchantItem>,
+    /// Gold the merchant can spend when buying from the player.
     pub gold: u32,
+    /// Player reputation with this merchant; improves haggling.
     pub reputation: i32,
+    /// Pricing model.
     pub price_model: PriceModel,
+    /// State of the random generator used for price noise and restocking.
     pub lcg_state: u64,
 }
 
@@ -72,6 +101,7 @@ fn lcg_next(state: &mut u64) -> f64 {
 }
 
 impl Merchant {
+    /// A merchant with the given name, starting gold and pricing model, and no stock.
     pub fn new(name: &str, gold: u32, model: PriceModel) -> Self {
         Merchant {
             name: name.to_string(),
@@ -83,10 +113,12 @@ impl Merchant {
         }
     }
 
+    /// Add or replace an item for sale (keyed by its id).
     pub fn add_item(&mut self, item: MerchantItem) {
         self.items.insert(item.id, item);
     }
 
+    /// Current price of one unit, at least 1 gold; `None` if the item is not sold here.
     pub fn current_price(&mut self, item_id: u32) -> Option<u32> {
         let item = self.items.get(&item_id)?.clone();
         let base = item.base_price as f64 * item.rarity.base_price_multiplier();
@@ -113,6 +145,7 @@ impl Merchant {
         Some(price.round().max(1.0) as u32)
     }
 
+    /// Buy `qty` of an item at the current price, paying from `player_gold`; raises the item's demand.
     pub fn buy_from_merchant(
         &mut self,
         item_id: u32,
@@ -136,6 +169,7 @@ impl Merchant {
         Ok(())
     }
 
+    /// Sell `qty` of an item to the merchant for half its base price each (the merchant pays only if it has the gold); lowers demand.
     pub fn sell_to_merchant(
         &mut self,
         item_id: u32,
@@ -170,6 +204,7 @@ impl Merchant {
         entry.demand = (entry.demand - 0.05 * qty as f64).max(0.1);
     }
 
+    /// Price after haggling: up to 20% off, from charisma (1% per point, max 20%) plus reputation (max 5%).
     pub fn haggle(&mut self, item_id: u32, player_charisma: i32) -> Option<u32> {
         let item = self.items.get(&item_id)?.clone();
         let base = item.base_price as f64 * item.rarity.base_price_multiplier();
@@ -180,6 +215,7 @@ impl Merchant {
         Some(discounted.round().max(1.0) as u32)
     }
 
+    /// Add 1 to 3 units of every item and lower its demand by 0.1.
     pub fn restock(&mut self) {
         let ids: Vec<u32> = self.items.keys().cloned().collect();
         for id in ids {
@@ -215,7 +251,7 @@ mod tests {
         for _ in 0..20 {
             let price = merchant.current_price(1).unwrap();
             // With demand=1.0 and ±5% noise on base 100*1.0=100
-            assert!(price >= 90 && price <= 115, "price out of range: {}", price);
+            assert!((90..=115).contains(&price), "price out of range: {}", price);
         }
     }
 

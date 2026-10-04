@@ -4,13 +4,22 @@
 //! Always runs fullscreen. All room types, modes, boons, nemesis, gauntlet,
 //! cursed floors, The Hunger, item volatility, crafting (all 6 ops), and
 //! real chaos-engine combat via resolve_action().
+// Many draw helpers take a context plus several colors, and much of the UI is
+// still being built out; keep clippy focused on lints that find bugs.
+#![allow(
+    dead_code,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::if_same_then_else,
+    clippy::type_complexity
+)]
 
 use bracket_lib::prelude::*;
 use chaos_rpg_audio::AudioSystem;
 use chaos_rpg_core::{
     audio_events::{AudioEvent, MusicVibe},
 
-    bosses::{boss_name, boss_pool_for_floor, random_unique_boss},
+    bosses::{boss_name, random_unique_boss},
     character::{Background, Boon, Character, CharacterClass, Difficulty},
     chaos_pipeline::{chaos_roll_verbose, destiny_roll, ChaosRollResult},
     combat::{resolve_action, CombatAction, CombatOutcome, CombatState},
@@ -22,7 +31,7 @@ use chaos_rpg_core::{
     skill_checks::{perform_skill_check, Difficulty as SkillDiff, SkillType},
     spells::Spell,
     world::{generate_floor, room_enemy, Floor, RoomType},
-    achievements::{AchievementStore, RunSummary, CombatSnapshot},
+    achievements::{AchievementStore, RunSummary},
     run_history::{RunHistory, RunRecord},
     chaos_config::ChaosConfig,
     daily_leaderboard::{LocalDailyStore, DailyEntry, LeaderboardRow, submit_score, fetch_scores},
@@ -44,12 +53,12 @@ mod ui_overlay;
 mod visual_config;
 mod weather;
 use visual_config as vc;
-use achievement_banner::{AchievementBanner, BannerRarity, rarity_from_name};
+use achievement_banner::{AchievementBanner, rarity_from_name};
 use anim_config::AnimConfig;
 use chaos_field::ChaosField;
 use color_grade::ColorGrade;
 use combat_anim::{
-    CombatAnim, WeaponKind, SpellElement, StatusKind,
+    CombatAnim,
     weapon_kind_from_name, spell_element_from_name, status_kind_from_name,
 };
 use death_seq::DeathSeq;
@@ -76,11 +85,7 @@ struct SaveState {
 }
 
 fn save_path() -> std::path::PathBuf {
-    // Prefer next to the exe; fall back to current dir
-    let mut p = std::env::current_exe().unwrap_or_default();
-    p.pop();
-    p.push("chaos_rpg_save.json");
-    p
+        chaos_rpg_core::paths::data_file("chaos_rpg_save.json")
 }
 
 fn write_save(s: &SaveState) {
@@ -98,7 +103,7 @@ fn delete_save() {
     let _ = std::fs::remove_file(save_path());
 }
 
-use theme::{Theme, THEMES};
+use theme::Theme;
 
 // ─── GAME MODE ────────────────────────────────────────────────────────────────
 
@@ -292,7 +297,7 @@ fn emit_status_ambient(particles: &mut Vec<Particle>, cx: f32, cy: f32, frame: u
 {
     if particles.len() > 1900 { return; }
     // Only emit on certain frames to cap particle rate
-    if frame % 4 != 0 { return; }
+    if !frame.is_multiple_of(4) { return; }
 
     let jitter = (frame ^ (cx as u64 * 31)) % 3;
 
@@ -301,7 +306,7 @@ fn emit_status_ambient(particles: &mut Vec<Particle>, cx: f32, cy: f32, frame: u
         particles.push(Particle::burst(
             cx + jitter as f32 - 1.0, cy + 1.0,
             (jitter as f32 - 1.0) * 0.04, -0.12, "·", col, 18));
-        if frame % 8 == 0 {
+        if frame.is_multiple_of(8) {
             particles.push(Particle::spark(cx + jitter as f32 - 1.0, cy,
                 (jitter as f32 - 1.0) * 0.06, -0.15, "▪", (255, 180, 40)));
         }
@@ -340,7 +345,7 @@ fn emit_status_ambient(particles: &mut Vec<Particle>, cx: f32, cy: f32, frame: u
 
 fn emit_stun_orbit(particles: &mut Vec<Particle>, cx: f32, cy: f32, frame: u64) {
     if particles.len() > 1900 { return; }
-    if frame % 3 != 0 { return; }
+    if !frame.is_multiple_of(3) { return; }
     use std::f32::consts::TAU;
     let col = (255u8, 215u8, 0u8);
     let angle = (frame as f32 * 0.18) % TAU;
@@ -364,7 +369,7 @@ fn emit_room_ambient(particles: &mut Vec<Particle>, frame: u64, room_seed: u64,
     room_type_id: u8) // 1=combat 2=treasure 3=shrine 4=chaos_rift 5=boss
 {
     if particles.len() > 1800 { return; }
-    if frame % 8 != 0 { return; }
+    if !frame.is_multiple_of(8) { return; }
     let xs = (frame.wrapping_add(room_seed)) % 140 + 10;
     let x = xs as f32;
     match room_type_id {
@@ -373,7 +378,7 @@ fn emit_room_ambient(particles: &mut Vec<Particle>, frame: u64, room_seed: u64,
             particles.push(Particle::burst(x, 72.0, 0.0, -0.06, "·", col, 40));
         }
         2 => {  // Treasure: gold sparkles from centre
-            if frame % 16 == 0 {
+            if frame.is_multiple_of(16) {
                 let col = (255u8, 200u8, 30u8);
                 use std::f32::consts::TAU;
                 let angle = (frame as f32 * 0.3) % TAU;
@@ -385,7 +390,7 @@ fn emit_room_ambient(particles: &mut Vec<Particle>, frame: u64, room_seed: u64,
             let col = (60u8, 100u8, 255u8);
             let sx = 60.0 + (frame % 60) as f32;
             particles.push(Particle::burst(sx, 60.0, 0.0, -0.10, "·", col, 35));
-            if frame % 24 == 0 {
+            if frame.is_multiple_of(24) {
                 particles.push(Particle::burst(80.0, 50.0, 0.0, -0.12, "✦", (100, 150, 255), 30));
             }
         }
@@ -403,7 +408,7 @@ fn emit_room_ambient(particles: &mut Vec<Particle>, frame: u64, room_seed: u64,
                 angle.cos() * 0.2, angle.sin() * 0.15, ch, col, 25));
         }
         5 => {  // Boss room: pulsing purple/red particles
-            let pulse = (frame / 8) % 2 == 0;
+            let pulse = (frame / 8).is_multiple_of(2);
             let col = if pulse { (200u8, 20u8, 20u8) } else { (140u8, 20u8, 180u8) };
             let bx = (frame % 140 + 10) as f32;
             particles.push(Particle::burst(bx, 70.0, 0.0, -0.08, "▪", col, 45));
@@ -418,15 +423,15 @@ fn emit_boss_entrance_burst(particles: &mut Vec<Particle>, boss_id: u8, frame: u
     let cx = 80.0f32; let cy = 30.0f32;
     match boss_id {
         1 => {  // Mirror: symmetric split left and right
-            if frame % 3 == 0 {
-                let angle = (frame as f32 * 0.2) % TAU;
+            if frame.is_multiple_of(3) {
+                let _angle = (frame as f32 * 0.2) % TAU;
                 let col = (200u8, 200u8, 255u8);
                 particles.push(Particle::burst(cx - 20.0, cy, -0.2, 0.0, "◈", col, 20));
                 particles.push(Particle::burst(cx + 20.0, cy,  0.2, 0.0, "◈", col, 20));
             }
         }
         3 => {  // Fibonacci Hydra: golden spiral
-            if frame % 2 == 0 {
+            if frame.is_multiple_of(2) {
                 let fib_angle = frame as f32 * 2.399; // golden angle
                 let r = (frame as f32 * 0.15).min(30.0);
                 let col = (255u8, 200u8, 30u8);
@@ -437,7 +442,7 @@ fn emit_boss_entrance_burst(particles: &mut Vec<Particle>, boss_id: u8, frame: u
             }
         }
         9 => {  // Committee: 5 clusters converging
-            if frame % 4 == 0 {
+            if frame.is_multiple_of(4) {
                 let col = (180u8, 80u8, 220u8);
                 for i in 0..5usize {
                     let angle = i as f32 * TAU / 5.0;
@@ -450,7 +455,7 @@ fn emit_boss_entrance_burst(particles: &mut Vec<Particle>, boss_id: u8, frame: u
             }
         }
         12 => {  // Algorithm Reborn: full screen ring explosion
-            if frame % 2 == 0 {
+            if frame.is_multiple_of(2) {
                 let col = (
                     ((frame * 60 + 80) % 200 + 55) as u8,
                     ((frame * 40 + 120) % 180 + 55) as u8,
@@ -467,7 +472,7 @@ fn emit_boss_entrance_burst(particles: &mut Vec<Particle>, boss_id: u8, frame: u
             }
         }
         _ => {  // Generic boss entrance: radial burst
-            if frame % 3 == 0 {
+            if frame.is_multiple_of(3) {
                 let col = (220u8, 40u8, 40u8);
                 let angle = (frame as f32 * 0.3) % TAU;
                 particles.push(Particle::burst(
@@ -751,7 +756,7 @@ impl State {
     /// Returns a color-graded clone of the current theme.
     /// All draw functions should use this instead of self.theme_graded().
     fn theme_graded(&self) -> theme::Theme {
-        let mut t = self.theme().clone();
+        let mut t = *self.theme();
         self.color_grade.apply_to_theme(&mut t);
         // Breathing borders via tile_effects
         let bb = self.tile_effects.border_brightness();
@@ -967,9 +972,9 @@ impl State {
     }
 
     fn start_new_game(&mut self) {
-        let class = CLASSES[self.cc_class].1.clone();
-        let bg    = BACKGROUNDS[self.cc_bg].1.clone();
-        let diff  = DIFFICULTIES[self.cc_diff].1.clone();
+        let class = CLASSES[self.cc_class].1;
+        let bg    = BACKGROUNDS[self.cc_bg].1;
+        let diff  = DIFFICULTIES[self.cc_diff].1;
         let seed  = match self.game_mode {
             GameMode::Daily => Self::daily_seed(),
             GameMode::Infinite if self.config.gameplay.infinite_seed_override != 0
@@ -1019,7 +1024,7 @@ impl State {
             .wrapping_add(self.floor_num as u64 * 31337);
 
         // Item volatility: every 20 floors, re-roll a random item
-        if self.floor_num > 1 && self.floor_num % 20 == 0 {
+        if self.floor_num > 1 && self.floor_num.is_multiple_of(20) {
             if let Some(ref mut p) = self.player {
                 if !p.inventory.is_empty() {
                     let vol_idx = (self.floor_seed % p.inventory.len() as u64) as usize;
@@ -1032,7 +1037,7 @@ impl State {
             }
         }
 
-        self.is_cursed_floor = self.floor_num > 0 && self.floor_num % 25 == 0;
+        self.is_cursed_floor = self.floor_num > 0 && self.floor_num.is_multiple_of(25);
         if self.is_cursed_floor {
             self.push_log("☠ CURSED FLOOR! All engine outputs INVERTED this floor.".to_string());
             self.emit_audio(AudioEvent::CursedFloorActivated);
@@ -1132,7 +1137,6 @@ impl State {
             if self.player.as_ref().map(|p| !p.is_alive()).unwrap_or(false) {
                 self.screen = AppScreen::GameOver;
                 self.save_score_now();
-                return;
             }
         }
     }
@@ -1154,7 +1158,7 @@ impl State {
         }
 
         let room_type = self.floor.as_ref()
-            .map(|f| f.current().room_type.clone())
+            .map(|f| f.current().room_type)
             .unwrap_or(RoomType::Empty);
         let room_desc = self.floor.as_ref()
             .map(|f| f.current().description.clone())
@@ -1208,7 +1212,7 @@ impl State {
                 }
 
                 // Boss gauntlet: every 10 floors boss room = 3-fight gauntlet
-                if is_boss && floor_num % 10 == 0 {
+                if is_boss && floor_num.is_multiple_of(10) {
                     let mut enemies = Vec::new();
                     let mut e1 = generate_enemy(floor_num, room_seed.wrapping_add(1));
                     e1.hp = (e1.hp as f64 * 2.0) as i64; e1.max_hp = e1.hp;
@@ -1238,9 +1242,9 @@ impl State {
 
                 // Unique boss spawn (floor 5+: boss rooms every 5 floors; floor 50+: 20% random; floor 100+: every 3rd room)
                 let unique_roll = room_seed.wrapping_mul(0x756E697175650000) % 100;
-                let spawn_unique = (floor_num >= 100 && self.floor.as_ref().map(|f| f.current_room).unwrap_or(0) % 3 == 0)
+                let spawn_unique = (floor_num >= 100 && self.floor.as_ref().map(|f| f.current_room).unwrap_or(0).is_multiple_of(3))
                     || (floor_num >= 50 && !is_boss && unique_roll < 20)
-                    || (is_boss && floor_num % 5 == 0);
+                    || (is_boss && floor_num.is_multiple_of(5));
                 if spawn_unique {
                     if let Some(boss_id) = random_unique_boss(floor_num, room_seed) {
                         self.start_unique_boss(boss_id, floor_num, room_seed);
@@ -1300,7 +1304,7 @@ impl State {
                 ev.lines.push("[P] Pick up   [Enter] Leave".to_string());
                 ev.gold_delta = gold_bonus;
                 ev.pending_item = Some(item);
-                if room_seed % 4 == 0 {
+                if room_seed.is_multiple_of(4) {
                     let spell = Spell::generate(room_seed.wrapping_add(54321));
                     ev.lines.push(String::new());
                     ev.lines.push(format!("+ SPELL SCROLL: {}", spell.name));
@@ -1316,7 +1320,7 @@ impl State {
                 let mut npc = shop_npc(floor_num, room_seed);
                 let heal_cost = 15 + floor_num as i64 * 2;
                 let cunning = self.player.as_ref().map(|p| p.stats.cunning).unwrap_or(0);
-                let npc_items: Vec<Item> = npc.inventory.drain(..).collect();
+                let npc_items: Vec<Item> = std::mem::take(&mut npc.inventory);
                 let shop: Vec<(Item, i64)> = npc_items.into_iter()
                     .map(|item| {
                         let price = npc.sale_price(item.value, cunning);
@@ -1644,7 +1648,7 @@ impl State {
         match bid {
             7 => {
                 // Ouroboros: heal to full every 3 turns
-                if self.boss_turn > 1 && (self.boss_turn - 1) % 3 == 0 {
+                if self.boss_turn > 1 && (self.boss_turn - 1).is_multiple_of(3) {
                     let max_hp = self.boss_extra;
                     if let Some(ref mut e) = self.enemy {
                         e.hp = max_hp;
@@ -2221,7 +2225,7 @@ impl State {
                             self.combat_anim.start_player_melee(*damage, *is_crit, weapon, anim_speed);
                         }
                     }
-                    CombatEvent::SpellCast { damage, backfired, .. } => {
+                    CombatEvent::SpellCast { damage, .. } => {
                         self.combat_anim.start_player_spell(*damage, false, element, self.anim_config.effective_spell());
                     }
                     CombatEvent::EnemyAttack { damage, is_crit } => {
@@ -2249,7 +2253,7 @@ impl State {
                     CombatEvent::PlayerAttack { damage, is_crit } => {
                         if *is_crit {
                             let jx = 10 + (self.frame % 10) as i32;
-                            self.particles.push(Particle::new(jx,     6, format!("★ CRIT ★"), (255, 215, 0), vc::particle_lifetime_crit()));
+                            self.particles.push(Particle::new(jx,     6, "★ CRIT ★".to_string(), (255, 215, 0), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 2, 8, format!("{}", damage), (255, 240, 80), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 4, 10, "✦✦✦".to_string(), (255, 180, 0), vc::particle_lifetime_crit()));
                             emit_crit_burst(&mut self.particles, jx as f32 + 4.0, 8.0);
@@ -2274,7 +2278,7 @@ impl State {
                     CombatEvent::EnemyAttack { damage, is_crit } => {
                         if *is_crit {
                             let jx = 95 + (self.frame % 10) as i32;
-                            self.particles.push(Particle::new(jx,     5, format!("☠ CRIT ☠"), (255, 40, 0), vc::particle_lifetime_crit()));
+                            self.particles.push(Particle::new(jx,     5, "☠ CRIT ☠".to_string(), (255, 40, 0), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 2, 8, format!("-{} !", damage), (255, 80, 30), vc::particle_lifetime_crit()));
                             self.particles.push(Particle::new(jx + 4, 11, "!!!".to_string(), (200, 20, 20), vc::particle_lifetime_crit()));
                             emit_hit_sparks(&mut self.particles, jx as f32 + 4.0, 8.0, (220, 50, 20), 10);
@@ -2302,7 +2306,7 @@ impl State {
                     CombatEvent::SpellCast { damage, backfired, .. } => {
                         if *backfired {
                             self.spell_beam_col = (220, 50, 50);
-                            self.particles.push(Particle::new(95, 5,  format!("BACKFIRE!"), (255, 60, 0), vc::particle_lifetime_backfire()));
+                            self.particles.push(Particle::new(95, 5,  "BACKFIRE!".to_string(), (255, 60, 0), vc::particle_lifetime_backfire()));
                             self.particles.push(Particle::new(97, 8,  format!("-{}", damage), (255, 120, 40), vc::particle_lifetime_backfire()));
                             self.particles.push(Particle::new(99, 11, "⚡⚡⚡".to_string(), (255, 80, 0), vc::particle_lifetime_backfire()));
                             self.hit_shake = vc::shake_heavy();
@@ -2311,7 +2315,7 @@ impl State {
                             self.ghost_player_timer = 60;
                         } else {
                             self.spell_beam_col = (80, 140, 255);
-                            self.particles.push(Particle::new(10, 5,  format!("✦ SPELL ✦"), (150, 200, 255), vc::particle_lifetime_spell()));
+                            self.particles.push(Particle::new(10, 5,  "✦ SPELL ✦".to_string(), (150, 200, 255), vc::particle_lifetime_spell()));
                             self.particles.push(Particle::new(12, 8,  format!("-{}", damage), (130, 190, 255), vc::particle_lifetime_spell()));
                             self.enemy_flash = vc::flash_crit();
                             self.enemy_flash_col = (80, 140, 255);
@@ -2341,7 +2345,7 @@ impl State {
                     }
                     // Defend
                     CombatEvent::PlayerDefend { damage_reduced } if *damage_reduced > 0 => {
-                        self.particles.push(Particle::new(95, 6,  format!("🛡 BLOCK"), (80, 140, 200), vc::particle_lifetime_normal()));
+                        self.particles.push(Particle::new(95, 6,  "🛡 BLOCK".to_string(), (80, 140, 200), vc::particle_lifetime_normal()));
                         self.particles.push(Particle::new(97, 9,  format!("-{}", damage_reduced), (120, 180, 255), vc::particle_lifetime_normal()));
                     }
                     // Item equipped during combat
@@ -2362,8 +2366,8 @@ impl State {
                     // Item destroyed — big red explosion
                     CombatEvent::ItemDestroyed { name } => {
                         let s: String = name.chars().take(12).collect();
-                        self.particles.push(Particle::new(95, 8,  format!("💥 SHATTERED!"), (255, 30, 30), vc::particle_lifetime_crit()));
-                        self.particles.push(Particle::new(97, 11, format!("{}", s),          (200, 40, 40), vc::particle_lifetime_crit()));
+                        self.particles.push(Particle::new(95, 8,  "💥 SHATTERED!".to_string(), (255, 30, 30), vc::particle_lifetime_crit()));
+                        self.particles.push(Particle::new(97, 11, s.to_string(),          (200, 40, 40), vc::particle_lifetime_crit()));
                         self.particles.push(Particle::new(99, 14, "▓▒░ DESTROYED ░▒▓".to_string(), (180, 20, 20), vc::particle_lifetime_crit()));
                         self.player_flash = vc::flash_crit();
                         self.hit_shake = vc::shake_heavy();
@@ -2402,7 +2406,7 @@ impl State {
             }
             // Chaos engine audio from the roll chain
             if let Some(ref roll) = self.last_roll.clone() {
-                for (i, step) in roll.chain.iter().enumerate() {
+                for (i, _step) in roll.chain.iter().enumerate() {
                     self.emit_audio(AE::ChaosEngineRoll { engine_id: (i % 10) as u8 });
                 }
                 if roll.chain.len() > 3 {
@@ -2434,7 +2438,7 @@ impl State {
                             if roll < (pity * 100.0) as u64 {
                                 p.misery.add_misery(MiserySource::EnemyPitiedYou, 0.0);
                                 p.run_stats.enemies_pitied_you += 1;
-                                self.combat_log.push(format!("Enemy looks at you with pity. Attack skipped."));
+                                self.combat_log.push("Enemy looks at you with pity. Attack skipped.".to_string());
                             }
                         }
                     }
@@ -2671,7 +2675,6 @@ impl State {
         use chaos_rpg_core::{
             legacy_system::{GraveyardEntry, LegacyData},
             scoreboard::{save_misery_score, MiseryEntry},
-            misery_system::MiseryState,
         };
         if let Some(ref p) = self.player {
             let score_val = p.xp + p.gold as u64 + (p.kills * 100) as u64 + (p.floor as u64 * 500);
@@ -2859,7 +2862,7 @@ impl State {
                             if rank == 1 { self.achievements.check_event("daily_rank1", 1); }
                             if rank <= 3 { self.achievements.check_event("daily_top3", 1); }
                         }
-                        Err(e) => self.daily_status = format!("Submit failed: {}", &e.chars().take(40).collect::<String>()),
+                        Err(e) => self.daily_status = format!("Submit failed: {}", e.chars().take(40).collect::<String>()),
                     }
                 }
                 self.daily_submitted = true;
@@ -2978,8 +2981,8 @@ impl GameState for State {
         }
 
         // Death cinematic — intercept GameOver screen until cinematic finishes
-        if self.screen == AppScreen::GameOver && !self.death_cinematic_done {
-            if self.death_seq.active {
+        if self.screen == AppScreen::GameOver && !self.death_cinematic_done
+            && self.death_seq.active {
                 // Draw chaos bg first
                 self.chaos_bg(ctx);
                 let t = self.theme_graded();
@@ -2998,7 +3001,6 @@ impl GameState for State {
                 self.tile_effects.draw_overlay(ctx, t.bg);
                 return;
             }
-        }
 
         match self.screen.clone() {
             AppScreen::Title            => self.draw_title(ctx),
@@ -3093,7 +3095,7 @@ impl GameState for State {
                 (t.accent.1 as f32 * alpha) as u8,
                 (t.accent.2 as f32 * alpha) as u8,
             );
-            let dim_col = RGB::from_u8(
+            let _dim_col = RGB::from_u8(
                 (t.dim.0 as f32 * alpha) as u8,
                 (t.dim.1 as f32 * alpha) as u8,
                 (t.dim.2 as f32 * alpha) as u8,
@@ -3104,7 +3106,7 @@ impl GameState for State {
             let ffx = (160 - flavor.len() as i32) / 2;
             ctx.print_color(ffx, by + 4, ac_col, bg, flavor);
             // Particle burst at box corners during fade-in
-            if elapsed < 30 && elapsed % 5 == 0 {
+            if elapsed < 30 && elapsed.is_multiple_of(5) {
                 let ex = bx as f32; let ey = by as f32;
                 let bw2 = bw as f32;
                 for &(px, py, vx, vy) in &[
@@ -3174,15 +3176,15 @@ impl GameState for State {
             emit_boss_entrance_burst(&mut self.particles, bid, elapsed as u64);
 
             // Chaos chars around the announcement during phase 2
-            if elapsed >= 60 && elapsed < 120 {
+            if (60..120).contains(&elapsed) {
                 let chaos_chars = ["∞","∑","λ","∂","Ω","π"];
                 for i in 0..8i32 {
                     let cx2 = bx - 2 + i * (bw / 7 + 1);
                     let cy_top = by - 1;
                     let cy_bot = by + 6;
                     let ch = chaos_chars[(elapsed as usize / 4 + i as usize) % chaos_chars.len()];
-                    ctx.print_color(cx2.max(0).min(158), cy_top, dng_col, bg, ch);
-                    ctx.print_color(cx2.max(0).min(158), cy_bot, dng_col, bg, ch);
+                    ctx.print_color(cx2.clamp(0, 158), cy_top, dng_col, bg, ch);
+                    ctx.print_color(cx2.clamp(0, 158), cy_bot, dng_col, bg, ch);
                 }
             }
         }
@@ -3194,8 +3196,7 @@ impl GameState for State {
 // ─── DRAW HELPERS ─────────────────────────────────────────────────────────────
 
 use renderer::{
-    draw_panel, draw_subpanel, draw_bar_gradient, draw_bar_solid,
-    print_t, print_center, print_hint, draw_separator,
+    draw_panel, draw_subpanel, draw_bar_gradient, draw_bar_solid, print_center, print_hint, draw_separator,
     print_selectable, draw_minimap_cell, stat_line,
     MinimapState, cursor_char,
 };
@@ -3229,7 +3230,7 @@ impl State {
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
         let muted = RGB::from_u8(t.muted.0, t.muted.1,   t.muted.2);
-        let danger = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
+        let _danger = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
 
         self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
@@ -3279,7 +3280,7 @@ impl State {
         }
 
         // ── Animated banner pulse — centered in 160-col screen ────────────
-        let pulse = ((self.frame as f32 * 0.04).sin() * 0.15 + 0.85) as f32;
+        let pulse = (self.frame as f32 * 0.04).sin() * 0.15 + 0.85;
         let ph = (t.heading.0 as f32 * pulse) as u8;
         let pg = (t.heading.1 as f32 * pulse) as u8;
         let pb = (t.heading.2 as f32 * pulse) as u8;
@@ -3305,7 +3306,7 @@ impl State {
 
         // ── Continue notice (if save exists) ──────────────────────────────
         if self.save_exists {
-            let flash = if (self.frame / 20) % 2 == 0 { ac } else { hd };
+            let flash = if (self.frame / 20).is_multiple_of(2) { ac } else { hd };
             ctx.print_color(bx, 18, flash, bg, "► SAVE DETECTED — press [L] to Continue");
         }
 
@@ -3358,7 +3359,7 @@ impl State {
         // ── Theme badge & tagline ──────────────────────────────────────────
         let tname = format!(" {} [T] ", t.name);
         ctx.print_color(158 - tname.len() as i32, 76, muted, bg, &tname);
-        ctx.print_color(4, 76, muted, bg, &format!("\"{}\"", t.tagline));
+        ctx.print_color(4, 76, muted, bg, format!("\"{}\"", t.tagline));
 
         // ── Title screen particle render ───────────────────────────────────
         for p in &mut self.particles { p.step(); }
@@ -3367,7 +3368,7 @@ impl State {
             for p in &self.particles {
                 let rc = p.render_col();
                 let px = p.x as i32; let py = p.y as i32;
-                if py < 2 || py > 78 || px < 1 || px > 158 { continue; }
+                if !(2..=78).contains(&py) || !(1..=158).contains(&px) { continue; }
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
             }
         }
@@ -3378,7 +3379,7 @@ impl State {
     fn draw_mode_select(&mut self, ctx: &mut BTerm) {
         let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
-        let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
+        let _hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
 
@@ -3427,14 +3428,14 @@ impl State {
 
         // ── Name entry ──
         let name_label = if self.cc_name_active {
-            format!("NAME (Enter to confirm): {}▌", &self.cc_name)
+            format!("NAME (Enter to confirm): {}▌", self.cc_name)
         } else {
             let n = if self.cc_name.is_empty() { "Anonymous" } else { &self.cc_name };
             format!("NAME [N to edit]: {}", n)
         };
         let name_col = if self.cc_name_active { sel } else { hd };
         draw_subpanel(ctx, 2, 3, 75, 3, "", &t);
-        ctx.print_color(4, 4, name_col, bg, &name_label.chars().take(72).collect::<String>());
+        ctx.print_color(4, 4, name_col, bg, name_label.chars().take(72).collect::<String>());
 
         // ── Class column (scrollable — show up to 12 classes at 1 row each)
         draw_subpanel(ctx, 2, 7, 25, 30, "CLASS  ↑↓", &t);
@@ -3473,7 +3474,7 @@ impl State {
             let is_sel = i == self.cc_diff;
             let c = if is_sel { sel } else { diff_colors[i] };
             let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
-            ctx.print_color(32, 29 + i as i32 * 2, c, bg, &format!("{}{}", pfx, name));
+            ctx.print_color(32, 29 + i as i32 * 2, c, bg, format!("{}{}", pfx, name));
         }
 
         // ── Portrait column
@@ -3517,7 +3518,7 @@ impl State {
         draw_subpanel(ctx, 80, 3, 77, 68, "PREVIEW", &t);
 
         // Class description (word-wrapped at 72 chars)
-        ctx.print_color(82, 5, hd, bg, &format!("CLASS: {}", class.name()));
+        ctx.print_color(82, 5, hd, bg, format!("CLASS: {}", class.name()));
         draw_separator(ctx, 81, 6, 75, &t);
         let mut rrow = 7i32;
         let mut rline = String::new();
@@ -3534,7 +3535,7 @@ impl State {
 
         // Passive ability
         rrow += 1;
-        ctx.print_color(82, rrow, ac, bg, &format!("Passive: {}", class.passive_name()));
+        ctx.print_color(82, rrow, ac, bg, format!("Passive: {}", class.passive_name()));
         rrow += 1;
         let mut pline2 = String::new();
         for w in class.passive_desc().split_whitespace() {
@@ -3550,7 +3551,7 @@ impl State {
 
         // Background description
         let bg_data = &BACKGROUNDS[self.cc_bg].1;
-        ctx.print_color(82, rrow, hd, bg, &format!("BACKGROUND: {}", bg_data.name()));
+        ctx.print_color(82, rrow, hd, bg, format!("BACKGROUND: {}", bg_data.name()));
         draw_separator(ctx, 81, rrow + 1, 75, &t);
         rrow += 2;
         let mut bline = String::new();
@@ -3568,7 +3569,7 @@ impl State {
         // Difficulty description
         let diff_data = &DIFFICULTIES[self.cc_diff].1;
         let diff_col = diff_colors[self.cc_diff];
-        ctx.print_color(82, rrow, diff_col, bg, &format!("DIFFICULTY: {}", diff_data.name()));
+        ctx.print_color(82, rrow, diff_col, bg, format!("DIFFICULTY: {}", diff_data.name()));
         draw_separator(ctx, 81, rrow + 1, 75, &t);
         rrow += 2;
         let mut dline = String::new();
@@ -3671,8 +3672,8 @@ impl State {
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
         let muted = RGB::from_u8(t.muted.0, t.muted.1, t.muted.2);
 
-        let (pname, pclass, plv, pfloor, pkills, pgold, pxp, php, pmhp, pstatus,
-             pcorruption, prwk, ptier, pmisery, punderdog, pdefiance) = match &self.player {
+        let (pname, pclass, plv, pfloor, pkills, pgold, _pxp, php, pmhp, pstatus,
+             pcorruption, prwk, ptier, pmisery, punderdog, _pdefiance) = match &self.player {
             Some(p) => {
                 let tier = p.power_tier();
                 (p.name.clone(), p.class.name(), p.level, p.floor,
@@ -3701,7 +3702,7 @@ impl State {
 
         // Auto-pilot badge (T1 — critical state)
         if self.auto_mode {
-            let pulse = (self.frame / 15) % 2 == 0;
+            let pulse = (self.frame / 15).is_multiple_of(2);
             let auto_c = if pulse { RGB::from_u8(80, 220, 80) } else { RGB::from_u8(40, 140, 40) };
             ctx.print_color(80, 1, auto_c, bg, "◆ AUTO [Z]stop");
         }
@@ -3709,7 +3710,7 @@ impl State {
 
         // Cursed floor warning (T1 danger)
         if self.is_cursed_floor {
-            let pulse = (self.frame / 20) % 2 == 0;
+            let pulse = (self.frame / 20).is_multiple_of(2);
             let cc = if pulse { dng } else { RGB::from_u8(t.danger.0/2, 0, 0) };
             ctx.print_color(2, 2, cc, bg, "☠ CURSED FLOOR — ALL ENGINES INVERTED ☠");
         }
@@ -3741,10 +3742,10 @@ impl State {
                         pal[((self.frame / speed) as usize) % pal.len()]
                     }
                     TierEffect::Pulse => {
-                        if (self.frame / 15) % 2 == 0 { tier_rgb } else { (tier_rgb.0/2, tier_rgb.1/2, tier_rgb.2/2) }
+                        if (self.frame / 15).is_multiple_of(2) { tier_rgb } else { (tier_rgb.0/2, tier_rgb.1/2, tier_rgb.2/2) }
                     }
                     TierEffect::Flash => {
-                        if (self.frame / 12) % 2 == 0 { tier_rgb } else { t.bg }
+                        if (self.frame / 12).is_multiple_of(2) { tier_rgb } else { t.bg }
                     }
                     _ => tier_rgb,
                 }
@@ -3781,7 +3782,7 @@ impl State {
                 else if dur_pct.map(|p| p < 0.50).unwrap_or(false) { RGB::from_u8(220, 160, 40) }
                 else { dim };
                 ctx.print_color(3, 16 + j as i32, col, bg,
-                    &format!("[{}] {}", label, &name_s.chars().take(22).collect::<String>()));
+                    format!("[{}] {}", label, name_s.chars().take(22).collect::<String>()));
             }
         }
 
@@ -3790,7 +3791,7 @@ impl State {
         // Alerts (T1 danger)
         let mut alert_y = 23i32;
         if pmisery >= 100.0 {
-            let pulse = (self.frame / 20) % 2 == 0;
+            let pulse = (self.frame / 20).is_multiple_of(2);
             let mc = if pulse { RGB::from_u8(t.warn.0, t.warn.1, t.warn.2) }
                      else { RGB::from_u8(t.warn.0/2, t.warn.1/2, t.warn.2/2) };
             let msg = if pmisery >= 200.0 { "⚠ MISERY CRITICAL!" }
@@ -3800,28 +3801,28 @@ impl State {
         }
         if pcorruption > 20 {
             ctx.print_color(3, alert_y, RGB::from_u8(t.warn.0, t.warn.1, t.warn.2), bg,
-                &format!("✖ CORRUPT {}", pcorruption));
+                format!("✖ CORRUPT {}", pcorruption));
             alert_y += 1;
         }
         if pfloor >= 50 && prwk >= 3 {
-            let rooms_left = 5u32.saturating_sub(prwk);
+            let _rooms_left = 5u32.saturating_sub(prwk);
             ctx.print_color(3, alert_y, dng, bg,
-                &format!("⚠ HUNGER {}/5", prwk));
+                format!("⚠ HUNGER {}/5", prwk));
             alert_y += 1;
         }
         if let Some(ref nem) = self.nemesis_record {
             ctx.print_color(3, alert_y, dng, bg,
-                &format!("☠ NEM fl.{}", nem.floor_killed_at));
+                format!("☠ NEM fl.{}", nem.floor_killed_at));
             alert_y += 1;
         }
         if punderdog > 1.01 {
             ctx.print_color(3, alert_y, gld, bg,
-                &format!("↑ UNDERDG ×{:.1}", punderdog));
+                format!("↑ UNDERDG ×{:.1}", punderdog));
             alert_y += 1;
         }
         if !pstatus.is_empty() && alert_y < 53 {
             ctx.print_color(3, alert_y, RGB::from_u8(t.xp.0, t.xp.1, t.xp.2), bg,
-                &pstatus.chars().take(30).collect::<String>());
+                pstatus.chars().take(30).collect::<String>());
         }
 
         // ── Zone 2b: FLOOR MAP — hero panel (center+right, cols 36-158) ───────
@@ -3842,7 +3843,7 @@ impl State {
                 draw_minimap_cell(ctx, rx, ry, mstate, rc, sym, &t);
                 // Current room: pulsing ▶ prefix (T1 selected)
                 if i == floor.current_room {
-                    let pulse = ((self.frame as f32 * 0.06).sin() * 0.4 + 0.6) as f32;
+                    let pulse = (self.frame as f32 * 0.06).sin() * 0.4 + 0.6;
                     let pr = (rc.0 as f32 * pulse).min(255.0) as u8;
                     let pg = (rc.1 as f32 * pulse).min(255.0) as u8;
                     let pb = (rc.2 as f32 * pulse).min(255.0) as u8;
@@ -3862,9 +3863,9 @@ impl State {
             let room_prog = format!("Room {}/{}", floor.current_room + 1, floor.rooms.len());
             draw_separator(ctx, 38, 44, 118, &t);
             ctx.print_color(39, 45, RGB::from_u8(rc.0, rc.1, rc.2), bg,
-                &format!("▶ {}  {}  — {}", current.room_type.icon(),
+                format!("▶ {}  {}  — {}", current.room_type.icon(),
                     current.room_type.name(),
-                    &current.description.chars().take(90).collect::<String>()));
+                    current.description.chars().take(90).collect::<String>()));
             ctx.print_color(142, 45, dim, bg, &room_prog);
 
             // Room hint (T3 secondary)
@@ -3898,7 +3899,7 @@ impl State {
 
             // All-clear / descend prompt (T1)
             if floor.rooms_remaining() == 0 {
-                let pulse = (self.frame / 15) % 2 == 0;
+                let pulse = (self.frame / 15).is_multiple_of(2);
                 let dc = if pulse { gld } else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+20, 0) };
                 ctx.print_color(39, 49, dc, bg, "▼  All rooms cleared — [D] Descend  ▼");
             }
@@ -3911,7 +3912,7 @@ impl State {
             for p in &self.particles {
                 let rc = p.render_col();
                 let px = p.x as i32; let py = p.y as i32;
-                if py < 3 || py > 60 || px < 1 || px > 158 { continue; }
+                if !(3..=60).contains(&py) || !(1..=158).contains(&px) { continue; }
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
             }
         }
@@ -3922,7 +3923,7 @@ impl State {
         // Primary actions (T2 active)
         let (sp_col, sp_label) = if let Some(ref p) = self.player {
             if p.skill_points > 0 {
-                let pulse = (self.frame / 12) % 2 == 0;
+                let pulse = (self.frame / 12).is_multiple_of(2);
                 let c = if pulse { gld } else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+20, 10) };
                 (c, format!("[C] Sheet ★{}", p.skill_points))
             } else {
@@ -3971,7 +3972,7 @@ impl State {
         let t = self.theme_graded();
         let bg  = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd  = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
-        let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let _ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let sel = RGB::from_u8(t.selected.0,t.selected.1,t.selected.2);
         let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
 
@@ -4015,7 +4016,7 @@ impl State {
             let fg = if line.starts_with('[') { sel }
                      else if line.starts_with('+') || line.starts_with("You find") { hd }
                      else { dim };
-            ctx.print_color(5, 7 + i as i32, fg, bg, &line.chars().take(70).collect::<String>());
+            ctx.print_color(5, 7 + i as i32, fg, bg, line.chars().take(70).collect::<String>());
         }
 
         let has_item  = self.room_event.pending_item.is_some();
@@ -4052,7 +4053,7 @@ impl State {
             for p in &self.particles {
                 let rc = p.render_col();
                 let px = p.x as i32; let py = p.y as i32;
-                if py < 3 || py > 67 || px < 3 || px > 156 { continue; }
+                if !(3..=67).contains(&py) || !(3..=156).contains(&px) { continue; }
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg_rgb, &p.text);
             }
         }
@@ -4073,9 +4074,9 @@ impl State {
         let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
         let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
         let mna = RGB::from_u8(t.mana.0,   t.mana.1,   t.mana.2);
-        let xp  = RGB::from_u8(t.xp.0,     t.xp.1,     t.xp.2);
+        let _xp  = RGB::from_u8(t.xp.0,     t.xp.1,     t.xp.2);
 
-        let (pname, pclass, plv, php, pmhp, pstatus) = match &self.player {
+        let (pname, pclass, plv, php, pmhp, _pstatus) = match &self.player {
             Some(p) => (p.name.clone(), p.class.name(), p.level, p.current_hp, p.max_hp, p.status_badges_plain()),
             None => { self.screen = AppScreen::Title; return; }
         };
@@ -4107,13 +4108,13 @@ impl State {
         let hp_bar: String = "█".repeat(hp_filled.max(0) as usize)
             + &"░".repeat((hp_bar_w - hp_filled).max(0) as usize);
         ctx.print_color(100, 0, RGB::from_u8(hp_col.0, hp_col.1, hp_col.2), bg,
-            &format!("HP[{}]{}/{}", hp_bar, php, pmhp));
+            format!("HP[{}]{}/{}", hp_bar, php, pmhp));
         let mp_pct_hdr = if self.max_mana() > 0 { self.current_mana as f32 / self.max_mana() as f32 } else { 1.0 };
         let mp_filled = (mp_pct_hdr * 12.0) as i32;
         let mp_bar: String = "█".repeat(mp_filled.max(0) as usize)
             + &"░".repeat((12 - mp_filled).max(0) as usize);
         ctx.print_color(100, 1, RGB::from_u8(t.mana.0, t.mana.1, t.mana.2), bg,
-            &format!("MP[{}]{}/{}", mp_bar, self.current_mana, self.max_mana()));
+            format!("MP[{}]{}/{}", mp_bar, self.current_mana, self.max_mana()));
 
         // ── Enemy panel (left half) ────────────────────────────────────────────
         draw_subpanel(ctx, 1, 2, 78, 36, "ENEMY", &t);
@@ -4125,7 +4126,7 @@ impl State {
         }
         let etier_s: String = etier.chars().take(20).collect();
         let ename_s: String = ename.chars().take(30).collect();
-        ctx.print_color(3, 4, dng, bg, &format!("{} [{}]", ename_s, etier_s));
+        ctx.print_color(3, 4, dng, bg, format!("{} [{}]", ename_s, etier_s));
         let ep = ehp as f32 / emhp.max(1) as f32;
         let ec = t.hp_color(ep);
         stat_line(ctx, 3, 5, "HP ", &format!("{}/{}", ehp, emhp), ec, &t);
@@ -4153,7 +4154,7 @@ impl State {
         draw_subpanel(ctx, 81, 2, 77, 36, "PLAYER", &t);
         let pname_s: String = pname.chars().take(14).collect();
         let pclass_s: String = pclass.chars().take(16).collect();
-        ctx.print_color(83, 4, hd, bg, &format!("{} Lv.{}  {}", pname_s, plv, pclass_s));
+        ctx.print_color(83, 4, hd, bg, format!("{} Lv.{}  {}", pname_s, plv, pclass_s));
         let pp = php as f32 / pmhp.max(1) as f32;
         let pc = t.hp_color(pp);
         stat_line(ctx, 83, 5, "HP ", &format!("{}/{}", php, pmhp), pc, &t);
@@ -4199,7 +4200,7 @@ impl State {
                     StatusEffect::Recursive(_)        => ("↻",  (255,  80,  80)),
                     StatusEffect::Nullified(_)        => ("∅",  ( 80,  80,  80)),
                 };
-                let pulse = (self.frame / 8) % 2 == 0;
+                let pulse = (self.frame / 8).is_multiple_of(2);
                 let fc = if pulse { base_col } else {
                     (base_col.0 / 2, base_col.1 / 2, base_col.2 / 2)
                 };
@@ -4247,7 +4248,7 @@ impl State {
             };
             if let Some(col) = eff_col {
                 let frame = self.frame;
-                if frame % 6 == 0 {
+                if frame.is_multiple_of(6) {
                     self.particles.push(Particle::burst(
                         40.0 + (frame % 5) as f32 - 2.0, 12.0,
                         0.0, -0.07, "·", col, 20));
@@ -4271,9 +4272,9 @@ impl State {
                     let can = self.current_mana >= spell.mana_cost;
                     let fg = if can { mna } else { dim };
                     ctx.print_color(83, 14 + i as i32, fg, bg,
-                        &format!("[{}] {:<20} {:>3}mp  ×{:.1}",
+                        format!("[{}] {:<20} {:>3}mp  ×{:.1}",
                             i+1,
-                            &spell.name.chars().take(20).collect::<String>(),
+                            spell.name.chars().take(20).collect::<String>(),
                             spell.mana_cost,
                             spell.scaling_factor.abs()));
                 }
@@ -4294,7 +4295,7 @@ impl State {
         for (i, (key, label, hint)) in actions.iter().enumerate() {
             let x = 3 + i as i32 * col_w;
             ctx.print_color(x, ay,     RGB::from_u8(t.accent.0, t.accent.1, t.accent.2),  bg, key);
-            ctx.print_color(x + key.len() as i32, ay, RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg, &format!(" {}", label));
+            ctx.print_color(x + key.len() as i32, ay, RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg, format!(" {}", label));
             ctx.print_color(x, ay + 1, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2),    bg, hint);
         }
         print_hint(ctx, 3 + 5 * col_w, ay, "[1-8]", " Cast Spell", &t);
@@ -4344,11 +4345,11 @@ impl State {
                     else { RGB::from_u8(220, 30, 30) };
                 let filled = (dur_pct * 8.0) as usize;
                 let bar_s = format!("[{}{}]", "█".repeat(filled), "░".repeat(8 - filled));
-                ctx.print_color(ex, ay + 5, dim, bg, &format!("[{}]", label));
+                ctx.print_color(ex, ay + 5, dim, bg, format!("[{}]", label));
                 ex += 6;
                 ctx.print_color(ex, ay + 5, dur_col, bg, &bar_s);
                 ex += 11;
-                ctx.print_color(ex, ay + 5, dim, bg, &format!("{:<16}", name_s));
+                ctx.print_color(ex, ay + 5, dim, bg, format!("{:<16}", name_s));
                 ex += 17;
                 if ex > 153 { break; }
             }
@@ -4374,16 +4375,16 @@ impl State {
                              else { dng };
             // Chain string — compressed to single line
             let chain_str: String = roll.chain.iter()
-                .map(|s| format!("{}({:+.1})", &s.engine_name.chars().take(6).collect::<String>(), s.output))
+                .map(|s| format!("{}({:+.1})", s.engine_name.chars().take(6).collect::<String>(), s.output))
                 .collect::<Vec<_>>().join("→");
             let bar_filled = ((roll.final_value + 1.0) / 2.0 * 40.0).round() as usize;
             let bar: String = "█".repeat(bar_filled.min(40)) + &"░".repeat(40usize.saturating_sub(bar_filled));
             ctx.print_color(3, 54, dim, bg,
-                &format!("[{}] {:+.3}", bar, roll.final_value));
+                format!("[{}] {:+.3}", bar, roll.final_value));
             ctx.print_color(50, 54, result_col, bg, result_label);
             if !self.combat_log_collapsed {
                 ctx.print_color(80, 54, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg,
-                    &format!("chain:{}", chain_str.chars().take(74).collect::<String>()));
+                    format!("chain:{}", chain_str.chars().take(74).collect::<String>()));
             }
         } else {
             ctx.print_color(3, 54, RGB::from_u8(t.muted.0, t.muted.1, t.muted.2), bg,
@@ -4397,7 +4398,7 @@ impl State {
             for (i, line) in self.combat_log[log_start..].iter().enumerate() {
                 ctx.print_color(3, 56 + i as i32,
                     RGB::from_u8(t.dim.0, t.dim.1, t.dim.2), bg,
-                    &line.chars().take(154).collect::<String>());
+                    line.chars().take(154).collect::<String>());
             }
         } else {
             // Expanded: 20 log lines (y=56..75)
@@ -4413,7 +4414,7 @@ impl State {
                          else if line.contains("Victory") || line.contains("LEVEL") { gld }
                          else if line.contains("heal") || line.contains('+') { suc }
                          else { RGB::from_u8(t.primary.0, t.primary.1, t.primary.2) };
-                ctx.print_color(3, 56 + i as i32, fg, bg, &line.chars().take(154).collect::<String>());
+                ctx.print_color(3, 56 + i as i32, fg, bg, line.chars().take(154).collect::<String>());
             }
         }
 
@@ -4440,7 +4441,7 @@ impl State {
         // 3. Screen shake on big crits — outer border flash
         if self.hit_shake > 0 {
             self.hit_shake -= 1;
-            let pulse = (self.hit_shake % 2 == 0) as u8;
+            let pulse = self.hit_shake.is_multiple_of(2) as u8;
             let intensity = 120 + pulse * 80;
             ctx.draw_box(0, 0, 159, 79, RGB::from_u8(intensity, intensity / 4, 0), bg);
         }
@@ -4454,9 +4455,9 @@ impl State {
             if elapsed < vc::beam_charge() {
                 let filled = (elapsed as i32 * 155 / vc::beam_charge() as i32).min(155);
                 let charge_col = RGB::from_u8(
-                    (bc.0 as u32 * elapsed as u32 / vc::beam_charge() as u32) as u8,
-                    (bc.1 as u32 * elapsed as u32 / vc::beam_charge() as u32) as u8,
-                    (bc.2 as u32 * elapsed as u32 / vc::beam_charge() as u32) as u8,
+                    (bc.0 as u32 * elapsed / vc::beam_charge()) as u8,
+                    (bc.1 as u32 * elapsed / vc::beam_charge()) as u8,
+                    (bc.2 as u32 * elapsed / vc::beam_charge()) as u8,
                 );
                 for bx in 2..(2 + filled) {
                     ctx.print_color(bx, 40, charge_col, bg, "·");
@@ -4485,7 +4486,7 @@ impl State {
                 let rc = p.render_col();
                 let px = p.x as i32;
                 let py = p.y as i32;
-                if py < 1 || py > 78 || px < 1 || px > 158 { continue; }
+                if !(1..=78).contains(&py) || !(1..=158).contains(&px) { continue; }
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
             }
         }
@@ -4518,7 +4519,7 @@ impl State {
         let Some(bid) = self.boss_id else { return; };
         let t = self.theme_graded();
         let ac  = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
-        let dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
+        let _dim = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
         let dng = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
         let suc = RGB::from_u8(t.success.0, t.success.1, t.success.2);
         let gld = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
@@ -4528,7 +4529,7 @@ impl State {
             // Boss 1 — THE MIRROR: symmetry indicator + reflected stat bars
             1 => {
                 // Draw a vertical split-line at center with "mirror" label
-                let pulse = (self.frame / 10) % 2 == 0;
+                let pulse = (self.frame / 10).is_multiple_of(2);
                 let mirror_col = if pulse { RGB::from_u8(200, 200, 255) } else { RGB::from_u8(100, 100, 180) };
                 ctx.print_color(78, 3, mirror_col, bg, "◈ MIRROR ◈");
                 ctx.print_color(78, 4, muted, bg, "Reflect");
@@ -4537,7 +4538,7 @@ impl State {
                     ctx.print_color(79, y, mirror_col, bg, ch);
                 }
                 // "Same HP as you" — warn bar
-                let flip = (self.frame / 20) % 2 == 0;
+                let flip = (self.frame / 20).is_multiple_of(2);
                 if flip {
                     ctx.print_color(3, 37, RGB::from_u8(160, 160, 255), bg,
                         "[ MIRROR: reflects your own power — find the asymmetry ]");
@@ -4551,7 +4552,7 @@ impl State {
                 let defends = self.boss_extra2;
                 let reduction = (defends * 20).min(80);
                 let bill_est = ((lifetime_dmg + fight_dmg) as f64 * (1.0 - reduction as f64 / 100.0)) as i64;
-                ctx.print_color(3, 37, gld, bg, &format!(
+                ctx.print_color(3, 37, gld, bg, format!(
                     "LEDGER: fight={} lifetime={} defends={}×20%={reduction}% off → BILL≈{}",
                     fight_dmg, lifetime_dmg, defends, bill_est).chars().take(155).collect::<String>());
                 // Turns remaining bar
@@ -4569,17 +4570,17 @@ impl State {
                 let splits = self.boss_extra as usize;
                 let fib_seq = [1u64, 1, 2, 3, 5, 8, 13];
                 let current_hp_mult = fib_seq.get(splits).copied().unwrap_or(1);
-                ctx.print_color(3, 37, gld, bg, &format!(
+                ctx.print_color(3, 37, gld, bg, format!(
                     "HYDRA SPLITS: {}/10  Next split adds {} heads  (Fib: 1,1,2,3,5,8,13…)",
                     splits, current_hp_mult));
                 // Growing sequence bar
                 for i in 0..splits.min(10) {
                     let col = if i < 5 { gld } else { dng };
-                    ctx.print_color(3 + i as i32 * 7, 38, col, bg, &format!("[×{}]",
+                    ctx.print_color(3 + i as i32 * 7, 38, col, bg, format!("[×{}]",
                         fib_seq.get(i).copied().unwrap_or(1)));
                 }
                 // Flash on split (every other frame when splits > 0)
-                if splits > 0 && (self.frame / 8) % 2 == 0 {
+                if splits > 0 && (self.frame / 8).is_multiple_of(2) {
                     ctx.print_color(58, 37, RGB::from_u8(255, 200, 30), bg, "⟶ SPLIT ⟶");
                 }
             }
@@ -4588,9 +4589,9 @@ impl State {
             5 => {
                 let ehp = self.enemy.as_ref().map(|e| e.hp).unwrap_or(0);
                 let tax = ((ehp as f64 * 0.01) as i64).max(1);
-                let pulse = (self.frame / 6) % 2 == 0;
+                let pulse = (self.frame / 6).is_multiple_of(2);
                 let tax_col = if pulse { gld } else { RGB::from_u8(200, 180, 20) };
-                ctx.print_color(3, 37, tax_col, bg, &format!(
+                ctx.print_color(3, 37, tax_col, bg, format!(
                     "TAXMAN: 1% HP drain/turn = {} dmg  (Turn {}) — [D] Defend halves it",
                     tax, self.boss_turn));
                 // Gold drain particle: stream left-to-right on row 38
@@ -4604,10 +4605,10 @@ impl State {
             // Boss 7 — OUROBOROS: circular ring phase indicator
             7 => {
                 let boss_hp = self.enemy.as_ref().map(|e| e.hp).unwrap_or(0);
-                let max_hp  = self.boss_extra;
+                let _max_hp  = self.boss_extra;
                 let cycle_turn = self.boss_turn % 3;
-                let turns_to_reset = 3 - cycle_turn;
-                ctx.print_color(3, 37, RGB::from_u8(100, 220, 100), bg, &format!(
+                let _turns_to_reset = 3 - cycle_turn;
+                ctx.print_color(3, 37, RGB::from_u8(100, 220, 100), bg, format!(
                     "OUROBOROS: Heals to full every 3 turns — {}/3 until reset  HP: {}",
                     cycle_turn, boss_hp));
                 // Serpent ring visual: circular arc fills as turn approaches
@@ -4621,7 +4622,7 @@ impl State {
                     let col = if on { RGB::from_u8(80, 200, 80) } else { muted };
                     let sx = cx + (angle.cos() * r as f32 * 2.0) as i32;
                     let sy = cy + (angle.sin() * r as f32) as i32;
-                    if sx >= 0 && sx < 160 && sy >= 0 && sy < 79 {
+                    if (0..160).contains(&sx) && (0..79).contains(&sy) {
                         ctx.print_color(sx, sy, col, bg, if on { "●" } else { "○" });
                     }
                 }
@@ -4634,7 +4635,7 @@ impl State {
                 let next2 = if next % 2 == 0 { next / 2 } else { next * 3 + 1 };
                 let at_min = n <= 4;
                 let seq_col = if at_min { dng } else if n < 20 { gld } else { muted };
-                ctx.print_color(3, 37, seq_col, bg, &format!(
+                ctx.print_color(3, 37, seq_col, bg, format!(
                     "COLLATZ: HP={n}  → {next}  → {next2}   {}",
                     if at_min { "★ ATTACK NOW — at minimum!" }
                     else if n % 2 == 0 { "(even: halving next)" }
@@ -4647,19 +4648,19 @@ impl State {
                     ctx.set(3 + x, 38, c, bg, if x < bar_filled { 219u16 } else { 176u16 });
                 }
                 // Flash warning on odd turns (about to triple)
-                if n % 2 != 0 && (self.frame / 8) % 2 == 0 {
+                if n % 2 != 0 && (self.frame / 8).is_multiple_of(2) {
                     ctx.print_color(78, 37, dng, bg, "  ▲ TRIPLE ▲");
                 }
             }
 
             // Boss 4 — THE EIGENSTATE: flicker between 1HP and 10000HP visual
             4 if self.config.visuals.enable_eigenstate_flicker => {
-                let flicker = (self.frame / 3) % 2 == 0;
+                let flicker = (self.frame / 3).is_multiple_of(2);
                 let label = if flicker { " [1 HP] " } else { " [10,000 HP] " };
                 let col = if flicker { suc } else { dng };
                 ctx.print_color(20, 3, col, bg, label);
                 // Static-noise flicker around enemy name
-                if (self.frame / 2) % 3 != 0 {
+                if !(self.frame / 2).is_multiple_of(3) {
                     let noise_chars = ["▒","░","▓","?","!"];
                     for i in 0..5i32 {
                         let nc = noise_chars[(self.frame as usize / 2 + i as usize) % noise_chars.len()];
@@ -4690,11 +4691,11 @@ impl State {
                     let secured = (vote_mask >> i) & 1 == 1;
                     let col = if secured { suc } else { muted };
                     let sym = if secured { "[Y]" } else { "[ ]" };
-                    ctx.print_color(vx, 4, col, bg, &format!("{} {}", sym, label));
+                    ctx.print_color(vx, 4, col, bg, format!("{} {}", sym, label));
                 }
                 let secured_count = vote_mask.count_ones();
                 let tally_col = if secured_count >= 3 { suc } else { dng };
-                ctx.print_color(72, 4, tally_col, bg, &format!("{}/5", secured_count));
+                ctx.print_color(72, 4, tally_col, bg, format!("{}/5", secured_count));
             }
 
             // Boss 10 — THE RECURSION: stack bar showing accumulated damage
@@ -4706,7 +4707,7 @@ impl State {
                 let stack_col = if bar_frac > 0.75 { dng }
                     else if bar_frac > 0.4 { RGB::from_u8(255, 150, 50) }
                     else { gld };
-                ctx.print_color(3, 37, stack_col, bg, &bar_label.chars().take(70).collect::<String>());
+                ctx.print_color(3, 37, stack_col, bg, bar_label.chars().take(70).collect::<String>());
                 for x in 0..bar_filled {
                     ctx.set(3 + x, 38, stack_col, bg, 219u16);
                 }
@@ -4748,11 +4749,11 @@ impl State {
                         let partial: String = name_chars[..reveal].iter().collect();
                         let nx = 80 - (name_chars.len() as i32) / 2;
                         ctx.print_color(nx, 37, RGB::from_u8(60, 60, 80), bg,
-                            &format!("{}_", partial));
+                            format!("{}_", partial));
                         // After full reveal: flash it
-                        if reveal == name_chars.len() && (self.frame / 20) % 2 == 0 {
+                        if reveal == name_chars.len() && (self.frame / 20).is_multiple_of(2) {
                             ctx.print_color(nx - 2, 37, ac, bg,
-                                &format!("[ {} ]", pname));
+                                format!("[ {} ]", pname));
                         }
                     }
                 }
@@ -4802,7 +4803,7 @@ impl State {
                         }
                     }
                     // Particle formation: particles converge toward "I SEE YOU" positions
-                    if self.frame % 6 == 0 && self.particles.len() < 1800 {
+                    if self.frame.is_multiple_of(6) && self.particles.len() < 1800 {
                         use std::f32::consts::TAU;
                         let angle = (self.frame as f32 * 0.5) % TAU;
                         let r = 40.0f32;
@@ -4854,7 +4855,7 @@ impl State {
                     else if roll.is_catastrophe()                         { ("CATASTROPHE",   RGB::from_u8(255, 20, 80)) }
                     else                                                   { ("MISS / FAIL",   dng) };
                 ctx.print_color(ox + 3, oy + 2, verdict_col, bg,
-                    &format!("Final: {:+.4}   {}", roll.final_value, verdict));
+                    format!("Final: {:+.4}   {}", roll.final_value, verdict));
 
                 // Progress bar
                 let bar_w = 60i32;
@@ -4888,10 +4889,10 @@ impl State {
                     let row_col = if is_last { ac } else { dim };
 
                     let eng: String = step.engine_name.chars().take(14).collect();
-                    ctx.print_color(ox + 3,  y, row_col, bg, &format!("{:>3}", i + 1));
-                    ctx.print_color(ox + 7,  y, row_col, bg, &format!("{:<16}", eng));
-                    ctx.print_color(ox + 23, y, muted,   bg, &format!("{:>+9.4}", step.input));
-                    ctx.print_color(ox + 34, y, out_col, bg, &format!("{:>+9.4}", step.output));
+                    ctx.print_color(ox + 3,  y, row_col, bg, format!("{:>3}", i + 1));
+                    ctx.print_color(ox + 7,  y, row_col, bg, format!("{:<16}", eng));
+                    ctx.print_color(ox + 23, y, muted,   bg, format!("{:>+9.4}", step.input));
+                    ctx.print_color(ox + 34, y, out_col, bg, format!("{:>+9.4}", step.output));
                     ctx.print_color(ox + 45, y, out_col, bg, &delta_str);
 
                     // Tiny bar for this step's magnitude
@@ -4907,7 +4908,7 @@ impl State {
                 let pos_count = roll.chain.iter().filter(|s| s.output > s.input).count();
                 let neg_count = chain_len - pos_count;
                 ctx.print_color(ox + 3, oy + oh - 3, muted, bg,
-                    &format!("Chain depth: {}   Positive steps: {}   Negative steps: {}",
+                    format!("Chain depth: {}   Positive steps: {}   Negative steps: {}",
                         chain_len, pos_count, neg_count));
             }
         }
@@ -4938,7 +4939,7 @@ impl State {
         let heal_row = 5i32;
         let can_heal = self.player.as_ref().map(|p| p.gold >= self.shop_heal_cost).unwrap_or(false);
         ctx.print_color(3, heal_row, if can_heal { suc } else { dim }, bg,
-            &format!("[H] Healing Potion  +40 HP  ─  {}g", self.shop_heal_cost));
+            format!("[H] Healing Potion  +40 HP  ─  {}g", self.shop_heal_cost));
 
         draw_separator(ctx, 1, 7, 77, &t);
 
@@ -4950,12 +4951,12 @@ impl State {
             let name_col = if is_sel { hd } else { dim };
             let price_col = if can_buy { gld } else { dim };
             let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
-            ctx.print_color(3, y, name_col, bg, &format!("{}[{}] {}", pfx, i+1, &item.name.chars().take(30).collect::<String>()));
-            ctx.print_color(55, y, price_col, bg, &format!("{}g ({})", price, item.rarity.name()));
+            ctx.print_color(3, y, name_col, bg, format!("{}[{}] {}", pfx, i+1, item.name.chars().take(30).collect::<String>()));
+            ctx.print_color(55, y, price_col, bg, format!("{}g ({})", price, item.rarity.name()));
             for (j, m) in item.stat_modifiers.iter().enumerate().take(3) {
                 let mc = if m.value > 0 { suc } else { dim };
                 ctx.print_color(8, y + 1 + j as i32, mc, bg,
-                    &format!("{:+} {}", m.value, m.stat));
+                    format!("{:+} {}", m.value, m.stat));
             }
         }
 
@@ -4986,12 +4987,12 @@ impl State {
                         Rarity::Divine    => RGB::from_u8(255, 215, 0),
                         _                 => hd,
                     };
-                    ctx.print_color(82, iy, ic, bg, &item.name.chars().take(35).collect::<String>());
-                    ctx.print_color(82, iy + 1, dim, bg, &format!("  ({})", item.rarity.name()));
+                    ctx.print_color(82, iy, ic, bg, item.name.chars().take(35).collect::<String>());
+                    ctx.print_color(82, iy + 1, dim, bg, format!("  ({})", item.rarity.name()));
                     let mods: String = item.stat_modifiers.iter()
                         .map(|m| format!("{:+}{}", m.value, &m.stat[..3.min(m.stat.len())]))
                         .collect::<Vec<_>>().join(" ");
-                    ctx.print_color(82, iy + 2, dim, bg, &format!("  {}", mods.chars().take(70).collect::<String>()));
+                    ctx.print_color(82, iy + 2, dim, bg, format!("  {}", mods.chars().take(70).collect::<String>()));
                 }
             }
         }
@@ -5029,9 +5030,9 @@ impl State {
                 // Filter bar
                 let filter_lc = self.item_filter.to_lowercase();
                 let filter_label = if self.item_filter_active {
-                    format!("/ {}_ (Enter/Esc to finish)", &self.item_filter)
+                    format!("/ {}_ (Enter/Esc to finish)", self.item_filter)
                 } else if !self.item_filter.is_empty() {
-                    format!("filter: \"{}\"  [/] to change · [Esc] clear", &self.item_filter)
+                    format!("filter: \"{}\"  [/] to change · [Esc] clear", self.item_filter)
                 } else {
                     "[/] Filter items  ↑↓ Navigate  Enter Confirm".to_string()
                 };
@@ -5040,24 +5041,23 @@ impl State {
                 if let Some(ref p) = self.player {
                     let mut row = 0i32;
                     for (i, item) in p.inventory.iter().enumerate() {
-                        if !filter_lc.is_empty() {
-                            if !item.name.to_lowercase().contains(&filter_lc)
+                        if !filter_lc.is_empty()
+                            && !item.name.to_lowercase().contains(&filter_lc)
                                 && !item.rarity.name().to_lowercase().contains(&filter_lc) {
                                 continue;
                             }
-                        }
                         let is_sel = i == self.craft_item_cursor;
                         let y = 5 + row * 2;
                         if y > 68 { break; }
                         let charge_tag = if item.charges > 0 { format!(" [{}c]", item.charges) } else { String::new() };
                         print_selectable(ctx, 5, y, is_sel,
-                            &format!("[{}] {}{} · {}", i+1, &item.name.chars().take(25).collect::<String>(), charge_tag, item.rarity.name()),
+                            &format!("[{}] {}{} · {}", i+1, item.name.chars().take(25).collect::<String>(), charge_tag, item.rarity.name()),
                             self.frame, &t);
                         if is_sel {
                             for (j, m) in item.stat_modifiers.iter().enumerate().take(3) {
                                 let vc = if m.value > 0 { ac } else { dng };
                                 ctx.print_color(10, y + 1 + j as i32, vc, bg,
-                                    &format!("{:+} {}", m.value, m.stat));
+                                    format!("{:+} {}", m.value, m.stat));
                             }
                         }
                         row += 1;
@@ -5081,23 +5081,23 @@ impl State {
                             Rarity::Divine    => RGB::from_u8(255, 215, 0),
                             _                 => hd,
                         };
-                        ctx.print_color(82, 5, ic, bg, &item.name.chars().take(50).collect::<String>());
-                        ctx.print_color(82, 6, dim, bg, &format!("Rarity: {}", item.rarity.name()));
+                        ctx.print_color(82, 5, ic, bg, item.name.chars().take(50).collect::<String>());
+                        ctx.print_color(82, 6, dim, bg, format!("Rarity: {}", item.rarity.name()));
                         if item.charges > 0 {
-                            ctx.print_color(82, 7, ac, bg, &format!("Charges: {}", item.charges));
+                            ctx.print_color(82, 7, ac, bg, format!("Charges: {}", item.charges));
                         }
                         draw_separator(ctx, 81, 8, 75, &t);
                         ctx.print_color(82, 9, hd, bg, "Stat Modifiers:");
                         for (j, m) in item.stat_modifiers.iter().enumerate() {
                             let mc = if m.value > 0 { suc } else { dng };
                             ctx.print_color(84, 11 + j as i32, mc, bg,
-                                &format!("{:+} {}", m.value, m.stat));
+                                format!("{:+} {}", m.value, m.stat));
                         }
                         draw_separator(ctx, 81, 20, 75, &t);
                         ctx.print_color(82, 21, hd, bg, "Craft operations available:");
                         let ops = ["Reforge", "Augment", "Annul", "Corrupt", "Fuse", "EngineLock", "Shatter", "Imbue", "Repair"];
                         for (k, op) in ops.iter().enumerate() {
-                            ctx.print_color(84, 23 + k as i32, dim, bg, &format!("[{}] {}", k+1, op));
+                            ctx.print_color(84, 23 + k as i32, dim, bg, format!("[{}] {}", k+1, op));
                         }
                     }
                 }
@@ -5114,8 +5114,8 @@ impl State {
                     .map(|i| (i.name.clone(), i.rarity.name(), i.stat_modifiers.clone()))
                     .unwrap_or_default();
 
-                ctx.print_color(3, 3, hd, bg, &format!("Crafting: {}", &item_name.chars().take(50).collect::<String>()));
-                ctx.print_color(3, 4, dim, bg, &format!("Rarity: {}", item_rarity));
+                ctx.print_color(3, 3, hd, bg, format!("Crafting: {}", item_name.chars().take(50).collect::<String>()));
+                ctx.print_color(3, 4, dim, bg, format!("Rarity: {}", item_rarity));
                 draw_separator(ctx, 2, 5, 75, &t);
 
                 let ops = [
@@ -5136,19 +5136,19 @@ impl State {
                     let fc = RGB::from_u8(col.0, col.1, col.2);
                     let pfx = if is_sel { format!("{} ", cursor_char(self.frame)) } else { "  ".to_string() };
                     ctx.print_color(5, y, if is_sel { fc } else { dim }, bg,
-                        &format!("{}[{}] {}", pfx, i+1, name));
+                        format!("{}[{}] {}", pfx, i+1, name));
                     ctx.print_color(10, y + 1, dim, bg, desc);
                 }
 
                 if !self.craft_message.is_empty() {
                     draw_separator(ctx, 2, 58, 75, &t);
-                    ctx.print_color(4, 59, gld, bg, &self.craft_message.chars().take(72).collect::<String>());
+                    ctx.print_color(4, 59, gld, bg, self.craft_message.chars().take(72).collect::<String>());
                 }
 
                 // Right panel: current item mods
                 draw_subpanel(ctx, 80, 3, 77, 68, "CURRENT MODIFIERS", &t);
-                ctx.print_color(82, 5, hd, bg, &item_name.chars().take(50).collect::<String>());
-                ctx.print_color(82, 6, dim, bg, &format!("Rarity: {}", item_rarity));
+                ctx.print_color(82, 5, hd, bg, item_name.chars().take(50).collect::<String>());
+                ctx.print_color(82, 6, dim, bg, format!("Rarity: {}", item_rarity));
                 draw_separator(ctx, 81, 7, 75, &t);
                 if item_mods.is_empty() {
                     ctx.print_color(82, 9, dim, bg, "(no modifiers)");
@@ -5156,7 +5156,7 @@ impl State {
                     for (j, m) in item_mods.iter().enumerate() {
                         let mc = if m.value > 0 { suc } else { dng };
                         ctx.print_color(82, 9 + j as i32 * 2, mc, bg,
-                            &format!("{:+} {}", m.value, m.stat));
+                            format!("{:+} {}", m.value, m.stat));
                     }
                 }
 
@@ -5179,7 +5179,7 @@ impl State {
             let bg_rgb = RGB::from_u8(t.bg.0, t.bg.1, t.bg.2);
             match self.craft_anim_type {
                 1 => {  // Reforge: item text dissolves into particles then reassembles
-                    let pulse = (elapsed % 4) < 2;
+                    let _pulse = (elapsed % 4) < 2;
                     let col = RGB::from_u8(
                         (t.accent.0 as f32 * alpha) as u8,
                         (t.accent.1 as f32 * alpha) as u8,
@@ -5200,7 +5200,7 @@ impl State {
                         }
                     }
                     // Spray particles during middle of animation
-                    if elapsed > 5 && elapsed < 30 && self.frame % 3 == 0 {
+                    if elapsed > 5 && elapsed < 30 && self.frame.is_multiple_of(3) {
                         let col_t = (t.accent.0, t.accent.1, t.accent.2);
                         for i in 0..4usize {
                             use std::f32::consts::TAU;
@@ -5227,7 +5227,7 @@ impl State {
                 }
                 3 => {  // Shatter: characters explode outward
                     let col_t = (t.danger.0, t.danger.1, t.danger.2);
-                    if elapsed < 5 && self.frame % 2 == 0 {
+                    if elapsed < 5 && self.frame.is_multiple_of(2) {
                         emit_death_explosion(&mut self.particles, 90.0, 35.0, col_t);
                     }
                     let shard_col = RGB::from_u8(
@@ -5301,14 +5301,14 @@ impl State {
                         let pal = [(220u8,180u8,40u8),(60,220,80),(80,200,220),(80,80,220),(180,60,200),(220,60,60)];
                         pal[((self.frame / 8 + i as u64) as usize) % pal.len()]
                     } else if *val >= 50 {
-                        let bright = (self.frame / 12) % 2 == 0;
+                        let bright = (self.frame / 12).is_multiple_of(2);
                         if bright { t.gold } else { (t.gold.0/2 + 30, t.gold.1/2 + 20, 10) }
                     } else if *val < 0 {
                         let jitter = (self.frame / 5 + i as u64) % 4 < 2;
                         if jitter { t.danger } else { (t.danger.0/2, 0, 0) }
                     } else { base_col };
                     stat_line(ctx, 3, 6 + i as i32 * 4, name, &format!("{:+}", val), col, &t);
-                    let bar_val = (*val).max(0).min(100);
+                    let bar_val = (*val).clamp(0, 100);
                     draw_bar_solid(ctx, 3, 7 + i as i32 * 4, 34, bar_val, 100, col, &t);
                     if *val >= 70 && self.frame % 20 == (i as u64 * 4) % 20 {
                         self.particles.push(Particle::spark(
@@ -5327,7 +5327,7 @@ impl State {
                             pal[((self.frame / 4) as usize) % pal.len()]
                         }
                         TierEffect::Pulse => {
-                            if (self.frame / 15) % 2 == 0 { tier_rgb } else { (tier_rgb.0/2, tier_rgb.1/2, tier_rgb.2/2) }
+                            if (self.frame / 15).is_multiple_of(2) { tier_rgb } else { (tier_rgb.0/2, tier_rgb.1/2, tier_rgb.2/2) }
                         }
                         _ => tier_rgb,
                     }
@@ -5359,7 +5359,7 @@ impl State {
                 stat_line(ctx, 43, 13, "Class  ", p.class.name(), t.heading, &t);
                 stat_line(ctx, 43, 14, "BG     ", p.background.name(), t.dim, &t);
                 if p.skill_points > 0 {
-                    let pulse = (self.frame / 12) % 2 == 0;
+                    let pulse = (self.frame / 12).is_multiple_of(2);
                     let pc_col = if pulse { t.gold } else { (t.gold.0/2+20, t.gold.1/2+20, 10) };
                     stat_line(ctx, 43, 15, "SkPts  ", &format!("{} avail", p.skill_points), pc_col, &t);
                 }
@@ -5387,16 +5387,16 @@ impl State {
                         ReputationTier::Exalted    => hd,
                     };
                     let fy = 38 + i as i32 * 4;
-                    ctx.print_color(43, fy, fc, bg, &format!("{} — {} ({:+})", fname, ftier.name(), frep));
+                    ctx.print_color(43, fy, fc, bg, format!("{} — {} ({:+})", fname, ftier.name(), frep));
                     if let Some(bonus) = chaos_rpg_core::factions::FactionRep::passive_bonus(*fvar, ftier) {
-                        ctx.print_color(45, fy + 1, dim, bg, &bonus.chars().take(32).collect::<String>());
+                        ctx.print_color(45, fy + 1, dim, bg, bonus.chars().take(32).collect::<String>());
                     }
                 }
 
                 // Right: class info + boon
                 draw_subpanel(ctx, 81, 4, 76, 30, "CLASS & BOON", &t);
                 ctx.print_color(83, 6, hd, bg, p.class.name());
-                ctx.print_color(83, 7, dim, bg, &format!("BG: {}", p.background.name()));
+                ctx.print_color(83, 7, dim, bg, format!("BG: {}", p.background.name()));
                 ctx.print_color(83, 8, ac, bg, p.class.passive_name());
                 let mut pr = 9i32;
                 let mut pline = String::new();
@@ -5414,22 +5414,22 @@ impl State {
                 ctx.print_color(83, 18, hd, bg, "Active Boon:");
                 if let Some(ref boon) = p.boon {
                     ctx.print_color(83, 19, ac, bg, boon.name());
-                    ctx.print_color(83, 20, dim, bg, &boon.description().chars().take(72).collect::<String>());
+                    ctx.print_color(83, 20, dim, bg, boon.description().chars().take(72).collect::<String>());
                 } else {
                     ctx.print_color(83, 19, dim, bg, "No boon active.");
                 }
                 draw_separator(ctx, 82, 22, 74, &t);
                 let sp = p.skill_points;
-                ctx.print_color(83, 23, dim, bg, &format!("{} passive nodes  |  {} skill pts", p.allocated_nodes.len(), sp));
+                ctx.print_color(83, 23, dim, bg, format!("{} passive nodes  |  {} skill pts", p.allocated_nodes.len(), sp));
 
                 // Right lower: passive tree summary
                 draw_subpanel(ctx, 81, 36, 76, 33, "PASSIVE TREE", &t);
                 let node_count = p.allocated_nodes.len();
-                ctx.print_color(83, 38, dim, bg, &format!("{} nodes allocated", node_count));
+                ctx.print_color(83, 38, dim, bg, format!("{} nodes allocated", node_count));
                 if sp > 0 {
-                    let pulse = (self.frame / 12) % 2 == 0;
+                    let pulse = (self.frame / 12).is_multiple_of(2);
                     let pc = if pulse { gld } else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+20, 10) };
-                    ctx.print_color(83, 39, pc, bg, &format!("★ {} SKILL POINT{} AVAILABLE — [P] to allocate",
+                    ctx.print_color(83, 39, pc, bg, format!("★ {} SKILL POINT{} AVAILABLE — [P] to allocate",
                         sp, if sp == 1 { "" } else { "S" }));
                 }
             }
@@ -5456,18 +5456,18 @@ impl State {
                         };
                         let equip_marker = if item.equip_slot().is_some() { "⚙" } else { " " };
                         ctx.print_color(3, iy, ic, bg,
-                            &format!("{}{:<3} {}", equip_marker, i+1, &item.name.chars().take(40).collect::<String>()));
-                        ctx.print_color(3, iy + 1, dim, bg, &format!("    Rarity: {}  Dur:{}/{}",
+                            format!("{}{:<3} {}", equip_marker, i+1, item.name.chars().take(40).collect::<String>()));
+                        ctx.print_color(3, iy + 1, dim, bg, format!("    Rarity: {}  Dur:{}/{}",
                             item.rarity.name(), item.durability, item.max_durability));
                         let mods: String = item.stat_modifiers.iter()
                             .map(|m| format!("{:+}{}", m.value, &m.stat[..4.min(m.stat.len())]))
                             .collect::<Vec<_>>().join("  ");
                         ctx.print_color(3, iy + 2, dim, bg,
-                            &format!("    {}", mods.chars().take(68).collect::<String>()));
+                            format!("    {}", mods.chars().take(68).collect::<String>()));
                     }
                     if p.inventory.len() > 16 {
                         ctx.print_color(3, 68, muted, bg,
-                            &format!("… and {} more  (go to Crafting Bench to see all)", p.inventory.len() - 16));
+                            format!("… and {} more  (go to Crafting Bench to see all)", p.inventory.len() - 16));
                     }
                 }
 
@@ -5498,14 +5498,14 @@ impl State {
                             let dur_col = if dur_pct < 0.25 { dng }
                                 else if dur_pct < 0.5 { RGB::from_u8(220,160,40) } else { dim };
                             ctx.print_color(81, ey + 1, ic, bg,
-                                &item.name.chars().take(40).collect::<String>());
+                                item.name.chars().take(40).collect::<String>());
                             ctx.print_color(81, ey + 2, dur_col, bg,
-                                &format!("  Dur: {}/{}", item.durability, item.max_durability));
+                                format!("  Dur: {}/{}", item.durability, item.max_durability));
                             let mods: String = item.stat_modifiers.iter()
                                 .map(|m| format!("{:+}{}", m.value, &m.stat[..4.min(m.stat.len())]))
                                 .collect::<Vec<_>>().join("  ");
                             ctx.print_color(81, ey + 3, dim, bg,
-                                &format!("  {}", mods.chars().take(70).collect::<String>()));
+                                format!("  {}", mods.chars().take(70).collect::<String>()));
                         } else {
                             ctx.print_color(81, ey + 1, muted, bg, "  (empty)");
                         }
@@ -5569,7 +5569,7 @@ impl State {
             // ── Tab 3: Lore ───────────────────────────────────────────────────
             3 => {
                 draw_subpanel(ctx, 1, 4, 157, 65, "LORE — CLASS & BACKGROUND", &t);
-                ctx.print_color(3, 6, hd, bg, &format!("Class: {}", p.class.name()));
+                ctx.print_color(3, 6, hd, bg, format!("Class: {}", p.class.name()));
                 ctx.print_color(3, 7, ac, bg, p.class.passive_name());
                 let mut ly = 9i32;
                 let mut lline = String::new();
@@ -5587,7 +5587,7 @@ impl State {
                 ly += 1;
                 draw_separator(ctx, 2, ly, 154, &t);
                 ly += 1;
-                ctx.print_color(3, ly, hd, bg, &format!("Background: {}", p.background.name()));
+                ctx.print_color(3, ly, hd, bg, format!("Background: {}", p.background.name()));
                 ly += 1;
                 ctx.print_color(3, ly, dim, bg, p.background.description());
                 ly += 2;
@@ -5612,9 +5612,9 @@ impl State {
                         ReputationTier::Exalted    => hd,
                     };
                     ctx.print_color(3, ly, fc, bg,
-                        &format!("{}: {} ({:+})", fname, ftier.name(), frep));
+                        format!("{}: {} ({:+})", fname, ftier.name(), frep));
                     if let Some(bonus) = chaos_rpg_core::factions::FactionRep::passive_bonus(*fvar, ftier) {
-                        ctx.print_color(5, ly + 1, dim, bg, &bonus.chars().take(150).collect::<String>());
+                        ctx.print_color(5, ly + 1, dim, bg, bonus.chars().take(150).collect::<String>());
                         ly += 2;
                     } else {
                         ly += 1;
@@ -5638,7 +5638,7 @@ impl State {
                                  else if line.contains("Victory") || line.contains("LEVEL") { gld }
                                  else if line.contains("heal") || line.contains('+') { suc }
                                  else { dim };
-                        ctx.print_color(3, y, fg, bg, &line.chars().take(154).collect::<String>());
+                        ctx.print_color(3, y, fg, bg, line.chars().take(154).collect::<String>());
                     }
                 }
             }
@@ -5659,7 +5659,7 @@ impl State {
             for p in &self.particles {
                 let rc = p.render_col();
                 let px = p.x as i32; let py = p.y as i32;
-                if py < 4 || py > 72 || px < 2 || px > 157 { continue; }
+                if !(4..=72).contains(&py) || !(2..=157).contains(&px) { continue; }
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
             }
         }
@@ -5794,13 +5794,13 @@ impl State {
         print_hint(ctx, 36, 75, "Esc",      " Back to title",     &t);
 
         if slide < TOTAL_SLIDES {
-            let next_flash = if (self.frame / 20) % 2 == 0 { ac } else { hd };
+            let next_flash = if (self.frame / 20).is_multiple_of(2) { ac } else { hd };
             ctx.print_color(56, 75, next_flash, bg, "► Next slide");
         } else {
             ctx.print_color(56, 75, succ, bg, "► Press Enter to play!");
         }
 
-        ctx.print_color(4, 77, dim, bg, &format!("Slide {}/{} — press ? on title to reopen", slide, TOTAL_SLIDES));
+        ctx.print_color(4, 77, dim, bg, format!("Slide {}/{} — press ? on title to reopen", slide, TOTAL_SLIDES));
     }
 
     // ── PASSIVE TREE ──────────────────────────────────────────────────────────
@@ -5826,14 +5826,14 @@ impl State {
 
         // Header bar
         let sp = p.skill_points;
-        let sp_col = if sp > 0 { gld } else { dim };
+        let _sp_col = if sp > 0 { gld } else { dim };
         let header = format!("{} — {} pts available — {} nodes allocated",
             p.class.name(), sp, allocated_set.len());
-        ctx.print_color(2, 1, hd, bg, &header.chars().take(76).collect::<String>());
+        ctx.print_color(2, 1, hd, bg, header.chars().take(76).collect::<String>());
         if sp > 0 {
-            let pulse = (self.frame / 12) % 2 == 0;
+            let pulse = (self.frame / 12).is_multiple_of(2);
             let pc = if pulse { gld } else { RGB::from_u8(t.gold.0/2+20, t.gold.1/2+10, 10) };
-            ctx.print_color(60, 1, pc, bg, &format!("[N] Spend {} pts", sp));
+            ctx.print_color(60, 1, pc, bg, format!("[N] Spend {} pts", sp));
         }
         draw_separator(ctx, 1, 2, 77, &t);
 
@@ -5896,15 +5896,15 @@ impl State {
             // Section header rows
             let global_idx = self.passive_scroll + i;
             if global_idx == 0 && avail_count > 0 {
-                ctx.print_color(2, y, suc, bg, &format!("-- AVAILABLE TO ALLOCATE ({}) --", avail_count));
+                ctx.print_color(2, y, suc, bg, format!("-- AVAILABLE TO ALLOCATE ({}) --", avail_count));
                 continue;
             }
             if global_idx == avail_count && alloc_count > 0 {
-                ctx.print_color(2, y, mna, bg, &format!("-- ALLOCATED ({}) --", alloc_count));
+                ctx.print_color(2, y, mna, bg, format!("-- ALLOCATED ({}) --", alloc_count));
                 continue;
             }
             if global_idx == avail_count + alloc_count {
-                ctx.print_color(2, y, dim, bg, &format!("-- LOCKED ({}) — allocate prerequisites first --", locked_nodes.len()));
+                ctx.print_color(2, y, dim, bg, format!("-- LOCKED ({}) — allocate prerequisites first --", locked_nodes.len()));
                 continue;
             }
 
@@ -5917,26 +5917,26 @@ impl State {
 
             // Node name (truncated to 22 chars)
             let name_col = match cat { 0 => hd, 1 => mna, _ => dim };
-            ctx.print_color(11, y, name_col, bg, &node.name.chars().take(22).collect::<String>());
+            ctx.print_color(11, y, name_col, bg, node.name.chars().take(22).collect::<String>());
 
             // Type tag + color
             let (type_tag, type_col) = match &node.node_type {
-                NodeType::Stat { stat, min, max } => (format!("Stat/{}", stat.chars().take(5).collect::<String>()), ac),
-                NodeType::Notable { stat, bonus, .. } => (format!("Notable {:+}", bonus), gld),
+                NodeType::Stat { stat, min: _, max: _ } => (format!("Stat/{}", stat.chars().take(5).collect::<String>()), ac),
+                NodeType::Notable { stat: _, bonus, .. } => (format!("Notable {:+}", bonus), gld),
                 NodeType::Keystone { .. } => ("KEYSTONE".to_string(), dng),
                 NodeType::Engine { engine, .. } => (format!("Engine/{}", engine.chars().take(6).collect::<String>()), RGB::from_u8(180, 80, 255)),
                 NodeType::Synergy { cluster, .. } => (format!("Syn #{}", cluster), RGB::from_u8(100, 200, 180)),
             };
-            ctx.print_color(36, y, type_col, bg, &type_tag.chars().take(13).collect::<String>());
+            ctx.print_color(36, y, type_col, bg, type_tag.chars().take(13).collect::<String>());
 
             // Short desc
-            ctx.print_color(51, y, dim, bg, &node.short_desc.chars().take(26).collect::<String>());
+            ctx.print_color(51, y, dim, bg, node.short_desc.chars().take(26).collect::<String>());
         }
 
         // Scroll indicator
         if display.len() > rows_per_page {
             let scroll_pct = self.passive_scroll * 100 / display.len().max(1);
-            ctx.print_color(2, 73, dim, bg, &format!("Showing {}-{} of {}  ({}% scrolled)",
+            ctx.print_color(2, 73, dim, bg, format!("Showing {}-{} of {}  ({}% scrolled)",
                 self.passive_scroll + 1,
                 (self.passive_scroll + rows_per_page).min(display.len()),
                 display.len(), scroll_pct));
@@ -5955,7 +5955,7 @@ impl State {
             for p in &self.particles {
                 let rc = p.render_col();
                 let px = p.x as i32; let py = p.y as i32;
-                if py < 3 || py > 73 || px < 2 || px > 157 { continue; }
+                if !(3..=73).contains(&py) || !(2..=157).contains(&px) { continue; }
                 ctx.print_color(px, py, RGB::from_u8(rc.0, rc.1, rc.2), bg, &p.text);
             }
         }
@@ -5980,7 +5980,7 @@ impl State {
 
         // Combat summary at top
         let summary = p.body.combat_summary();
-        ctx.print_color(2, 3, if summary.contains("CRITICAL") || summary.contains("SEVERED") { dng } else { dim }, bg, &summary.chars().take(155).collect::<String>());
+        ctx.print_color(2, 3, if summary.contains("CRITICAL") || summary.contains("SEVERED") { dng } else { dim }, bg, summary.chars().take(155).collect::<String>());
 
         // Two-column body part display with visual HP bars
         draw_subpanel(ctx, 1, 5, 77, 66, "BODY PARTS", &t);
@@ -6011,8 +6011,8 @@ impl State {
                          else { suc };
                 // Part name + HP numbers
                 let name_str = part.name();
-                ctx.print_color(cx, ry,     hd,  bg, &format!("{:<12}", name_str));
-                ctx.print_color(cx + 12, ry, fg, bg, &format!("{}/{}", cur, max_hp));
+                ctx.print_color(cx, ry,     hd,  bg, format!("{:<12}", name_str));
+                ctx.print_color(cx + 12, ry, fg, bg, format!("{}/{}", cur, max_hp));
                 // Severity label
                 ctx.print_color(cx + 22, ry, fg, bg, sev_lbl);
                 // HP bar (width 32)
@@ -6021,7 +6021,7 @@ impl State {
                 if let Some(state) = p.body.parts.get(&part) {
                     if state.armor_defense > 0 {
                         ctx.print_color(cx + 20, ry + 2, dim, bg,
-                            &format!("DEF+{}", state.armor_defense));
+                            format!("DEF+{}", state.armor_defense));
                     }
                 }
             }
@@ -6034,10 +6034,10 @@ impl State {
         let severed: usize = p.body.parts.values()
             .filter(|s| s.injury.as_ref().map(|i| i.name() == "MATH.ABSENT").unwrap_or(false))
             .count();
-        ctx.print_color(82, 7, hd, bg, &format!("Parts: {}/{} healthy", total_parts - injured, total_parts));
+        ctx.print_color(82, 7, hd, bg, format!("Parts: {}/{} healthy", total_parts - injured, total_parts));
         if injured > 0 {
             ctx.print_color(82, 8, if severed > 0 { dng } else { RGB::from_u8(200,130,40) }, bg,
-                &format!("{} injured{}",
+                format!("{} injured{}",
                     injured,
                     if severed > 0 { format!(", {} SEVERED", severed) } else { String::new() }));
         }
@@ -6049,7 +6049,7 @@ impl State {
                 let pct = if state.max_hp > 0 { state.current_hp as f32 / state.max_hp as f32 } else { 0.0 };
                 let fc = if pct <= 0.0 { dng } else { RGB::from_u8(200,130,40) };
                 ctx.print_color(82, wr, fc, bg,
-                    &format!("{:<12} — {}", part.name().chars().take(12).collect::<String>(), inj.name()));
+                    format!("{:<12} — {}", part.name().chars().take(12).collect::<String>(), inj.name()));
                 wr += 1;
                 if wr > 26 { break; }
             }
@@ -6063,7 +6063,7 @@ impl State {
         for (part, state) in &p.body.parts {
             if state.armor_defense > 0 {
                 ctx.print_color(82, ar, dim, bg,
-                    &format!("{:<12} DEF+{}", part.name().chars().take(12).collect::<String>(), state.armor_defense));
+                    format!("{:<12} DEF+{}", part.name().chars().take(12).collect::<String>(), state.armor_defense));
                 ar += 1;
                 if ar > 50 { break; }
             }
@@ -6077,7 +6077,7 @@ impl State {
         print_hint(ctx, 18, 75, "[C]", " Character Sheet", &t);
         let summary2 = p.body.combat_summary();
         if summary2.contains("CRITICAL") || summary2.contains("SEVERED") {
-            ctx.print_color(42, 75, dng, bg, &format!("⚠ {}", &summary2.chars().take(70).collect::<String>()));
+            ctx.print_color(42, 75, dng, bg, format!("⚠ {}", summary2.chars().take(70).collect::<String>()));
         }
     }
 
@@ -6089,15 +6089,15 @@ impl State {
         let dng = RGB::from_u8(t.danger.0, t.danger.1, t.danger.2);
         let hd  = RGB::from_u8(t.heading.0,t.heading.1,t.heading.2);
         let dim = RGB::from_u8(t.dim.0,    t.dim.1,    t.dim.2);
-        let gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
+        let _gld = RGB::from_u8(t.gold.0,   t.gold.1,   t.gold.2);
         let ac  = RGB::from_u8(t.accent.0, t.accent.1, t.accent.2);
-        let suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
+        let _suc = RGB::from_u8(t.success.0,t.success.1,t.success.2);
 
         self.chaos_bg(ctx);
         draw_panel(ctx, 0, 0, 159, 79, "", &t);
 
         // ── Flashing "YOU DIED" banner — centered in full 160-col screen ──
-        let pulse = if (self.frame / 30) % 2 == 0 { dng } else { hd };
+        let pulse = if (self.frame / 30).is_multiple_of(2) { dng } else { hd };
         ctx.print_color(57, 2, pulse, bg, "╔══════════════════════════════════════════╗");
         ctx.print_color(57, 3, pulse, bg, "║         Y  O  U     D  I  E  D           ║");
         ctx.print_color(57, 4, dng,   bg, "║     The mathematics have consumed you.   ║");
@@ -6110,9 +6110,9 @@ impl State {
             draw_subpanel(ctx, 1, 8, 77, 58, "RUN SUMMARY", &t);
 
             ctx.print_color(3, 10, hd, bg,
-                &format!("{} · {} · Lv.{} · Floor {}", p.name, p.class.name(), p.level, p.floor));
+                format!("{} · {} · Lv.{} · Floor {}", p.name, p.class.name(), p.level, p.floor));
             let cause: String = p.run_stats.cause_of_death.chars().take(70).collect();
-            ctx.print_color(3, 11, dng, bg, &format!("☠  {}", cause));
+            ctx.print_color(3, 11, dng, bg, format!("☠  {}", cause));
 
             draw_separator(ctx, 2, 12, 75, &t);
 
@@ -6143,7 +6143,7 @@ impl State {
             draw_separator(ctx, 2, 19, 75, &t);
             // Run summary log — up to 44 lines
             for (i, line) in p.run_summary().iter().enumerate().take(44) {
-                ctx.print_color(3, 20 + i as i32, dim, bg, &line.chars().take(72).collect::<String>());
+                ctx.print_color(3, 20 + i as i32, dim, bg, line.chars().take(72).collect::<String>());
             }
 
             // ── RIGHT PANEL: run narrative / final events ──────────────────
@@ -6151,7 +6151,7 @@ impl State {
 
             // Cause of death headline
             ctx.print_color(82, 10, dng, bg, "Cause of death:");
-            ctx.print_color(82, 11, hd,  bg, &cause.chars().take(74).collect::<String>());
+            ctx.print_color(82, 11, hd,  bg, cause.chars().take(74).collect::<String>());
 
             draw_separator(ctx, 81, 13, 76, &t);
 
@@ -6168,7 +6168,7 @@ impl State {
 
         if let Some(ref nem) = self.nemesis_record {
             ctx.print_color(2, 68, dng, bg,
-                &format!("☠ {} is now your Nemesis — will return stronger.", &nem.enemy_name.chars().take(50).collect::<String>()));
+                format!("☠ {} is now your Nemesis — will return stronger.", nem.enemy_name.chars().take(50).collect::<String>()));
         }
 
         draw_separator(ctx, 1, 72, 157, &t);
@@ -6209,7 +6209,7 @@ impl State {
             draw_subpanel(ctx, 1, 9, 77, 58, "FINAL STATS", &t);
 
             ctx.print_color(3, 11, hd, bg,
-                &format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
+                format!("{} · {} · Lv.{}", p.name, p.class.name(), p.level));
 
             draw_separator(ctx, 2, 12, 75, &t);
 
@@ -6236,7 +6236,7 @@ impl State {
             // Run summary log — up to 44 lines
             for (i, line) in p.run_summary().iter().enumerate().take(44) {
                 let c = if i == 0 { suc } else { dim };
-                ctx.print_color(3, 20 + i as i32, c, bg, &line.chars().take(72).collect::<String>());
+                ctx.print_color(3, 20 + i as i32, c, bg, line.chars().take(72).collect::<String>());
             }
 
             // ── RIGHT PANEL: narrative / combat log ────────────────────────
@@ -6249,7 +6249,7 @@ impl State {
             for (i, line) in self.combat_log[log_start..].iter().enumerate().take(54) {
                 let y = 13 + i as i32;
                 if y > 64 { break; }
-                ctx.print_color(82, y, dim, bg, &line.chars().take(74).collect::<String>());
+                ctx.print_color(82, y, dim, bg, line.chars().take(74).collect::<String>());
             }
         }
 
@@ -6281,16 +6281,16 @@ impl State {
             ctx.print_color(4, 4, dim, bg, "No scores yet. Play and die bravely.");
         } else {
             ctx.print_color(2, 3, dim, bg,
-                &format!("{:<4} {:<10} {:<16} {:<12} {:<5} {:<5}",
+                format!("{:<4} {:<10} {:<16} {:<12} {:<5} {:<5}",
                     "Rank", "Score", "Name", "Class", "Flr", "Kills"));
             draw_separator(ctx, 2, 4, 75, &t);
             for (i, s) in scores.iter().enumerate().take(30) {
                 let row_col = match i { 0 => gld, 1 => hd, 2 => ac, _ => dim };
                 let medal = match i { 0 => "★ ", 1 => "◆ ", 2 => "● ", _ => "  " };
                 ctx.print_color(2, 5 + i as i32, row_col, bg,
-                    &format!("{}{:<3}  {:<10} {:<16} {:<12} {:<5} {}",
-                        medal, i+1, s.score, &s.name.chars().take(16).collect::<String>(),
-                        &s.class.chars().take(12).collect::<String>(),
+                    format!("{}{:<3}  {:<10} {:<16} {:<12} {:<5} {}",
+                        medal, i+1, s.score, s.name.chars().take(16).collect::<String>(),
+                        s.class.chars().take(12).collect::<String>(),
                         s.floor_reached, s.enemies_defeated));
             }
         }
@@ -6304,7 +6304,7 @@ impl State {
             ctx.print_color(4, misery_y + 2, dim, bg, "No misery recorded. Suffer more.");
         } else {
             ctx.print_color(2, misery_y + 1, dim, bg,
-                &format!("{:<4} {:<8} {:<14} {:<12} {:<5} {:<18}",
+                format!("{:<4} {:<8} {:<14} {:<12} {:<5} {:<18}",
                     "Rank", "Misery", "Name", "Class", "Flr", "Cause of death"));
             draw_separator(ctx, 2, misery_y + 2, 75, &t);
             for (i, m) in mscores.iter().enumerate().take(30) {
@@ -6312,10 +6312,10 @@ impl State {
                 let medal = match i { 0 => "☠ ", 1 => "✦ ", 2 => "● ", _ => "  " };
                 let cause: String = m.cause_of_death.chars().take(18).collect();
                 ctx.print_color(2, misery_y + 3 + i as i32, row_col, bg,
-                    &format!("{}{:<3}  {:<8.0} {:<14} {:<12} {:<5} {}",
+                    format!("{}{:<3}  {:<8.0} {:<14} {:<12} {:<5} {}",
                         medal, i+1, m.misery_index,
-                        &m.name.chars().take(14).collect::<String>(),
-                        &m.class.chars().take(12).collect::<String>(),
+                        m.name.chars().take(14).collect::<String>(),
+                        m.class.chars().take(12).collect::<String>(),
                         m.floor_reached, cause));
             }
         }
@@ -6328,16 +6328,16 @@ impl State {
             ctx.print_color(82, 6, dim, bg, "No scores recorded yet.");
         } else {
             ctx.print_color(82, 5, dim, bg,
-                &format!("{:<4} {:<10} {:<16} {:<12} {:<5} {:<5} Mode",
+                format!("{:<4} {:<10} {:<16} {:<12} {:<5} {:<5} Mode",
                     "Rank", "Score", "Name", "Class", "Flr", "Kills"));
             for (i, s) in scores.iter().enumerate() {
                 let row_col = match i { 0 => gld, 1 => hd, 2 => ac, _ => dim };
                 let medal = match i { 0 => "★ ", 1 => "◆ ", 2 => "● ", _ => "  " };
                 ctx.print_color(82, 6 + i as i32, row_col, bg,
-                    &format!("{}{:<3}  {:<10} {:<16} {:<12} {:<5} {}",
+                    format!("{}{:<3}  {:<10} {:<16} {:<12} {:<5} {}",
                         medal, i+1, s.score,
-                        &s.name.chars().take(16).collect::<String>(),
-                        &s.class.chars().take(12).collect::<String>(),
+                        s.name.chars().take(16).collect::<String>(),
+                        s.class.chars().take(12).collect::<String>(),
                         s.floor_reached, s.enemies_defeated));
                 if 6 + i as i32 > 70 { break; }
             }
@@ -6506,7 +6506,7 @@ impl State {
                             if self.config.leaderboard.fetch_on_open {
                                 match fetch_scores(&url, &date) {
                                     Ok(rows) => { self.daily_status = format!("Updated — {} entries", rows.len()); self.daily_rows = rows; }
-                                    Err(e) => self.daily_status = format!("Fetch error: {}", &e.chars().take(40).collect::<String>()),
+                                    Err(e) => self.daily_status = format!("Fetch error: {}", e.chars().take(40).collect::<String>()),
                                 }
                             }
                         }
@@ -6540,7 +6540,7 @@ impl State {
                                 self.daily_status = format!("Updated — {} entries", rows.len());
                                 self.daily_rows = rows;
                             }
-                            Err(e) => self.daily_status = format!("Fetch error: {}", &e.chars().take(40).collect::<String>()),
+                            Err(e) => self.daily_status = format!("Fetch error: {}", e.chars().take(40).collect::<String>()),
                         }
                     }
                 }
@@ -6694,7 +6694,7 @@ impl State {
                             if let Some(ref mut p) = self.player { p.add_spell(spell); }
                             self.push_log(format!("Learned spell: {}", name));
                         }
-                        if !self.room_event.pending_item.is_some() {
+                        if self.room_event.pending_item.is_none() {
                             self.advance_floor_room();
                             if self.screen != AppScreen::GameOver { self.screen = AppScreen::FloorNav; }
                         }
@@ -7057,7 +7057,7 @@ impl State {
                             self.daily_status = format!("Updated — {} entries", rows.len());
                             self.daily_rows = rows;
                         }
-                        Err(e) => self.daily_status = format!("Error: {}", &e.chars().take(40).collect::<String>()),
+                        Err(e) => self.daily_status = format!("Error: {}", e.chars().take(40).collect::<String>()),
                     }
                 }
                 VirtualKeyCode::Escape | VirtualKeyCode::Q | VirtualKeyCode::Return => {
@@ -7207,7 +7207,7 @@ impl State {
                         }
                         5 | 6 if risk >= 1 => {
                             // Risky-exclusive: double or halve all mods
-                            let coin = seed % 2 == 0;
+                            let coin = seed.is_multiple_of(2);
                             for m in &mut item.stat_modifiers {
                                 if coin { m.value *= 2; } else { m.value /= 2; }
                             }
@@ -7224,7 +7224,7 @@ impl State {
                                 return;
                             } else {
                                 item.is_weapon = !item.is_weapon;
-                                format!("[RECKLESS] item type transmogrified!")
+                                "[RECKLESS] item type transmogrified!".to_string()
                             }
                         }
                         _ => { item.is_weapon = !item.is_weapon; format!("[{}] transmogrified!", tag) }
@@ -7301,7 +7301,7 @@ impl State {
             }
             8 => { // Repair — restore durability
                 let cost = self.player.as_ref().map(|p| {
-                    chaos_rpg_core::crafting::repair_cost(&p.inventory[idx], self.floor_num as u32)
+                    chaos_rpg_core::crafting::repair_cost(&p.inventory[idx], self.floor_num)
                 }).unwrap_or(0);
                 let can_afford = self.player.as_ref().map(|p| p.gold >= cost).unwrap_or(false);
                 if !can_afford {
@@ -7383,24 +7383,7 @@ fn key_to_char(key: bracket_lib::prelude::VirtualKeyCode, shift: bool) -> Option
 
 /// Returns current date as "YYYY-MM-DD" using only std.
 fn chrono_date_simple() -> String {
-    let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    // Days since epoch
-    let days = secs / 86400;
-    // Gregorian calendar calculation
-    let z = days + 719468;
-    let era = z / 146097;
-    let doe = z - era * 146097;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = if m <= 2 { y + 1 } else { y };
-    format!("{:04}-{:02}-{:02}", y, m, d)
+    chaos_rpg_core::time_util::today_utc()
 }
 
 /// Build the shareable plain-text run recap.
@@ -7596,8 +7579,8 @@ impl State {
 
         // Scroll indicator
         if filtered_total > visible {
-            let pct = if max_scroll > 0 { scroll * 100 / max_scroll } else { 100 };
-            ctx.print_color(3, 71, dim, bg, &format!("↑↓ {}/{} ({:3}%)", scroll + 1, filtered_total, pct));
+            let pct = (scroll * 100).checked_div(max_scroll).unwrap_or(100);
+            ctx.print_color(3, 71, dim, bg, format!("↑↓ {}/{} ({:3}%)", scroll + 1, filtered_total, pct));
         }
 
         // ── DIVIDER ──────────────────────────────────────────────────────────
@@ -7609,7 +7592,7 @@ impl State {
         let rx = 82i32;
 
         // Overall progress
-        ctx.print_color(rx, 2, hd, bg, &format!("{}/{} Unlocked", unlocked_count, total));
+        ctx.print_color(rx, 2, hd, bg, format!("{}/{} Unlocked", unlocked_count, total));
         let bar_w = 72i32;
         let filled = if total > 0 { (unlocked_count as i32 * bar_w) / total as i32 } else { 0 };
         for i in 0..bar_w {
@@ -7623,7 +7606,7 @@ impl State {
         let mut fx = rx;
         for (i, (lbl, cnt)) in filter_labels.iter().zip(filter_counts.iter()).enumerate() {
             let col = if self.achievement_filter == i as u8 { ac } else { dim };
-            ctx.print_color(fx, 5, col, bg, &format!("{} {}", lbl, cnt));
+            ctx.print_color(fx, 5, col, bg, format!("{} {}", lbl, cnt));
             fx += lbl.len() as i32 + cnt.to_string().len() as i32 + 2;
         }
 
@@ -7679,7 +7662,7 @@ impl State {
             let cat_bar_w = 20i32;
             let cat_fill  = if cat_total > 0 { (cat_done as i32 * cat_bar_w) / cat_total as i32 } else { 0 };
             let col = if cat_done == cat_total { gld } else if cat_done > 0 { suc } else { dim };
-            ctx.print_color(rx, cy, col, bg, &format!("{:.<18} {:2}/{}", cat_name, cat_done, cat_total));
+            ctx.print_color(rx, cy, col, bg, format!("{:.<18} {:2}/{}", cat_name, cat_done, cat_total));
             for i in 0..cat_bar_w {
                 ctx.print_color(rx + 24 + i, cy, if i < cat_fill { suc } else { muted }, bg,
                     if i < cat_fill { "▪" } else { "·" });
@@ -7709,7 +7692,7 @@ impl State {
             let r_total = all.iter().filter(|a| std::mem::discriminant(&a.rarity) == std::mem::discriminant(rarity)).count();
             let r_done  = all.iter().filter(|a| std::mem::discriminant(&a.rarity) == std::mem::discriminant(rarity)
                 && self.achievements.is_unlocked(&a.id)).count();
-            ctx.print_color(rx, cy, rc, bg, &format!("■ {:9} {:2}/{}", name, r_done, r_total));
+            ctx.print_color(rx, cy, rc, bg, format!("■ {:9} {:2}/{}", name, r_done, r_total));
             cy += 1;
         }
 
@@ -7740,7 +7723,7 @@ impl State {
         let total = runs.len();
 
         ctx.print_color(4, 2, hd, bg,
-            &format!("Last {} runs  (newest first) — ↑↓ to scroll", total.min(100)));
+            format!("Last {} runs  (newest first) — ↑↓ to scroll", total.min(100)));
 
         draw_separator(ctx, 2, 3, 155, &t);
 
@@ -7771,25 +7754,25 @@ impl State {
 
             let date_str: String = rec.date.chars().take(10).collect();
             ctx.print_color(4,   y, muted, bg, &date_str);
-            ctx.print_color(16,  y, hd,    bg, &rec.name.chars().take(10).collect::<String>());
-            ctx.print_color(28,  y, dim,   bg, &rec.class.chars().take(12).collect::<String>());
-            ctx.print_color(42,  y, gld,   bg, &format!("{}", rec.floor));
-            ctx.print_color(47,  y, ac,    bg, &format!("{}", rec.score));
-            ctx.print_color(58,  y, suc,   bg, &format!("{}", rec.kills));
-            ctx.print_color(65,  y, dim,   bg, &rec.game_mode.chars().take(8).collect::<String>());
-            ctx.print_color(74,  y, dim,   bg, &rec.difficulty.chars().take(6).collect::<String>());
-            ctx.print_color(82,  y, gld,   bg, &format!("{}", rec.gold));
-            ctx.print_color(90,  y, dim,   bg, &rec.power_tier.chars().take(10).collect::<String>());
+            ctx.print_color(16,  y, hd,    bg, rec.name.chars().take(10).collect::<String>());
+            ctx.print_color(28,  y, dim,   bg, rec.class.chars().take(12).collect::<String>());
+            ctx.print_color(42,  y, gld,   bg, format!("{}", rec.floor));
+            ctx.print_color(47,  y, ac,    bg, format!("{}", rec.score));
+            ctx.print_color(58,  y, suc,   bg, format!("{}", rec.kills));
+            ctx.print_color(65,  y, dim,   bg, rec.game_mode.chars().take(8).collect::<String>());
+            ctx.print_color(74,  y, dim,   bg, rec.difficulty.chars().take(6).collect::<String>());
+            ctx.print_color(82,  y, gld,   bg, format!("{}", rec.gold));
+            ctx.print_color(90,  y, dim,   bg, rec.power_tier.chars().take(10).collect::<String>());
             ctx.print_color(101, y, result_col, bg, result_str);
             if !rec.won {
-                ctx.print_color(108, y, dim, bg, &rec.cause_of_death.chars().take(47).collect::<String>());
+                ctx.print_color(108, y, dim, bg, rec.cause_of_death.chars().take(47).collect::<String>());
             }
         }
 
         // Scroll indicator
         if total > visible_rows {
             let pct = if total > 1 { start * 100 / (total - 1) } else { 0 };
-            ctx.print_color(150, 6, dim, bg, &format!("{}%", pct));
+            ctx.print_color(150, 6, dim, bg, format!("{}%", pct));
         }
 
         draw_separator(ctx, 2, 74, 155, &t);
@@ -7818,7 +7801,7 @@ impl State {
 
         // Today's seed
         let daily_seed = State::daily_seed();
-        ctx.print_color(4, 2, muted, bg, &format!("Today's seed: {}   ", daily_seed));
+        ctx.print_color(4, 2, muted, bg, format!("Today's seed: {}   ", daily_seed));
         ctx.print_color(4, 3, dim, bg,
             "Same dungeon for everyone today. Rankings by score.");
 
@@ -7828,14 +7811,14 @@ impl State {
         } else if self.daily_status.starts_with("Submit") || self.daily_status.starts_with("Updated") {
             suc
         } else { dim };
-        ctx.print_color(4, 4, status_col, bg, &self.daily_status.chars().take(70).collect::<String>());
+        ctx.print_color(4, 4, status_col, bg, self.daily_status.chars().take(70).collect::<String>());
 
         draw_separator(ctx, 2, 5, 155, &t);
 
         // My best today
         if let Some(best) = self.daily_store.best_for_today(&today) {
             ctx.print_color(4, 6, hd, bg, "Your best today:");
-            ctx.print_color(4, 7, gld, bg, &format!(
+            ctx.print_color(4, 7, gld, bg, format!(
                 "  {}/{} — Floor {}  Score {}  Kills {}  {}",
                 best.name, best.class, best.floor, best.score, best.kills,
                 if best.won { "[WON]" } else { "" }
@@ -7869,12 +7852,12 @@ impl State {
                     _ => muted,
                 };
                 let result_col = if row.won { suc } else { dng };
-                ctx.print_color(4,  y, rank_col, bg, &format!("#{:<4}", row.rank));
-                ctx.print_color(11, y, hd,       bg, &row.name.chars().take(11).collect::<String>());
-                ctx.print_color(24, y, dim,      bg, &row.class.chars().take(12).collect::<String>());
-                ctx.print_color(38, y, gld,      bg, &format!("{}", row.floor));
-                ctx.print_color(45, y, ac,       bg, &format!("{}", row.score));
-                ctx.print_color(57, y, suc,      bg, &format!("{}", row.kills));
+                ctx.print_color(4,  y, rank_col, bg, format!("#{:<4}", row.rank));
+                ctx.print_color(11, y, hd,       bg, row.name.chars().take(11).collect::<String>());
+                ctx.print_color(24, y, dim,      bg, row.class.chars().take(12).collect::<String>());
+                ctx.print_color(38, y, gld,      bg, format!("{}", row.floor));
+                ctx.print_color(45, y, ac,       bg, format!("{}", row.score));
+                ctx.print_color(57, y, suc,      bg, format!("{}", row.kills));
                 ctx.print_color(64, y, result_col, bg, if row.won { "WON" } else { "died" });
             }
         }
@@ -7883,7 +7866,7 @@ impl State {
         print_hint(ctx, 4,  75, "[R]",   " Refresh   ", &t);
         print_hint(ctx, 18, 75, "[Esc]", " Back to title", &t);
         ctx.print_color(40, 75, muted, bg,
-            &format!("Endpoint: {}", &self.config.leaderboard.url.chars().take(70).collect::<String>()));
+            format!("Endpoint: {}", self.config.leaderboard.url.chars().take(70).collect::<String>()));
     }
 }
 
@@ -7896,9 +7879,9 @@ impl State {
         let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
         let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
-        let gld  = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
+        let _gld  = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
         let dim  = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
-        let dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
+        let _dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
         let suc  = RGB::from_u8(t.success.0, t.success.1, t.success.2);
         let muted = RGB::from_u8(t.muted.0,  t.muted.1,   t.muted.2);
 
@@ -7914,7 +7897,7 @@ impl State {
         // Right panel (cols 54-159): selected enemy detail
 
         // Header
-        ctx.print_color(2, 1, hd, bg, &format!("{} enemies encountered", total_entries));
+        ctx.print_color(2, 1, hd, bg, format!("{} enemies encountered", total_entries));
         ctx.print_color(90, 1, muted, bg, "↑↓ Navigate  Enter/→ Select  ← Back  Esc Return");
         draw_separator(ctx, 1, 2, 157, &t);
 
@@ -7951,30 +7934,30 @@ impl State {
                     ctx.set(xi, y, bg, bar_bg, 32u16);
                 }
                 ctx.print_color(2, y, RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg,
-                    &format!("{}{} {}  ×{} killed",
+                    format!("{}{} {}  ×{} killed",
                         cursor_char(self.frame), lore_marker,
-                        &rec.name.chars().take(24).collect::<String>(),
+                        rec.name.chars().take(24).collect::<String>(),
                         rec.times_killed));
             } else {
                 ctx.print_color(2, y, hd, bg,
-                    &format!(" {} {:<24} {}", lore_marker,
-                        &rec.name.chars().take(24).collect::<String>(),
+                    format!(" {} {:<24} {}", lore_marker,
+                        rec.name.chars().take(24).collect::<String>(),
                         rec.times_fought));
-                ctx.print_color(42, y, kill_col, bg, &format!("×{}", rec.times_killed));
+                ctx.print_color(42, y, kill_col, bg, format!("×{}", rec.times_killed));
             }
         }
 
         // Scroll indicator
         if total_entries > visible {
             let pct = if total_entries > 1 { start * 100 / (total_entries - 1) } else { 0 };
-            ctx.print_color(2, 68, muted, bg, &format!("{}/{} ({}%)", start + 1, total_entries, pct));
+            ctx.print_color(2, 68, muted, bg, format!("{}/{} ({}%)", start + 1, total_entries, pct));
         }
 
         // ── Right: detail panel ───────────────────────────────────────────────
         draw_subpanel(ctx, 53, 3, 104, 70, "DETAIL", &t);
 
         if let Some(&rec) = entries.get(self.bestiary_selected) {
-            ctx.print_color(55, 5, hd, bg, &rec.name.chars().take(60).collect::<String>());
+            ctx.print_color(55, 5, hd, bg, rec.name.chars().take(60).collect::<String>());
             draw_separator(ctx, 54, 6, 102, &t);
 
             // Stats
@@ -7989,7 +7972,7 @@ impl State {
 
             // Lore entry
             if let Some(lore) = chaos_rpg_core::lore::enemies::enemy_lore(&rec.name) {
-                ctx.print_color(55, 12, ac, bg, &format!("★ {}", lore.name));
+                ctx.print_color(55, 12, ac, bg, format!("★ {}", lore.name));
                 let mut ly = 14i32;
                 let mut lline = String::new();
                 for w in lore.description.split_whitespace() {
@@ -8021,7 +8004,7 @@ impl State {
         let t = self.theme_graded();
         let bg   = RGB::from_u8(t.bg.0,      t.bg.1,      t.bg.2);
         let hd   = RGB::from_u8(t.heading.0, t.heading.1, t.heading.2);
-        let ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
+        let _ac   = RGB::from_u8(t.accent.0,  t.accent.1,  t.accent.2);
         let gld  = RGB::from_u8(t.gold.0,    t.gold.1,    t.gold.2);
         let dim  = RGB::from_u8(t.dim.0,     t.dim.1,     t.dim.2);
         let dng  = RGB::from_u8(t.danger.0,  t.danger.1,  t.danger.2);
@@ -8036,7 +8019,7 @@ impl State {
         let unlocked_count = progress.unlocked_entries.len();
 
         // Header
-        ctx.print_color(2, 1, hd, bg, &format!("{}/{} entries unlocked", unlocked_count, total));
+        ctx.print_color(2, 1, hd, bg, format!("{}/{} entries unlocked", unlocked_count, total));
         ctx.print_color(90, 1, muted, bg, "↑↓ Navigate  Enter/→ Select  ← Back  Esc Return");
         draw_separator(ctx, 1, 2, 157, &t);
 
@@ -8071,20 +8054,20 @@ impl State {
                     (t.accent.2 as u16 * 15 / 100) as u8);
                 for xi in 2..52 { ctx.set(xi, y, bg, bar_bg, 32u16); }
                 ctx.print_color(2, y, RGB::from_u8(t.selected.0, t.selected.1, t.selected.2), bg,
-                    &format!("{}{} {:<26} {}", cursor_char(self.frame), lock_marker,
-                        &entry.title.chars().take(26).collect::<String>(),
-                        &cat_str.chars().take(10).collect::<String>()));
+                    format!("{}{} {:<26} {}", cursor_char(self.frame), lock_marker,
+                        entry.title.chars().take(26).collect::<String>(),
+                        cat_str.chars().take(10).collect::<String>()));
             } else {
                 ctx.print_color(2, y, lock_col, bg, lock_marker);
                 ctx.print_color(4, y, name_col, bg,
-                    &format!("{:<28} {}", &entry.title.chars().take(28).collect::<String>(),
-                        &cat_str.chars().take(10).collect::<String>()));
+                    format!("{:<28} {}", entry.title.chars().take(28).collect::<String>(),
+                        cat_str.chars().take(10).collect::<String>()));
             }
         }
 
         if total > visible {
             let pct = if total > 1 { start * 100 / (total - 1) } else { 0 };
-            ctx.print_color(2, 68, muted, bg, &format!("{}/{} ({}%)", start + 1, total, pct));
+            ctx.print_color(2, 68, muted, bg, format!("{}/{} ({}%)", start + 1, total, pct));
         }
 
         // ── Right: detail panel ───────────────────────────────────────────────
@@ -8094,7 +8077,7 @@ impl State {
             let is_unlocked = progress.unlocked_entries.contains(entry.id);
             let cat_str = format!("{:?}", entry.category);
             ctx.print_color(55, 5, if is_unlocked { hd } else { muted }, bg,
-                &entry.title.chars().take(60).collect::<String>());
+                entry.title.chars().take(60).collect::<String>());
             ctx.print_color(55, 6, gld, bg, &cat_str);
             ctx.print_color(120, 6, if is_unlocked { suc } else { dng }, bg,
                 if is_unlocked { "★ UNLOCKED" } else { "· locked" });

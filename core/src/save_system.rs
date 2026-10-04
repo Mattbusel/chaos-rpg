@@ -19,10 +19,14 @@
 
 // ─── Error ────────────────────────────────────────────────────────────────────
 
+/// Why a save could not be read.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SaveError {
+    /// The text is not in the expected `key=value` format.
     InvalidFormat(String),
+    /// A required field is missing.
     MissingField(String),
+    /// The slot number is out of range.
     InvalidSlot,
 }
 
@@ -38,12 +42,18 @@ impl std::fmt::Display for SaveError {
 
 // ─── Data structures ─────────────────────────────────────────────────────────
 
+/// Combat stats kept in a save.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlayerStats {
+    /// Maximum HP.
     pub max_hp: u32,
+    /// HP at save time.
     pub current_hp: u32,
+    /// Attack.
     pub attack: u32,
+    /// Defense.
     pub defense: u32,
+    /// Experience points.
     pub experience: u64,
 }
 
@@ -59,14 +69,22 @@ impl Default for PlayerStats {
     }
 }
 
+/// One saved game.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SaveData {
+    /// Player name.
     pub player_name: String,
+    /// Character level.
     pub level: u32,
+    /// Gold held.
     pub gold: u32,
+    /// Floor the player is on.
     pub current_floor: u32,
+    /// Ids of completed quests.
     pub completed_quests: Vec<String>,
+    /// Item names held.
     pub inventory: Vec<String>,
+    /// Combat stats.
     pub stats: PlayerStats,
 }
 
@@ -86,6 +104,7 @@ impl Default for SaveData {
 
 // ─── Serializer ───────────────────────────────────────────────────────────────
 
+/// Converts a [`SaveData`] to and from the `key=value` text format.
 pub struct SaveSerializer;
 
 impl SaveSerializer {
@@ -197,11 +216,14 @@ impl SaveSerializer {
 
 // ─── Save Manager ─────────────────────────────────────────────────────────────
 
+/// Reads and writes numbered save slots in one combined text.
 pub struct SaveManager {
+    /// Number of slots (valid slots are 0 to `slot_count - 1`).
     pub slot_count: usize,
 }
 
 impl SaveManager {
+    /// A manager with `slot_count` slots.
     pub fn new(slot_count: usize) -> Self {
         Self { slot_count }
     }

@@ -9,13 +9,17 @@ use std::collections::HashMap;
 
 // ─── INGREDIENT ───────────────────────────────────────────────────────────────
 
+/// An item and how many of it a recipe needs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Ingredient {
+    /// Item name, matched against inventory keys.
     pub item_name: String,
+    /// How many are needed.
     pub quantity: u32,
 }
 
 impl Ingredient {
+    /// An ingredient of `quantity` units of `item_name`.
     pub fn new(item_name: impl Into<String>, quantity: u32) -> Self {
         Ingredient {
             item_name: item_name.into(),
@@ -26,16 +30,23 @@ impl Ingredient {
 
 // ─── CRAFTING STATION ─────────────────────────────────────────────────────────
 
+/// Where a recipe has to be crafted.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CraftingStation {
+    /// A smith's anvil, for weapons and metalwork.
     Anvil,
+    /// An alchemy table, for potions.
     Alchemist,
+    /// A general workbench, for tools and ammunition.
     Workbench,
+    /// A magic forge, for enchanted gear.
     MagicForge,
+    /// A campfire, for cooking.
     Campfire,
 }
 
 impl CraftingStation {
+    /// Name shown to the player.
     pub fn name(&self) -> &str {
         match self {
             CraftingStation::Anvil => "Anvil",
@@ -49,19 +60,29 @@ impl CraftingStation {
 
 // ─── RECIPE ───────────────────────────────────────────────────────────────────
 
+/// A crafting recipe: ingredients in, item out.
 #[derive(Debug, Clone)]
 pub struct Recipe {
+    /// Unique recipe identifier.
     pub id: String,
+    /// Name shown to the player.
     pub name: String,
+    /// Items consumed.
     pub ingredients: Vec<Ingredient>,
+    /// Item produced.
     pub result_item: String,
+    /// How many of the item are produced.
     pub result_quantity: u32,
+    /// Minimum player level to craft it.
     pub required_level: u32,
+    /// Turns crafting takes.
     pub crafting_time_turns: u32,
+    /// Station the recipe belongs to.
     pub station: CraftingStation,
 }
 
 impl Recipe {
+    /// Built-in recipe: 3 Iron Ingot and 1 Wood Handle at an anvil make an Iron Sword.
     pub fn iron_sword() -> Self {
         Recipe {
             id: "iron_sword".to_string(),
@@ -78,6 +99,7 @@ impl Recipe {
         }
     }
 
+    /// Built-in recipe: 2 Red Herb and 1 Water Vial at an alchemy table make a Health Potion.
     pub fn health_potion() -> Self {
         Recipe {
             id: "health_potion".to_string(),
@@ -94,6 +116,7 @@ impl Recipe {
         }
     }
 
+    /// Built-in recipe (level 10): 2 Arcane Wood, 3 Mana Crystal and 1 Silver Wire at a magic forge make a Magic Staff.
     pub fn magic_staff() -> Self {
         Recipe {
             id: "magic_staff".to_string(),
@@ -111,6 +134,7 @@ impl Recipe {
         }
     }
 
+    /// Built-in recipe: 5 Feather, 5 Stick and 2 Flint at a workbench make 20 arrows.
     pub fn arrow_bundle() -> Self {
         Recipe {
             id: "arrow_bundle".to_string(),
@@ -128,6 +152,7 @@ impl Recipe {
         }
     }
 
+    /// Built-in recipe (level 3): 2 Wire and 1 Small File at a workbench make 3 Lockpicks.
     pub fn lockpick() -> Self {
         Recipe {
             id: "lockpick".to_string(),
@@ -147,11 +172,24 @@ impl Recipe {
 
 // ─── CRAFTING ERROR ───────────────────────────────────────────────────────────
 
+/// Why a recipe cannot be crafted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CraftingError {
+    /// No recipe with that id.
     UnknownRecipe,
-    InsufficientMaterials { missing: Vec<Ingredient> },
-    InsufficientLevel { required: u32, have: u32 },
+    /// Some ingredients are missing.
+    InsufficientMaterials {
+        /// What is still needed, with the missing quantity of each.
+        missing: Vec<Ingredient>,
+    },
+    /// The player's level is too low.
+    InsufficientLevel {
+        /// Level the recipe needs.
+        required: u32,
+        /// The player's level.
+        have: u32,
+    },
+    /// The recipe needs this station.
     StationRequired(CraftingStation),
 }
 
@@ -181,9 +219,12 @@ impl std::fmt::Display for CraftingError {
 
 // ─── CRAFTING RESULT ──────────────────────────────────────────────────────────
 
+/// What a successful craft produced.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CraftingResult {
+    /// Item produced.
     pub item_name: String,
+    /// How many were produced.
     pub quantity: u32,
     /// True if player level > recipe.required_level + 5 and the 10% bonus triggered.
     pub bonus_quality: bool,
@@ -191,12 +232,14 @@ pub struct CraftingResult {
 
 // ─── RECIPE BOOK ──────────────────────────────────────────────────────────────
 
+/// All known recipes, keyed by id.
 #[derive(Debug, Default)]
 pub struct RecipeBook {
     recipes: HashMap<String, Recipe>,
 }
 
 impl RecipeBook {
+    /// An empty recipe book.
     pub fn new() -> Self {
         RecipeBook::default()
     }
@@ -251,6 +294,7 @@ impl RecipeBook {
         Ok(())
     }
 
+    /// Look up a recipe by id.
     pub fn get(&self, recipe_id: &str) -> Option<&Recipe> {
         self.recipes.get(recipe_id)
     }
@@ -258,13 +302,16 @@ impl RecipeBook {
 
 // ─── CRAFTING MANAGER ─────────────────────────────────────────────────────────
 
+/// Crafts recipes against an inventory, with a chance of a bonus-quality result.
 pub struct CraftingManager {
+    /// Recipes this manager can craft.
     pub recipe_book: RecipeBook,
     /// LCG state for bonus quality rolls.
     rng_state: u64,
 }
 
 impl CraftingManager {
+    /// A manager using `recipe_book`.
     pub fn new(recipe_book: RecipeBook) -> Self {
         CraftingManager {
             recipe_book,

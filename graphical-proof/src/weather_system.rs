@@ -64,6 +64,12 @@ pub struct WeatherState {
     pub fog_density: f32,
 }
 
+impl Default for WeatherState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WeatherState {
     pub fn new() -> Self {
         Self {
@@ -224,7 +230,7 @@ impl WeatherState {
                     let y = seed_f.cos() * 9.0;
                     let spark = (seed_f * 7.1 + self.time).sin().abs() * 0.3;
                     engine.spawn_glyph(Glyph {
-                        character: if (frame + i) % 4 == 0 { '⚡' } else { '·' },
+                        character: if (frame + i).is_multiple_of(4) { '⚡' } else { '·' },
                         position: Vec3::new(x, y, -1.0),
                         color: Vec4::new(1.0 * spark, 0.9 * spark, 0.3 * spark, spark),
                         emission: spark,

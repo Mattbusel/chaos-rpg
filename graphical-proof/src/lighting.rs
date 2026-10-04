@@ -62,6 +62,12 @@ pub struct StatusLight {
     pub status_type: u8, // bitmask: 1=burn, 2=freeze, 4=poison, 16=stun
 }
 
+impl Default for SceneLighting {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SceneLighting {
     pub fn new() -> Self {
         Self {

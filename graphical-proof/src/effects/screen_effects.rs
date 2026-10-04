@@ -305,7 +305,7 @@ impl UnderwaterEffect {
             let speed = hash_range(seed.wrapping_add(1), 1.0, 3.0);
             let phase = hash_f32(seed.wrapping_add(2));
             let raw_y = -5.0 + ((frame as f32 * 0.016 * speed + phase * 15.0) % 11.0);
-            let wobble = (frame as f32 * 0.03 + phase * 6.28).sin() * 0.3;
+            let wobble = (frame as f32 * 0.03 + phase * std::f32::consts::TAU).sin() * 0.3;
             let alpha = 0.3 + hash_f32(seed.wrapping_add(3)) * 0.3;
 
             engine.spawn_glyph(Glyph {

@@ -175,7 +175,7 @@ impl SnowSystem {
             let drift_amp = hash_range(seed.wrapping_add(3), 0.3, 1.2);
 
             let raw_y = 6.0 - ((frame as f32 * 0.016 * speed + phase * 20.0) % 12.0);
-            let drift = (frame as f32 * 0.016 * 1.5 + phase * 6.28).sin() * drift_amp;
+            let drift = (frame as f32 * 0.016 * 1.5 + phase * std::f32::consts::TAU).sin() * drift_amp;
             let x = base_x + drift;
             let y = raw_y;
 
@@ -304,7 +304,7 @@ impl FireAmbient {
             let speed = hash_range(seed.wrapping_add(2), 1.0, 3.0);
             let phase = hash_f32(seed.wrapping_add(3));
             let raw_y = -5.0 + ((frame as f32 * 0.016 * speed + phase * 15.0) % 11.0);
-            let wobble = (frame as f32 * 0.03 + phase * 6.28).sin() * 0.4;
+            let wobble = (frame as f32 * 0.03 + phase * std::f32::consts::TAU).sin() * 0.4;
 
             let life_frac = (raw_y + 5.0) / 11.0; // 0 at bottom, 1 at top
             let alpha = (1.0 - life_frac) * 0.8 * self.intensity;

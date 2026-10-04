@@ -78,6 +78,7 @@ pub enum EffectKind {
 }
 
 impl EffectKind {
+    /// Name shown in the combat log, in capitals.
     pub fn name(self) -> &'static str {
         match self {
             EffectKind::Enraged => "ENRAGED",
@@ -98,6 +99,7 @@ impl EffectKind {
         }
     }
 
+    /// Whether the effect helps whoever has it (Enraged, Blessed, Regenerating, Focused Aim, Armor Pierce, Hasted).
     pub fn is_buff(self) -> bool {
         matches!(
             self,
@@ -110,6 +112,7 @@ impl EffectKind {
         )
     }
 
+    /// Whether the effect hurts whoever has it.
     pub fn is_debuff(self) -> bool {
         matches!(
             self,
@@ -143,6 +146,7 @@ impl EffectKind {
 /// A single active status effect with its remaining duration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveEffect {
+    /// Which effect it is.
     pub kind: EffectKind,
     /// Remaining turns before the effect expires. `u32::MAX` = permanent.
     pub turns_remaining: u32,
@@ -166,18 +170,26 @@ impl ActiveEffect {
 /// An event produced by [`StatusRegistry::tick`] — suitable for the combat log.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TickEvent {
+    /// Effect that produced the event.
     pub kind: EffectKind,
+    /// What happened.
     pub event_type: TickEventType,
+    /// Combat log text.
     pub description: String,
     /// HP delta (positive = gained, negative = lost) caused by this tick.
     pub hp_delta: i64,
 }
 
+/// What a status effect did on a turn tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TickEventType {
+    /// Damage over time was dealt (burning, poison).
     DotDamage,
+    /// Healing over time was applied (regeneration).
     HotHeal,
+    /// The effect ran out.
     Expired,
+    /// The effect is still running with no HP change.
     Ongoing,
 }
 
@@ -190,6 +202,7 @@ pub struct StatusRegistry {
 }
 
 impl StatusRegistry {
+    /// An empty registry with no effects.
     pub fn new() -> Self {
         Self::default()
     }
@@ -434,24 +447,25 @@ impl StatusRegistry {
 /// Convert from the `character::StatusEffect` enum to the new registry.
 /// This allows incremental migration while keeping the old interface working.
 impl StatusRegistry {
+    /// Build a registry from the older `character::StatusEffect` list, keeping each effect's remaining turns.
     pub fn from_legacy_statuses(statuses: &[crate::character::StatusEffect]) -> Self {
         let mut reg = Self::new();
         for s in statuses {
             match s {
                 crate::character::StatusEffect::Enraged(t) => {
-                    reg.apply(EffectKind::Enraged, *t as u32);
+                    reg.apply(EffectKind::Enraged, (*t));
                 }
                 crate::character::StatusEffect::Blessed(t) => {
-                    reg.apply(EffectKind::Blessed, *t as u32);
+                    reg.apply(EffectKind::Blessed, (*t));
                 }
                 crate::character::StatusEffect::Burning(t) => {
-                    reg.apply(EffectKind::Burning, *t as u32);
+                    reg.apply(EffectKind::Burning, (*t));
                 }
                 crate::character::StatusEffect::Poisoned(t) => {
-                    reg.apply(EffectKind::Poisoned, *t as u32);
+                    reg.apply(EffectKind::Poisoned, (*t));
                 }
                 crate::character::StatusEffect::Stunned(t) => {
-                    reg.apply(EffectKind::Stunned, *t as u32);
+                    reg.apply(EffectKind::Stunned, (*t));
                 }
                 _ => {} // Other effects not yet mirrored in the registry
             }

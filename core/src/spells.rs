@@ -9,19 +9,28 @@ use serde::{Deserialize, Serialize};
 
 // ─── SPELL SCHOOL ────────────────────────────────────────────────────────────
 
+/// School of a spell; decides which stat it scales with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum SpellSchool {
+    /// Scales with Force.
     Fire,
+    /// Scales with Precision.
     Ice,
+    /// Scales with Entropy.
     Lightning,
+    /// Scales with Mana.
     Arcane,
+    /// Scales with Vitality.
     Nature,
+    /// Scales with Cunning.
     Shadow,
+    /// Scales with Luck; the default school.
     #[default]
     Chaos,
 }
 
 impl SpellSchool {
+    /// School name shown to the player.
     pub fn name(&self) -> &'static str {
         match self {
             SpellSchool::Fire => "Fire",
@@ -34,6 +43,7 @@ impl SpellSchool {
         }
     }
 
+    /// Name of the stat the school scales with.
     pub fn scaling_stat(&self) -> &'static str {
         match self {
             SpellSchool::Fire => "Force",
@@ -59,6 +69,7 @@ impl SpellSchool {
         }
     }
 
+    /// One-character icon for the school.
     pub fn icon(&self) -> &'static str {
         match self {
             SpellSchool::Fire => "*",
@@ -317,24 +328,38 @@ const SIDE_EFFECTS: &[&str] = &[
 
 // ─── SPELL STRUCT ────────────────────────────────────────────────────────────
 
+/// A generated spell.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Spell {
+    /// Spell name.
     pub name: String,
+    /// Base damage; negative values heal.
     pub damage: i64,      // can be negative (heals)
+    /// Mana cost; negative values give mana.
     pub mana_cost: i64,   // can be negative (gives mana)
+    /// Area: 0 hits one target, above 0 is a radius, below 0 also hits your own side.
     pub aoe_radius: i64,  // 0=single, >0=radius, <0=hits own party
+    /// Extra effect text.
     pub side_effect: String,
+    /// Stat added to the damage.
     pub scaling_stat: String,
+    /// How much of the scaling stat is added.
     pub scaling_factor: f64,
+    /// Chaos engines that generated the spell.
     pub engines_used: Vec<String>,
+    /// School of the spell.
     #[serde(default)]
     pub school: SpellSchool,
+    /// Turns between casts; 0 means no cooldown.
     #[serde(default)]
     pub cooldown: u32,          // max cooldown in turns (0 = no cooldown)
+    /// Turns until it can be cast again.
     #[serde(default)]
     pub current_cooldown: u32,  // turns until ready
+    /// Spell level, starting at 1 and going up every 5 casts (+10% damage per level).
     #[serde(default = "default_spell_level")]
     pub spell_level: u32,       // 1-based; increases every 5 casts
+    /// Times the spell has been cast.
     #[serde(default)]
     pub casts: u32,             // total times cast
 }
@@ -398,10 +423,12 @@ impl Spell {
 
     // ─── Cooldown / Level ────────────────────────────────────────────────────
 
+    /// Whether the cooldown is over.
     pub fn is_ready(&self) -> bool {
         self.current_cooldown == 0
     }
 
+    /// Count the cooldown down by one turn.
     pub fn tick_cooldown(&mut self) {
         if self.current_cooldown > 0 {
             self.current_cooldown -= 1;
@@ -434,6 +461,7 @@ impl Spell {
 
     // ─── Display ─────────────────────────────────────────────────────────────
 
+    /// The spell as a framed text box for the terminal frontend, one string per line.
     pub fn display_box(&self) -> Vec<String> {
         let color = self.school.color();
         let reset = "\x1b[0m";

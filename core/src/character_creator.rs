@@ -11,11 +11,17 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatMethod {
     /// Player assigns points from a budget (8–15 range per stat).
-    PointBuy { points: u32 },
+    PointBuy {
+        /// Point budget to spend.
+        points: u32,
+    },
     /// Classic array: [15, 14, 13, 12, 10, 8].
     StandardArray,
     /// Roll 4d6, drop the lowest die, repeat six times.
-    RollFourDropOne { seed: u64 },
+    RollFourDropOne {
+        /// Seed for the dice rolls (same seed, same stats).
+        seed: u64,
+    },
     /// Caller supplies stats directly (no validation).
     Manual,
 }
@@ -25,13 +31,21 @@ pub enum StatMethod {
 /// Character backgrounds, each granting skill proficiencies and starting gear.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Background {
+    /// Temple servant; Insight and Religion.
     Acolyte,
+    /// Lawbreaker; Deception and Stealth.
     Criminal,
+    /// Local hero of common folk; Animal Handling and Survival.
     FolkHero,
+    /// Born to privilege; History and Persuasion.
     Noble,
+    /// Scholar; Arcana and History.
     Sage,
+    /// Former soldier; Athletics and Intimidation.
     Soldier,
+    /// Raised in the wilds; Athletics and Survival.
     Outlander,
+    /// Performer; Acrobatics and Performance.
     Entertainer,
 }
 
@@ -136,11 +150,17 @@ impl std::fmt::Display for Background {
 /// Racial traits applied to a character sheet.
 #[derive(Debug, Clone)]
 pub struct RaceTraits {
+    /// Race name.
     pub name: String,
+    /// Stat bonuses by stat name.
     pub stat_bonuses: HashMap<String, i32>,
+    /// Racial traits, by name.
     pub traits: Vec<String>,
+    /// Walking speed in feet per turn.
     pub speed_ft: u32,
+    /// Size category, for example "Medium".
     pub size: String,
+    /// Languages known.
     pub languages: Vec<String>,
 }
 
@@ -149,14 +169,23 @@ pub struct RaceTraits {
 /// A completed character sheet produced by `CharacterCreator::create`.
 #[derive(Debug, Clone)]
 pub struct CharacterSheet {
+    /// Character name.
     pub name: String,
+    /// Race name.
     pub race: String,
+    /// Class name.
     pub class: String,
+    /// Character level.
     pub level: u32,
+    /// Ability scores by stat name.
     pub stats: HashMap<String, u8>,
+    /// Background.
     pub background: Background,
+    /// Skill proficiencies.
     pub skills: Vec<String>,
+    /// Personality text.
     pub personality: String,
+    /// Backstory text.
     pub backstory: String,
 }
 
@@ -462,7 +491,7 @@ mod tests {
         let rolls = CharacterCreator::roll_stats(12345);
         assert_eq!(rolls.len(), 6);
         for &r in &rolls {
-            assert!(r >= 3 && r <= 18, "roll {} out of range", r);
+            assert!((3..=18).contains(&r), "roll {} out of range", r);
         }
     }
 

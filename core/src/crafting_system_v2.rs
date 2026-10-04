@@ -5,15 +5,22 @@ use std::collections::{HashMap, HashSet};
 // ── IngredientQuality ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+/// Quality grade of a crafting ingredient.
 pub enum IngredientQuality {
+    /// Low quality; no bonus.
     Poor,
+    /// Ordinary quality; no bonus.
     Normal,
+    /// Good quality; +0.1 to crafting quality.
     Fine,
+    /// Very good quality; +0.25 to crafting quality.
     Exceptional,
+    /// Best quality; +0.5 to crafting quality.
     Masterwork,
 }
 
 impl IngredientQuality {
+    /// Bonus this quality adds to the crafted item's quality score (0.0 to 0.5).
     pub fn quality_bonus(&self) -> f64 {
         match self {
             IngredientQuality::Poor => 0.0,
@@ -28,70 +35,100 @@ impl IngredientQuality {
 // ── Ingredient ────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// One ingredient line of a recipe.
 pub struct Ingredient {
+    /// Item id of the ingredient.
     pub item_id: u32,
+    /// Ingredient name.
     pub name: String,
+    /// How many are needed.
     pub quantity: u32,
+    /// Quality of the ingredient.
     pub quality: IngredientQuality,
 }
 
 // ── CraftingRecipe ────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// A crafting recipe.
 pub struct CraftingRecipe {
+    /// Recipe id.
     pub id: u32,
+    /// Recipe name.
     pub name: String,
+    /// Ingredients consumed.
     pub ingredients: Vec<Ingredient>,
+    /// Item id of what gets made.
     pub output_item_id: u32,
+    /// Name of what gets made.
     pub output_name: String,
+    /// How many are made per craft.
     pub base_quantity: u32,
+    /// Minimum crafting skill needed.
     pub skill_required: u32,
+    /// Chance (0.0 to 1.0) of discovering the recipe when it is crafted or tried.
     pub discovery_chance: f64,
 }
 
 // ── SubstitutionRule ──────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+/// Lets one item stand in for another in recipes.
 pub struct SubstitutionRule {
+    /// The item a recipe asks for.
     pub original_item_id: u32,
+    /// The item that may be used instead.
     pub substitute_item_id: u32,
+    /// Fraction (0.0 to 1.0) of the substitute's quality bonus that counts.
     pub efficiency: f64,
 }
 
 // ── CraftingResult ────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
+/// What a craft produced.
 pub struct CraftingResult {
+    /// True when the craft went through.
     pub success: bool,
+    /// Item id of the output.
     pub output_item_id: u32,
+    /// Name of the output.
     pub output_name: String,
+    /// How many were made.
     pub quantity: u32,
+    /// Average ingredient quality bonus plus 0.01 per skill point above the requirement.
     pub quality_score: f64,
+    /// Recipe id if this craft discovered the recipe.
     pub discovered_recipe: Option<u32>,
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Default, Clone)]
+/// Ingredients the crafter holds, by item id.
 pub struct Inventory {
     /// id -> (name, quantity, quality)
     pub items: HashMap<u32, (String, u32, IngredientQuality)>,
 }
 
 impl Inventory {
+    /// An empty inventory.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Add `qty` of an item; a new stack keeps the given quality.
     pub fn add_item(&mut self, id: u32, name: &str, qty: u32, quality: IngredientQuality) {
         let entry = self.items.entry(id).or_insert((name.to_string(), 0, quality.clone()));
         entry.1 += qty;
     }
 
+    /// True if at least `qty` of the item is held.
     pub fn has_item(&self, id: u32, qty: u32) -> bool {
         self.items.get(&id).map(|(_, q, _)| *q >= qty).unwrap_or(false)
     }
 
+    /// Remove `qty` of an item; returns false (and removes nothing) if there are not enough.
     pub fn remove_item(&mut self, id: u32, qty: u32) -> bool {
         if let Some(entry) = self.items.get_mut(&id) {
             if entry.1 >= qty {
@@ -102,6 +139,7 @@ impl Inventory {
         false
     }
 
+    /// Quality of the item stack with this id (Normal if the item is not held).
     pub fn get_quality(&self, id: u32) -> IngredientQuality {
         self.items
             .get(&id)
@@ -120,14 +158,20 @@ fn lcg_next(state: &mut u64) -> f64 {
 // ── CraftingSystem ────────────────────────────────────────────────────────
 
 #[derive(Debug)]
+/// Recipe book plus the crafting rules and its own random state.
 pub struct CraftingSystem {
+    /// All recipes, by recipe id.
     pub recipes: HashMap<u32, CraftingRecipe>,
+    /// Allowed ingredient substitutions.
     pub substitutions: Vec<SubstitutionRule>,
+    /// Recipe ids the player has discovered.
     pub known_recipes: HashSet<u32>,
+    /// State of the random generator used for discovery rolls.
     pub lcg_state: u64,
 }
 
 impl CraftingSystem {
+    /// An empty crafting system whose rolls start from `seed`.
     pub fn new(seed: u64) -> Self {
         Self {
             recipes: HashMap::new(),
@@ -137,14 +181,17 @@ impl CraftingSystem {
         }
     }
 
+    /// Add or replace a recipe (keyed by its id).
     pub fn add_recipe(&mut self, recipe: CraftingRecipe) {
         self.recipes.insert(recipe.id, recipe);
     }
 
+    /// Add an ingredient substitution rule.
     pub fn add_substitution(&mut self, rule: SubstitutionRule) {
         self.substitutions.push(rule);
     }
 
+    /// Roll to discover a recipe (chance is the recipe's `discovery_chance`); returns true if it was discovered.
     pub fn discover_recipe(&mut self, recipe_id: u32) -> bool {
         if let Some(recipe) = self.recipes.get(&recipe_id) {
             let roll = lcg_next(&mut self.lcg_state);
@@ -156,6 +203,7 @@ impl CraftingSystem {
         false
     }
 
+    /// Substitution rules that can stand in for the given item.
     pub fn find_substitutes(&self, item_id: u32) -> Vec<&SubstitutionRule> {
         self.substitutions
             .iter()
@@ -163,6 +211,7 @@ impl CraftingSystem {
             .collect()
     }
 
+    /// True if the inventory holds every ingredient, or an allowed substitute, in the needed quantity.
     pub fn can_craft(&self, recipe_id: u32, inventory: &Inventory) -> bool {
         let recipe = match self.recipes.get(&recipe_id) {
             Some(r) => r,
@@ -185,6 +234,7 @@ impl CraftingSystem {
         true
     }
 
+    /// Craft the recipe: consume ingredients (or substitutes), add the output to the inventory and maybe discover the recipe; `None` if it cannot be crafted or the skill is too low.
     pub fn craft(
         &mut self,
         recipe_id: u32,

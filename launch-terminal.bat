@@ -21,6 +21,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [3/3] Updating dist...
+if not exist "%REPO_DIR%dist" mkdir "%REPO_DIR%dist"
 copy /Y "%CARGO_TARGET_DIR%\release\chaos-rpg.exe" "%REPO_DIR%dist\chaos-rpg.exe" >nul
 
 :LAUNCH

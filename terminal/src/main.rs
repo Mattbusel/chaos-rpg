@@ -1,3 +1,12 @@
+// Many draw helpers take a context plus several colors, and much of the UI is
+// still being built out; keep clippy focused on lints that find bugs.
+#![allow(
+    dead_code,
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::if_same_then_else,
+    clippy::type_complexity
+)]
 mod ui;
 mod ratatui_screens;
 
@@ -11,10 +20,10 @@ use chaos_rpg_core::{
     enemy::{generate_enemy, Enemy, FloorAbility},
     items::Item,
     legacy_system::{GraveyardEntry, LegacyData},
-    misery_system::{MiserySource, SpiteAction},
+    misery_system::MiserySource,
     nemesis::{load_nemesis, save_nemesis, NemesisRecord},
     npcs::shop_npc,
-    scoreboard::{load_misery_scores, save_misery_score, save_score, MiseryEntry, ScoreEntry},
+    scoreboard::{save_misery_score, save_score, MiseryEntry, ScoreEntry},
     skill_checks::{perform_skill_check, Difficulty, SkillType},
     world::{generate_floor, room_enemy, Room, RoomType},
 };
@@ -119,7 +128,7 @@ fn main() {
 use std::cell::RefCell;
 
 thread_local! {
-    static AUDIO: RefCell<Option<AudioSystem>> = RefCell::new(None);
+    static AUDIO: RefCell<Option<AudioSystem>> = const { RefCell::new(None) };
 }
 
 fn emit_audio(ev: AudioEvent) {
@@ -252,13 +261,13 @@ fn run_game(mode: GameMode) {
             .wrapping_add(player.floor as u64 * 31337);
 
         let mut floor = generate_floor(player.floor, floor_seed);
-        let is_cursed_floor = player.floor > 0 && player.floor % 25 == 0;
+        let is_cursed_floor = player.floor > 0 && player.floor.is_multiple_of(25);
 
         emit_audio(AudioEvent::FloorEntered { floor: player.floor, seed: floor_seed });
         if is_cursed_floor { emit_audio(AudioEvent::CursedFloorActivated); }
 
         // ── Item Volatility: every 20 floors, re-roll a random item ──────────
-        if player.floor > 0 && player.floor % 20 == 0 && !player.inventory.is_empty() {
+        if player.floor > 0 && player.floor.is_multiple_of(20) && !player.inventory.is_empty() {
             let vol_idx = (floor_seed % player.inventory.len() as u64) as usize;
             let old_name = player.inventory[vol_idx].name.clone();
             player.inventory[vol_idx] = Item::generate(floor_seed.wrapping_add(0x766F6C6174696C65));
@@ -642,7 +651,7 @@ fn handle_room(
             // After floor 50: 20% chance any combat becomes a unique boss
             // After floor 100: every 3rd room is a boss
             let unique_boss_roll = seed.wrapping_mul(0x756E6971_75650000) % 100;
-            let spawn_unique = (player.floor >= 100 && player.rooms_cleared % 3 == 0)
+            let spawn_unique = (player.floor >= 100 && player.rooms_cleared.is_multiple_of(3))
                 || (player.floor >= 50 && unique_boss_roll < 20);
 
             if spawn_unique {
@@ -665,10 +674,10 @@ fn handle_room(
 
         RoomType::Boss => {
             // Every 10 floors: gauntlet (3 fights back-to-back, no healing)
-            let is_gauntlet = player.floor % 10 == 0;
+            let is_gauntlet = player.floor.is_multiple_of(10);
 
             // Boss every 5 floors: check for unique boss
-            let use_unique = player.floor % 5 == 0;
+            let use_unique = player.floor.is_multiple_of(5);
             if use_unique {
                 if let Some(boss_id) = random_unique_boss(player.floor, seed) {
                     if is_gauntlet {
@@ -1505,10 +1514,7 @@ fn do_boss_gauntlet(
     e1.hp = (e1.hp as f64 * 2.0) as i64;
     e1.max_hp = e1.hp;
     println!("  {}GAUNTLET: Fight 1/3{}", ui::YELLOW, ui::RESET);
-    match do_combat_encounter(player, &mut e1, seed.wrapping_add(1), last_roll, false, is_cursed, mode_str) {
-        RoomOutcome::PlayerDied => return RoomOutcome::PlayerDied,
-        _ => {}
-    }
+    if let RoomOutcome::PlayerDied = do_combat_encounter(player, &mut e1, seed.wrapping_add(1), last_roll, false, is_cursed, mode_str) { return RoomOutcome::PlayerDied }
 
     // Fight 2: stronger enemy
     let mut e2 = generate_enemy(player.floor, seed.wrapping_add(2));
@@ -1516,10 +1522,7 @@ fn do_boss_gauntlet(
     e2.max_hp = e2.hp;
     e2.base_damage = (e2.base_damage as f64 * 1.5) as i64;
     println!("  {}GAUNTLET: Fight 2/3{}", ui::YELLOW, ui::RESET);
-    match do_combat_encounter(player, &mut e2, seed.wrapping_add(2), last_roll, false, is_cursed, mode_str) {
-        RoomOutcome::PlayerDied => return RoomOutcome::PlayerDied,
-        _ => {}
-    }
+    if let RoomOutcome::PlayerDied = do_combat_encounter(player, &mut e2, seed.wrapping_add(2), last_roll, false, is_cursed, mode_str) { return RoomOutcome::PlayerDied }
 
     // Fight 3: boss with destiny roll
     println!("  {}GAUNTLET: Fight 3/3 — THE BOSS{}", ui::RED, ui::RESET);

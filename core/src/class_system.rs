@@ -9,16 +9,24 @@ use serde::{Deserialize, Serialize};
 /// An active ability unlocked by advancing in a class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassAbility {
+    /// Unique ability id.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Description shown to the player.
     pub description: String,
+    /// Class level needed to use it.
     pub level_required: u8,
+    /// Turns before it can be used again.
     pub cooldown_turns: u32,
+    /// Mana spent per use.
     pub mana_cost: u32,
+    /// Kind of effect, as a free-form label.
     pub effect_type: String,
 }
 
 impl ClassAbility {
+    /// Build an ability from its fields.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -47,15 +55,22 @@ impl ClassAbility {
 /// An optional specialization path available at higher levels.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassSpecialization {
+    /// Unique specialization id.
     pub id: String,
+    /// Display name.
     pub name: String,
+    /// Description shown to the player.
     pub description: String,
+    /// Class level at which it can be chosen.
     pub unlock_level: u8,
+    /// Extra abilities it grants.
     pub bonus_abilities: Vec<ClassAbility>,
+    /// Passive bonuses it grants, as text.
     pub passive_bonuses: Vec<String>,
 }
 
 impl ClassSpecialization {
+    /// Build a specialization from its fields.
     pub fn new(
         id: impl Into<String>,
         name: impl Into<String>,
@@ -82,12 +97,17 @@ impl ClassSpecialization {
 /// Full definition of a character class.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CharacterClassDef {
+    /// Unique class id.
     pub id: String,
+    /// Display name.
     pub name: String,
     /// Hit dice size (e.g. 10 for d10).
     pub hit_dice: u8,
+    /// Name of the class's main attribute.
     pub primary_attribute: String,
+    /// Abilities of the class.
     pub abilities: Vec<ClassAbility>,
+    /// Specializations the class can choose.
     pub specializations: Vec<ClassSpecialization>,
     /// `xp_curve[level]` = total XP required to reach that level.
     /// Index 0 is unused (or set to 0).
@@ -132,10 +152,10 @@ impl ClassProgressionSystem {
     }
 
     /// Return all abilities available at or below `level`.
-    pub fn abilities_at_level<'a>(
-        class: &'a CharacterClassDef,
+    pub fn abilities_at_level(
+        class: &CharacterClassDef,
         level: u8,
-    ) -> Vec<&'a ClassAbility> {
+    ) -> Vec<&ClassAbility> {
         class
             .abilities
             .iter()
@@ -144,10 +164,10 @@ impl ClassProgressionSystem {
     }
 
     /// Return specializations that can be chosen at `level`.
-    pub fn available_specializations<'a>(
-        class: &'a CharacterClassDef,
+    pub fn available_specializations(
+        class: &CharacterClassDef,
         level: u8,
-    ) -> Vec<&'a ClassSpecialization> {
+    ) -> Vec<&ClassSpecialization> {
         class
             .specializations
             .iter()

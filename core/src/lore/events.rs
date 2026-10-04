@@ -93,7 +93,7 @@ pub fn floor_transition_flavor(floor: u32, seed: u64) -> Option<&'static str> {
     // Only show on milestone floors or first of a range
     if matches!(floor, 1 | 5 | 10 | 11 | 20 | 21 | 30 | 31 | 50 | 51 | 75 | 76 | 99 | 100 | 101) {
         Some(crate::lore::world::floor_entry_text(floor))
-    } else if floor > 100 && seed % 5 == 0 {
+    } else if floor > 100 && seed.is_multiple_of(5) {
         // Beyond floor 100: occasional reminders
         const BEYOND: &[&str] = &[
             "The proof is generating this floor around you as you walk through it.",

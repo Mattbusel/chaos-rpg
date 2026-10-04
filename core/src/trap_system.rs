@@ -3,47 +3,82 @@ use std::collections::HashMap;
 /// The kind of trap.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TrapType {
+    /// A hidden pit.
     PitFall,
+    /// A snare that catches the victim.
     Snare,
+    /// A poison needle or gas.
     Poison,
+    /// Raises an alarm.
     Alarm,
+    /// Explodes.
     Explosion,
+    /// A magical trap; the string names the effect.
     Magic(String),
 }
 
 /// Lifecycle state of a trap.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TrapState {
+    /// Not yet found.
     Hidden,
+    /// Found but still armed.
     Detected,
+    /// Triggered (not set by `TrapSystem` today, which uses `Sprung`).
     Triggered,
+    /// Made safe.
     Disarmed,
+    /// Gone off; it will not trigger again.
     Sprung,
 }
 
 /// A single trap in the world.
 #[derive(Debug, Clone)]
 pub struct Trap {
+    /// Unique trap id.
     pub id: u32,
+    /// Display name.
     pub name: String,
+    /// What kind of trap it is.
     pub trap_type: TrapType,
+    /// Where the trap is in its lifecycle.
     pub state: TrapState,
+    /// Difficulty a d20 plus search skill must reach to find it.
     pub detection_dc: u32,
+    /// Difficulty a d20 plus skill must reach to disarm it.
     pub disarm_dc: u32,
+    /// Difficulty a d20 plus perception must reach to spot a hidden trap when stepping on it (10 by default).
     pub trigger_dc: u32,
     /// (num_dice, sides)
     pub damage_dice: (u8, u8),
+    /// Grid position (x, y) of the trap.
     pub location: (u32, u32),
+    /// Who set it off, once sprung.
     pub triggered_by: Option<String>,
 }
 
 /// Result of an attempt to disarm a trap.
 #[derive(Debug, Clone, PartialEq)]
 pub enum DisarmResult {
+    /// The trap is disarmed.
     Success,
-    Failure { damage: u32 },
-    CriticalSuccess { looted_component: String },
-    CriticalFailure { damage: u32, trap_springs: bool },
+    /// The attempt failed and the trap hurt the player; it stays armed.
+    Failure {
+        /// Damage taken.
+        damage: u32,
+    },
+    /// A natural 20: disarmed, and a part was salvaged.
+    CriticalSuccess {
+        /// Name of the salvaged part.
+        looted_component: String,
+    },
+    /// A natural 1: the trap went off.
+    CriticalFailure {
+        /// Damage taken.
+        damage: u32,
+        /// Whether the trap sprang (always true today).
+        trap_springs: bool,
+    },
 }
 
 /// Linear congruential generator — returns a value in [1, 20].
@@ -55,12 +90,16 @@ pub fn lcg_next(state: &mut u64) -> u32 {
 
 /// Manages all traps in the game world.
 pub struct TrapSystem {
+    /// Traps by id.
     pub traps: HashMap<u32, Trap>,
+    /// Id the next placed trap will get.
     pub next_id: u32,
+    /// State of the random generator used for d20 rolls.
     pub lcg_state: u64,
 }
 
 impl TrapSystem {
+    /// An empty trap system whose rolls are seeded with `seed`.
     pub fn new(seed: u64) -> Self {
         Self {
             traps: HashMap::new(),
@@ -291,7 +330,7 @@ mod tests {
         let id = sys.place_trap(TrapType::Explosion, (2, 2), 10, 15, (2, 6));
         let dmg = sys.trigger_trap(id, "hero");
         // Damage should be > 0 for 2d6
-        assert!(dmg >= 2 && dmg <= 12);
+        assert!((2..=12).contains(&dmg));
         assert_eq!(sys.traps[&id].state, TrapState::Sprung);
         assert_eq!(sys.traps[&id].triggered_by, Some("hero".to_string()));
     }

@@ -377,6 +377,12 @@ pub struct DungeonRenderer {
     pub prev_camera_y: f32,
 }
 
+impl Default for DungeonRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DungeonRenderer {
     pub fn new() -> Self {
         Self {
@@ -565,7 +571,7 @@ impl DungeonRenderer {
                 if !has_floor_neighbor { continue; }
                 // Sparse placement: hash-based
                 let h = (x as u64).wrapping_mul(73856093) ^ (y as u64).wrapping_mul(19349663) ^ seed;
-                if h % 7 == 0 {
+                if h.is_multiple_of(7) {
                     torches.push((x, y));
                 }
             }

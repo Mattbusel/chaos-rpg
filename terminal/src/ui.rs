@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 // ─── AUTO-PLAY MODE ───────────────────────────────────────────────────────────
 
 thread_local! {
-    static AUTO_MODE: RefCell<bool> = RefCell::new(false);
+    static AUTO_MODE: RefCell<bool> = const { RefCell::new(false) };
 }
 
 pub fn set_auto_mode(v: bool) {
@@ -1870,7 +1870,7 @@ pub fn show_bestiary() {
     // Paginate through entries
     let per_page = 8usize;
     let mut page = 0usize;
-    let total_pages = (records.len() + per_page - 1) / per_page;
+    let total_pages = records.len().div_ceil(per_page);
 
     loop {
         clear_screen();
@@ -2071,7 +2071,7 @@ fn show_codex_category(
 }
 
 fn show_codex_fragments(progress: &chaos_rpg_core::codex_progress::CodexProgress) {
-    let c = t_primary();
+    let _c = t_primary();
     let unlocked = progress.unlocked_fragments_sorted();
     let total = chaos_rpg_core::lore::fragments::FRAGMENTS.len();
 
@@ -2146,7 +2146,7 @@ pub fn show_achievements() {
         });
 
         let total = sorted.len();
-        let total_pages = ((total + per_page - 1) / per_page).max(1);
+        let total_pages = total.div_ceil(per_page).max(1);
         if page >= total_pages { page = total_pages - 1; }
 
         let unlocked_count = all.iter().filter(|a| a.unlocked).count();
@@ -2160,7 +2160,7 @@ pub fn show_achievements() {
         println!("  {}╠══════════════════════════════════════════════════════╣{}", c, RESET);
 
         // Progress bar (20 chars wide)
-        let filled = if total_count > 0 { unlocked_count * 20 / total_count } else { 0 };
+        let filled = (unlocked_count * 20).checked_div(total_count).unwrap_or(0);
         let bar: String = (0..20).map(|i| if i < filled { '█' } else { '░' }).collect();
         println!(
             "  {}║{}  Progress: {}{}{}  {}/{} unlocked{}  Page {}/{}{}  {}║{}",
@@ -2246,7 +2246,7 @@ pub fn show_achievements() {
 
 /// Opens the lore editor for the given character. Returns the updated CharacterLore.
 pub fn show_lore_editor(player: &Character) -> chaos_rpg_core::character_lore::CharacterLore {
-    use chaos_rpg_core::character_lore::{CharacterLore, LoreEditorState, LoreField};
+    use chaos_rpg_core::character_lore::{LoreEditorState, LoreField};
     use crossterm::event::{self, Event, KeyCode, KeyModifiers};
     use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 

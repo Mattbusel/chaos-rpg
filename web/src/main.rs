@@ -236,7 +236,7 @@ fn draw_char_creation(state: &mut AppState) {
     }
 
     if button((sw - 200.0) / 2.0, sh - 80.0, 200.0, 40.0, "[ START ADVENTURE ]") {
-        let chosen_class = classes[state.selected_class].1.clone();
+        let chosen_class = classes[state.selected_class].1;
         let seed = macroquad::miniquad::date::now() as u64;
         let player = Character::roll_new(
             "Hero".to_string(),

@@ -9,14 +9,19 @@ use serde::{Deserialize, Serialize};
 
 // ─── FACTION ──────────────────────────────────────────────────────────────────
 
+/// One of the three factions, each tied to a view of chaos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Faction {
+    /// Wants chaos tamed: stability and predictable rolls.
     OrderOfConvergence,
+    /// Wants chaos maximised: variance and extremes.
     CultOfDivergence,
+    /// Studies the edge between order and chaos: thresholds and crits.
     WatchersOfBoundary,
 }
 
 impl Faction {
+    /// Full faction name.
     pub fn name(self) -> &'static str {
         match self {
             Faction::OrderOfConvergence => "Order of Convergence",
@@ -25,6 +30,7 @@ impl Faction {
         }
     }
 
+    /// Short tag shown in tight UI, for example "ORDER".
     pub fn short(self) -> &'static str {
         match self {
             Faction::OrderOfConvergence => "ORDER",
@@ -33,6 +39,7 @@ impl Faction {
         }
     }
 
+    /// ANSI colour escape code for the faction (terminal frontend).
     pub fn color(self) -> &'static str {
         match self {
             Faction::OrderOfConvergence => "\x1b[34m", // blue -- order
@@ -41,6 +48,7 @@ impl Faction {
         }
     }
 
+    /// The faction's motto.
     pub fn philosophy(self) -> &'static str {
         match self {
             Faction::OrderOfConvergence => {
@@ -55,6 +63,7 @@ impl Faction {
         }
     }
 
+    /// All three factions.
     pub fn all() -> [Faction; 3] {
         [
             Faction::OrderOfConvergence,
@@ -66,16 +75,23 @@ impl Faction {
 
 // ─── REPUTATION TIER ──────────────────────────────────────────────────────────
 
+/// How a faction regards you, from your reputation with it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum ReputationTier {
+    /// Reputation below -200.
     Hostile,    // < -200
+    /// Reputation from -200 to 0.
     Neutral,    // -200 to 0
+    /// Reputation from 1 to 200.
     Recognized, // 1 to 200
+    /// Reputation from 201 to 500.
     Trusted,    // 201 to 500
+    /// Reputation above 500.
     Exalted,    // > 500
 }
 
 impl ReputationTier {
+    /// The tier for a reputation value.
     pub fn from_rep(rep: i32) -> Self {
         match rep {
             i32::MIN..=-201 => ReputationTier::Hostile,
@@ -86,6 +102,7 @@ impl ReputationTier {
         }
     }
 
+    /// Tier name shown to the player.
     pub fn name(self) -> &'static str {
         match self {
             ReputationTier::Hostile => "HOSTILE",
@@ -96,6 +113,7 @@ impl ReputationTier {
         }
     }
 
+    /// ANSI colour escape code for the tier (terminal frontend).
     pub fn color(self) -> &'static str {
         match self {
             ReputationTier::Hostile => "\x1b[31m",
@@ -109,14 +127,19 @@ impl ReputationTier {
 
 // ─── FACTION REP STATE ────────────────────────────────────────────────────────
 
+/// Your reputation with each faction.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FactionRep {
+    /// Reputation with the Order of Convergence.
     pub order: i32,
+    /// Reputation with the Cult of Divergence.
     pub cult: i32,
+    /// Reputation with the Watchers of the Boundary.
     pub watchers: i32,
 }
 
 impl FactionRep {
+    /// Reputation with one faction.
     pub fn get(&self, faction: Faction) -> i32 {
         match faction {
             Faction::OrderOfConvergence => self.order,
@@ -125,6 +148,7 @@ impl FactionRep {
         }
     }
 
+    /// Change reputation with a faction; gains with the Order or the Cult also cost reputation with the other of the two.
     pub fn add(&mut self, faction: Faction, amount: i32) {
         let other_penalty = -(amount / 3).max(1);
         match faction {
@@ -143,6 +167,7 @@ impl FactionRep {
         }
     }
 
+    /// Your tier with a faction.
     pub fn tier(&self, faction: Faction) -> ReputationTier {
         ReputationTier::from_rep(self.get(faction))
     }
@@ -168,6 +193,7 @@ impl FactionRep {
 
 // ─── FACTION VENDOR DIALOGUE ──────────────────────────────────────────────────
 
+/// What a faction's vendor says to you at your reputation tier.
 pub fn vendor_greeting(faction: Faction, tier: ReputationTier) -> &'static str {
     match (faction, tier) {
         (Faction::OrderOfConvergence, ReputationTier::Hostile) => {
@@ -220,16 +246,23 @@ pub fn vendor_greeting(faction: Faction, tier: ReputationTier) -> &'static str {
 
 // ─── FACTION QUEST ────────────────────────────────────────────────────────────
 
+/// A small task offered by a faction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactionQuest {
+    /// Faction offering it.
     pub faction: Faction,
+    /// What to do.
     pub description: String,
+    /// Reputation earned on completion.
     pub reward_rep: i32,
+    /// Gold earned on completion.
     pub reward_gold: i64,
+    /// Whether it is done.
     pub completed: bool,
 }
 
 impl FactionQuest {
+    /// Pick a quest for `faction` on `floor`, chosen by `seed`.
     pub fn generate(faction: Faction, floor: u32, seed: u64) -> Self {
         let (desc, rep, gold) = match faction {
             Faction::OrderOfConvergence => {

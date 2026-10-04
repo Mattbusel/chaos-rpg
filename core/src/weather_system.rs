@@ -21,11 +21,17 @@ fn lcg_next(seed: u64) -> u64 {
 /// Distinct weather conditions in the game world.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum WeatherType {
+    /// No weather.
     Clear,
+    /// Overcast.
     Cloudy,
+    /// Rain.
     Rain,
+    /// Thunderstorm.
     Storm,
+    /// Fog.
     Fog,
+    /// Heavy snow and wind.
     Blizzard,
 }
 
@@ -91,6 +97,7 @@ impl fmt::Display for WeatherType {
 /// Full snapshot of current weather conditions.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WeatherState {
+    /// The current weather.
     pub current: WeatherType,
     /// 0.0 (calm) – 1.0 (extreme).
     pub intensity: f64,
@@ -103,6 +110,7 @@ pub struct WeatherState {
 }
 
 impl WeatherState {
+    /// Weather of the given type at medium intensity (0.5), 10 ticks to go, 10 km/h wind and 15 C.
     pub fn new(current: WeatherType) -> Self {
         WeatherState {
             current,
@@ -170,11 +178,13 @@ impl WeatherTransitionMatrix {
 
 /// Manages weather simulation and modifier calculations.
 pub struct WeatherSystem {
+    /// Chances of each weather turning into each other weather.
     pub transition_matrix: WeatherTransitionMatrix,
     lcg_state: u64,
 }
 
 impl WeatherSystem {
+    /// A weather system with the default transitions and a fixed starting seed (42).
     pub fn new() -> Self {
         WeatherSystem {
             transition_matrix: WeatherTransitionMatrix::default_transitions(),
@@ -182,6 +192,7 @@ impl WeatherSystem {
         }
     }
 
+    /// A weather system with the default transitions and the given seed.
     pub fn with_seed(seed: u64) -> Self {
         WeatherSystem {
             transition_matrix: WeatherTransitionMatrix::default_transitions(),

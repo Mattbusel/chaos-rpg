@@ -116,6 +116,12 @@ pub struct LoadedMod {
     pub hooks: Vec<String>,
 }
 
+impl Default for ModLoader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModLoader {
     pub fn new() -> Self {
         let mods_dir = std::env::current_exe()

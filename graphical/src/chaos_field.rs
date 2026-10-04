@@ -207,7 +207,7 @@ impl ChaosField {
         let corruption_f = (corruption as f32 / 400.0).clamp(0.0, 1.0);
 
         // Corruption: occasionally swap parallax speeds of far/near layers
-        let swap_speeds = corruption_f > 0.8 && ((frame / 80) % 5 == 0);
+        let swap_speeds = corruption_f > 0.8 && (frame / 80).is_multiple_of(5);
 
         // Pulse wave
         if self.pulse_active {

@@ -12,11 +12,17 @@ use std::collections::HashMap;
 /// Tradeable goods available in markets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Good {
+    /// Food, base price 10.
     Food,
+    /// Wood, base price 8.
     Wood,
+    /// Iron, base price 25.
     Iron,
+    /// Gold, base price 200.
     Gold,
+    /// Gems, base price 500.
     Gems,
+    /// Magic components, base price 1000.
     MagicComponents,
 }
 
@@ -33,6 +39,7 @@ impl Good {
         }
     }
 
+    /// Every tradeable good.
     pub fn all() -> &'static [Good] {
         &[
             Good::Food,
@@ -52,13 +59,18 @@ impl Good {
 /// Per-good market state including price history.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MarketGood {
+    /// Units available.
     pub supply: u64,
+    /// Units wanted.
     pub demand: u64,
+    /// Current price in copper.
     pub current_price: u64,
+    /// Every price this good has had, oldest first.
     pub price_history: Vec<u64>,
 }
 
 impl MarketGood {
+    /// A market entry with its starting price computed from supply and demand.
     pub fn new(supply: u64, demand: u64, base: u64) -> Self {
         let price = compute_price(base, supply, demand);
         MarketGood {
@@ -69,6 +81,7 @@ impl MarketGood {
         }
     }
 
+    /// Recompute the price from current supply and demand and append it to the history.
     pub fn update_price(&mut self, base: u64) {
         let price = compute_price(base, self.supply, self.demand);
         self.current_price = price;
@@ -94,10 +107,12 @@ fn compute_price(base: u64, supply: u64, demand: u64) -> u64 {
 /// A collection of goods with their market state.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Market {
+    /// Market state for each good.
     pub goods: HashMap<Good, MarketGood>,
 }
 
 impl Market {
+    /// A market with 100 supply and 100 demand of every good, so each starts at its base price.
     pub fn new() -> Self {
         let mut goods = HashMap::new();
         for g in Good::all() {
@@ -118,11 +133,19 @@ impl Default for Market {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, thiserror::Error, PartialEq)]
+/// Why a trade failed.
 pub enum EconomyError {
     #[error("insufficient supply: need {needed}, have {available}")]
-    InsufficientSupply { needed: u64, available: u64 },
+    /// Not enough of the good for sale.
+    InsufficientSupply {
+        /// Units asked for.
+        needed: u64,
+        /// Units in stock.
+        available: u64,
+    },
 
     #[error("unknown good")]
+    /// The good is not traded in this market.
     UnknownGood,
 }
 
@@ -133,8 +156,11 @@ pub enum EconomyError {
 /// Direction of recent price movement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trend {
+    /// Price went up.
     Rising,
+    /// Price went down.
     Falling,
+    /// Price held steady.
     Stable,
 }
 
@@ -144,6 +170,7 @@ pub enum Trend {
 
 /// Top-level economy manager.
 pub struct Economy {
+    /// The market being simulated.
     pub market: Market,
     lcg_state: u64,
     tick_count: u64,
@@ -158,6 +185,7 @@ fn lcg_next(state: u64) -> u64 {
 }
 
 impl Economy {
+    /// An economy with a fresh market and the default seed (1).
     pub fn new() -> Self {
         Economy {
             market: Market::new(),
@@ -166,6 +194,7 @@ impl Economy {
         }
     }
 
+    /// An economy with a fresh market whose random events are seeded with `seed`.
     pub fn with_seed(seed: u64) -> Self {
         Economy {
             market: Market::new(),
@@ -386,7 +415,7 @@ mod tests {
         let mut econ = Economy::new();
         // Force price deviation by manipulating supply.
         let mg = econ.market.goods.get_mut(&Good::MagicComponents).unwrap();
-        mg.current_price = mg.current_price * 3; // +200% above base
+        mg.current_price *= 3; // +200% above base
         let opps = econ.arbitrage_opportunities();
         assert!(!opps.is_empty(), "Expected at least one arbitrage opportunity");
         let found = opps.iter().any(|(g, _)| *g == Good::MagicComponents);

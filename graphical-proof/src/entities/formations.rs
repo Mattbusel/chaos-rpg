@@ -340,7 +340,7 @@ fn gen_swarm(count: usize, scale: f32) -> Vec<Vec3> {
     let mut pts = Vec::with_capacity(count);
     for i in 0..count {
         let hash = ((i as u32).wrapping_mul(2654435761)) as f32 / u32::MAX as f32;
-        let hash2 = (((i as u32 + 7919).wrapping_mul(2246822519))) as f32 / u32::MAX as f32;
+        let hash2 = ((i as u32 + 7919).wrapping_mul(2246822519)) as f32 / u32::MAX as f32;
         let angle = hash * TAU;
         let r = hash2.sqrt() * scale;
         pts.push(Vec3::new(angle.cos() * r, angle.sin() * r, 0.0));

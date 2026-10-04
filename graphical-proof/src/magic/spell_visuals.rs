@@ -294,6 +294,12 @@ pub struct SpellVisualManager {
     pub active_spells: Vec<ActiveSpell>,
 }
 
+impl Default for SpellVisualManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SpellVisualManager {
     pub fn new() -> Self {
         Self { active_spells: Vec::new() }
@@ -919,7 +925,7 @@ fn render_aftermath(engine: &mut ProofEngine, spell: &ActiveSpell, frame: u64) {
         Element::Lightning => {
             // Static sparks lingering
             for i in 0..6 {
-                if (frame + i as u64) % 4 != 0 { continue; }
+                if !(frame + i as u64).is_multiple_of(4) { continue; }
                 let sx = pos.x + ((frame as f32 * 0.7 + i as f32 * 19.0).sin()) * 2.0;
                 let sy = pos.y + ((frame as f32 * 0.5 + i as f32 * 13.0).cos()) * 1.5;
                 engine.spawn_glyph(Glyph {
@@ -1364,7 +1370,7 @@ fn render_spell_specific(engine: &mut ProofEngine, spell: &ActiveSpell, frame: u
             if spell.stage == SpellVisualStage::Impact {
                 // Electric field — random sparks in area
                 for i in 0..12 {
-                    if (frame + i as u64) % 3 != 0 { continue; }
+                    if !(frame + i as u64).is_multiple_of(3) { continue; }
                     let sx = spell.target_pos.x + ((frame as f32 * 0.5 + i as f32 * 17.0).sin()) * 3.0;
                     let sy = spell.target_pos.y + ((frame as f32 * 0.4 + i as f32 * 13.0).cos()) * 2.0;
                     engine.spawn_glyph(Glyph {
@@ -1760,8 +1766,8 @@ fn render_spell_specific(engine: &mut ProofEngine, spell: &ActiveSpell, frame: u
                 }
             }
         }
-        SpellVisual::Entropy => {
-            if spell.stage == SpellVisualStage::Impact {
+        SpellVisual::Entropy
+            if spell.stage == SpellVisualStage::Impact => {
                 // Everything dissolves — random chars scattered
                 for i in 0..25 {
                     let seed = i as f32 * 47.3 + frame as f32 * 0.7;
@@ -1783,7 +1789,6 @@ fn render_spell_specific(engine: &mut ProofEngine, spell: &ActiveSpell, frame: u
                     });
                 }
             }
-        }
 
         // Default: no spell-specific overlay needed
         _ => {}

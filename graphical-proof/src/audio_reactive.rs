@@ -193,6 +193,12 @@ pub struct AudioReactiveSystem {
     time: f32,
 }
 
+impl Default for AudioReactiveSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioReactiveSystem {
     pub fn new() -> Self {
         Self {
@@ -346,6 +352,12 @@ pub struct AudioReactiveMapper {
     pub enabled: bool,
 }
 
+impl Default for AudioReactiveMapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioReactiveMapper {
     pub fn new() -> Self {
         Self {
@@ -373,6 +385,11 @@ impl AudioReactiveMapper {
         // Bass → particle speed
         let particle_speed_mult = 1.0 + audio.bass_energy * PARTICLE_SPEED_BASS_SCALE * r;
 
+        // Count down the previous flash before a new beat can restart it.
+        // (Counting down after the restart zeroed a one-frame flash on the
+        // frame it started, so the border never flashed.)
+        self.flash_timer = (self.flash_timer - dt).max(0.0);
+
         // Beat → FOV pulse
         if audio.beat_detected {
             self.fov_offset = FOV_BEAT_PULSE * r;
@@ -398,7 +415,6 @@ impl AudioReactiveMapper {
         let vignette_intensity = vignette_intensity.clamp(0.1, 0.8);
 
         // Border flash
-        self.flash_timer = (self.flash_timer - dt).max(0.0);
         let border_flash = if self.flash_timer > 0.0 {
             Vec4::new(
                 self.theme_color.x,
@@ -441,6 +457,12 @@ pub struct AudioReactivePipeline {
     sample_buffer: Vec<f32>,
     /// Write cursor into the ring buffer.
     write_pos: usize,
+}
+
+impl Default for AudioReactivePipeline {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AudioReactivePipeline {

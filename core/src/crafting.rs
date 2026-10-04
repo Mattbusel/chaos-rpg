@@ -487,7 +487,7 @@ pub fn crafting_bench_lines(item: &Item, gold: i64) -> Vec<String> {
         "{}║  Item: {}{:<40}{}{}║{}",
         CYAN,
         item.rarity.color_code(),
-        &item.name,
+        item.name,
         RESET,
         CYAN,
         RESET

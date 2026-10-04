@@ -9,14 +9,29 @@ use std::fmt;
 /// Status conditions that can affect a combatant during combat.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CombatCondition {
+    /// Cannot act until it wears off.
     Stunned,
-    Poisoned { damage_per_turn: u32 },
+    /// Takes poison damage at the start of each turn.
+    Poisoned {
+        /// Damage taken each turn.
+        damage_per_turn: u32,
+    },
+    /// Blinded (a label only; attacks do not check it yet).
     Blinded,
+    /// Frightened (a label only; attacks do not check it yet).
     Frightened,
+    /// Cannot act until it wears off.
     Paralyzed,
-    Burning { damage_per_turn: u32 },
+    /// Takes fire damage at the start of each turn.
+    Burning {
+        /// Damage taken each turn.
+        damage_per_turn: u32,
+    },
+    /// Hidden from view; given by the Hide action (no mechanical effect yet).
     Invisible,
+    /// Sped up; given by the Dodge action (no mechanical effect yet).
     Hasted,
+    /// Slowed; given by a successful Grapple (no mechanical effect yet).
     Slow,
 }
 
@@ -87,14 +102,26 @@ impl CombatCondition {
 /// The type of action a combatant can take on their turn.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ActionType {
+    /// Weapon attack against the target's armor class.
     Attack,
+    /// Cast the named spell.
     CastSpell(String),
+    /// Use the named item.
     UseItem(String),
+    /// Dodge for a round (grants Hasted for one turn).
     Dodge,
+    /// Step out of melee (only logs a message for now).
     Disengage,
-    Help { target_idx: usize },
+    /// Help an ally (only logs a message for now).
+    Help {
+        /// Index of the ally being helped.
+        target_idx: usize,
+    },
+    /// Move quickly (only logs a message for now).
     Dash,
+    /// Hide, becoming Invisible for 2 turns.
     Hide,
+    /// Grapple the target, Slowing it for 2 turns on success.
     Grapple,
 }
 
@@ -119,11 +146,17 @@ impl fmt::Display for ActionType {
 /// A participant in combat — player character or enemy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Combatant {
+    /// Unique id within the encounter.
     pub id: usize,
+    /// Display name.
     pub name: String,
+    /// Current hit points; 0 or below means down.
     pub hp_current: i32,
+    /// Maximum hit points.
     pub hp_max: i32,
+    /// Armor class an attack roll must reach to hit.
     pub armor_class: u8,
+    /// Initiative modifier added to the d20 initiative roll; after rolling, the rolled total.
     pub initiative: i32,
     /// (condition, remaining_turns)
     pub conditions: Vec<(CombatCondition, u32)>,
@@ -132,6 +165,7 @@ pub struct Combatant {
 }
 
 impl Combatant {
+    /// A combatant at full HP with no conditions.
     pub fn new(
         id: usize,
         name: impl Into<String>,
@@ -152,6 +186,7 @@ impl Combatant {
         }
     }
 
+    /// Whether HP is above 0.
     pub fn is_alive(&self) -> bool {
         self.hp_current > 0
     }
@@ -224,14 +259,20 @@ impl Combatant {
 /// The result of a single combat action.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionResult {
+    /// Whether the action hit.
     pub hit: bool,
+    /// Damage dealt.
     pub damage: u32,
+    /// HP healed.
     pub healing: u32,
+    /// Conditions the action applied.
     pub conditions_applied: Vec<CombatCondition>,
+    /// Text for the combat log.
     pub message: String,
 }
 
 impl ActionResult {
+    /// A result that missed, with the given log message.
     pub fn miss(msg: impl Into<String>) -> Self {
         Self {
             hit: false,
@@ -248,9 +289,13 @@ impl ActionResult {
 /// A single action taken by a combatant during a round.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CombatAction {
+    /// Index of the combatant who acted.
     pub actor_id: usize,
+    /// What they did.
     pub action: ActionType,
+    /// Index of the target, if any.
     pub target_id: Option<usize>,
+    /// What happened.
     pub result: ActionResult,
 }
 
@@ -259,8 +304,11 @@ pub struct CombatAction {
 /// All actions and the initiative order for a single round.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CombatRound {
+    /// Round number, starting at 1.
     pub round_num: u32,
+    /// Combatant indices in the order they acted.
     pub initiative_order: Vec<usize>,
+    /// Every action taken this round.
     pub actions: Vec<CombatAction>,
 }
 
@@ -268,8 +316,11 @@ pub struct CombatRound {
 
 /// Drives a full turn-based combat encounter.
 pub struct CombatEngine {
+    /// Everyone in the fight.
     pub combatants: Vec<Combatant>,
+    /// Current round number (0 before the first round).
     pub round: u32,
+    /// Every round played so far.
     pub log: Vec<CombatRound>,
 }
 
@@ -285,6 +336,7 @@ fn roll_die(sides: u32, seed: &mut u64) -> u32 {
 }
 
 impl CombatEngine {
+    /// An encounter with these combatants, before initiative is rolled.
     pub fn new(combatants: Vec<Combatant>) -> Self {
         Self {
             combatants,
@@ -299,10 +351,10 @@ impl CombatEngine {
         let mut rng = seed;
         for c in self.combatants.iter_mut() {
             let roll = roll_die(20, &mut rng) as i32;
-            c.initiative = roll + c.initiative;
+            c.initiative += roll;
         }
         self.combatants
-            .sort_by(|a, b| b.initiative.cmp(&a.initiative));
+            .sort_by_key(|c| std::cmp::Reverse(c.initiative));
     }
 
     /// Roll an attack: returns (hit, crit).

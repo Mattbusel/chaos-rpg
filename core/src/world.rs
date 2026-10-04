@@ -10,20 +10,32 @@ use serde::{Deserialize, Serialize};
 // ─── ROOM TYPES ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// What kind of room this is.
 pub enum RoomType {
+    /// A fight with an enemy.
     Combat,
+    /// Loot to pick up.
     Treasure,
+    /// A merchant.
     Shop,
+    /// A shrine that grants a buff.
     Shrine, // buff room
+    /// A trap.
     Trap,
+    /// A boss fight.
     Boss,
+    /// A portal that skips ahead to the next floor.
     Portal,        // advance floor early
+    /// A rare empty rest room.
     Empty,         // rare rest room
+    /// A rift of pure randomness.
     ChaosRift,     // pure randomness
+    /// A bench for modifying items with chaos operations.
     CraftingBench, // modify items with chaos operations
 }
 
 impl RoomType {
+    /// Display name of the room type.
     pub fn name(&self) -> &'static str {
         match self {
             RoomType::Combat => "Combat",
@@ -39,6 +51,7 @@ impl RoomType {
         }
     }
 
+    /// Short icon for the room type on the map.
     pub fn icon(&self) -> &'static str {
         match self {
             RoomType::Combat => "[×]",
@@ -58,18 +71,28 @@ impl RoomType {
 // ─── ENVIRONMENT EFFECTS ─────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Environmental effect active in a room.
 pub enum EnvEffect {
+    /// Gain this much mana each turn.
     ManaBoost(i64),    // +mana per turn
+    /// Take this much damage each turn from the environment.
     DamageAura(i64),   // take damage per turn from environment
+    /// The player always acts first.
     SpeedBoost,        // player goes first always
+    /// Multiply every chaos roll by this factor.
     ChaosAmplify(f64), // multiply all chaos roll values
+    /// One stat is lowered while in the room.
     StatDebuff { stat: String, amount: i64 },
+    /// Enemy stats are hidden.
     VisionBlur,          // can't see enemy stats
+    /// Gold drops are multiplied by this factor.
     GoldMultiplier(f64), // gold drops multiplied
+    /// No environmental effect.
     None,
 }
 
 impl EnvEffect {
+    /// Player-facing description of the effect.
     pub fn describe(&self) -> String {
         match self {
             EnvEffect::ManaBoost(n) => format!("+{} mana per turn", n),
@@ -87,16 +110,24 @@ impl EnvEffect {
 // ─── ROOM ────────────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// One room on a floor.
 pub struct Room {
+    /// Kind of room.
     pub room_type: RoomType,
+    /// Flavour text.
     pub description: String,
+    /// Environmental effect in the room.
     pub env_effect: EnvEffect,
+    /// Floor the room is on.
     pub floor: u32,
+    /// Seed for this room's rolls.
     pub seed: u64,
+    /// True once the player has entered the room.
     pub visited: bool,
 }
 
 impl Room {
+    /// The room drawn as a 52-character-wide box (type, description, environment) for the terminal.
     pub fn ascii_border(&self) -> Vec<String> {
         let width = 50;
         let top = format!("╔{}╗", "═".repeat(width));
@@ -162,17 +193,23 @@ const ROOM_DESCS_EMPTY: &[&str] = &[
 /// A complete floor with rooms laid out on a linear path
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Floor {
+    /// Floor number, starting at 1.
     pub number: u32,
+    /// Rooms in the order they are visited.
     pub rooms: Vec<Room>,
+    /// Index of the room the player is in.
     pub current_room: usize,
+    /// Seed the floor was generated from.
     pub seed: u64,
 }
 
 impl Floor {
+    /// The room the player is in.
     pub fn current(&self) -> &Room {
         &self.rooms[self.current_room]
     }
 
+    /// Move to the next room; returns false when the floor is finished.
     pub fn advance(&mut self) -> bool {
         if self.current_room + 1 < self.rooms.len() {
             self.current_room += 1;
@@ -182,10 +219,12 @@ impl Floor {
         }
     }
 
+    /// Rooms left after the current one.
     pub fn rooms_remaining(&self) -> usize {
         self.rooms.len() - self.current_room - 1
     }
 
+    /// One-line map of the floor: cleared rooms, the current room and rooms ahead.
     pub fn minimap(&self) -> String {
         let mut map = String::new();
         for (i, _room) in self.rooms.iter().enumerate() {
@@ -204,6 +243,7 @@ impl Floor {
     }
 }
 
+/// Generate floor `floor_num` from `seed`: 5 rooms, plus one per two floors, up to 10.
 pub fn generate_floor(floor_num: u32, seed: u64) -> Floor {
     let roll = chaos_roll_verbose(floor_num as f64 * 0.05, seed);
 

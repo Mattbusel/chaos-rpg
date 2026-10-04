@@ -256,7 +256,7 @@ fn render_abom(
             emission: tier.em()*fd*1.3, scale: Vec2::new(tier.gs()*0.8, tier.gs()*0.8),
             glow_color: Vec3::new(1.0,0.15,0.1), glow_radius: 0.4,
             temperature: 0.8, entropy: 0.6,
-            visible: (fr+i as u64) % 3 != 0,
+            visible: !(fr + i as u64).is_multiple_of(3),
             layer: RenderLayer::Entity, ..Default::default()
         });
         idx += 1;
@@ -374,7 +374,7 @@ impl BossVisualProfile {
             Self::Mirror=>FormationShape::Diamond, Self::Null=>FormationShape::Ring,
             Self::Committee=>FormationShape::Semicircle,
             Self::FibonacciHydra=> if phase==0 { FormationShape::Cluster } else { FormationShape::Swarm },
-            Self::Eigenstate=> if phase%2==0 { FormationShape::Star } else { FormationShape::Diamond },
+            Self::Eigenstate=> if phase.is_multiple_of(2) { FormationShape::Star } else { FormationShape::Diamond },
             Self::Ouroboros=>FormationShape::Ring,
             Self::AlgorithmReborn=> match phase { 0=>FormationShape::Grid, 1=>FormationShape::Diamond, 2=>FormationShape::Star, _=>FormationShape::Pentagram },
             Self::ChaosWeaver=> [FormationShape::Star,FormationShape::Spiral,FormationShape::Cross,FormationShape::Triangle,FormationShape::Pentagon][(phase as usize)%5],

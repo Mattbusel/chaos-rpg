@@ -5,56 +5,99 @@ use std::collections::HashMap;
 /// Schools of magic available to spellcasters.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum MagicSchool {
+    /// Direct damage and energy.
     Evocation,
+    /// Creating or summoning things.
     Conjuration,
+    /// Death and undeath.
     Necromancy,
+    /// Tricks of perception.
     Illusion,
+    /// Changing what things are.
     Transmutation,
+    /// Knowledge and revealing.
     Divination,
+    /// Affecting minds.
     Enchantment,
+    /// Protection and wards.
     Abjuration,
 }
 
 /// The effect produced when a spell is cast.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SpellEffect {
-    Damage { amount: u32, element: String },
+    /// Deal damage of one element.
+    Damage {
+        /// Damage dealt.
+        amount: u32,
+        /// Element name, for example "fire".
+        element: String,
+    },
+    /// Restore this much HP.
     Heal(u32),
-    Buff { stat: String, bonus: i32, duration_turns: u32 },
+    /// Raise a stat for a number of turns.
+    Buff {
+        /// Stat name.
+        stat: String,
+        /// Amount added to the stat (negative lowers it).
+        bonus: i32,
+        /// How many turns it lasts.
+        duration_turns: u32,
+    },
+    /// Summon the named creature.
     Summon(String),
+    /// Move the caster.
     Teleport,
+    /// Reveal hidden things.
     Reveal,
 }
 
 /// Components required to cast a spell.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SpellComponent {
+    /// Spoken words.
     Verbal,
+    /// Hand gestures.
     Somatic,
+    /// A named material that is used up.
     Material(String),
+    /// A named focus item that is not used up.
     Focus(String),
 }
 
 /// A spell definition.
 #[derive(Debug, Clone)]
 pub struct Spell {
+    /// Identifier assigned by the spellbook.
     pub id: u32,
+    /// Spell name.
     pub name: String,
+    /// School of magic.
     pub school: MagicSchool,
+    /// Mana needed to cast.
     pub mana_cost: u32,
+    /// Turns the cast takes.
     pub cast_time_turns: u32,
+    /// Range in tiles.
     pub range: u32,
+    /// Turns the effect lasts; above 1 means it needs concentration.
     pub duration_turns: u32,
+    /// Effects applied when cast.
     pub effects: Vec<SpellEffect>,
+    /// Components needed to cast.
     pub components: Vec<SpellComponent>,
+    /// Spell level.
     pub level: u8,
 }
 
 /// A caster's mana pool with regeneration.
 #[derive(Debug, Clone)]
 pub struct ManaPool {
+    /// Mana available now.
     pub current: u32,
+    /// Most mana the pool can hold.
     pub maximum: u32,
+    /// Mana regained each turn.
     pub regen_per_turn: u32,
 }
 
@@ -96,20 +139,27 @@ impl ManaPool {
 /// Result produced after attempting to cast a spell.
 #[derive(Debug, Clone)]
 pub struct SpellcastResult {
+    /// Whether the spell was cast.
     pub success: bool,
+    /// Mana spent.
     pub mana_used: u32,
+    /// Effects that took place.
     pub effects_applied: Vec<SpellEffect>,
+    /// Whether the spell needs ongoing concentration.
     pub concentration_required: bool,
 }
 
 /// A collection of known spells, keyed by id.
 #[derive(Debug, Clone)]
 pub struct SpellBook {
+    /// Known spells by id.
     pub spells: HashMap<u32, Spell>,
+    /// Id the next added spell will get.
     pub next_id: u32,
 }
 
 impl SpellBook {
+    /// An empty spellbook; ids start at 1.
     pub fn new() -> Self {
         Self { spells: HashMap::new(), next_id: 1 }
     }
@@ -123,6 +173,7 @@ impl SpellBook {
         id
     }
 
+    /// Look up a spell by id.
     pub fn get_spell(&self, id: u32) -> Option<&Spell> {
         self.spells.get(&id)
     }
@@ -147,9 +198,18 @@ impl Default for SpellBook {
 /// Errors that can occur during spellcasting.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MagicError {
-    InsufficientMana { needed: u32, have: u32 },
+    /// Not enough mana for the spell.
+    InsufficientMana {
+        /// Mana the spell costs.
+        needed: u32,
+        /// Mana available.
+        have: u32,
+    },
+    /// No spell with that id is known.
     SpellNotFound,
+    /// Already concentrating on another spell.
     AlreadyConcentrating,
+    /// A required component is missing.
     ComponentMissing(String),
 }
 
@@ -169,13 +229,16 @@ impl std::error::Error for MagicError {}
 
 /// The top-level magic system: holds a spellbook, mana pool, and concentration state.
 pub struct MagicSystem {
+    /// Known spells.
     pub spellbook: SpellBook,
+    /// The caster's mana.
     pub mana_pool: ManaPool,
     /// Id of the spell currently being concentrated upon, if any.
     pub concentration_spell: Option<u32>,
 }
 
 impl MagicSystem {
+    /// A magic system with an empty spellbook and a full mana pool of `max_mana` that regains `regen` per turn.
     pub fn new(max_mana: u32, regen: u32) -> Self {
         Self {
             spellbook: SpellBook::new(),

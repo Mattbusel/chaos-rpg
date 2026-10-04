@@ -8,60 +8,91 @@ use serde::{Deserialize, Serialize};
 
 // ─── ERRORS ───────────────────────────────────────────────────────────────────
 
+/// Why an inventory operation failed.
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum InventoryError {
+    /// Adding the item would go over the weight limit.
     #[error("inventory is full (weight limit exceeded)")]
     Full,
+    /// No item with that id is held.
     #[error("item '{0}' not found in inventory")]
     NotFound(String),
+    /// The stack would go over its maximum size.
     #[error("stack limit ({0}) would be exceeded")]
     StackLimit(u32),
+    /// The item cannot stack, so only one can be held.
     #[error("item '{0}' is not stackable")]
     NotStackable(String),
     #[error("cannot remove {want} of '{id}': only {have} available")]
-    InsufficientQuantity { id: String, want: u32, have: u32 },
+    /// Fewer units are held than were asked for.
+    InsufficientQuantity {
+        /// Item id.
+        id: String,
+        /// Units asked for.
+        want: u32,
+        /// Units held.
+        have: u32,
+    },
 }
 
 // ─── ITEM TYPE ────────────────────────────────────────────────────────────────
 
+/// Broad category of an item.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ItemType {
+    /// Something to attack with.
     Weapon,
+    /// Something to wear for defense.
     Armor,
+    /// Used up when used, like a potion.
     Consumable,
+    /// Crafting material.
     Material,
+    /// Needed for a quest.
     QuestItem,
+    /// Money.
     Currency,
 }
 
 // ─── ITEM ─────────────────────────────────────────────────────────────────────
 
+/// An item kind that can be held in an inventory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
+    /// Unique item identifier, also the inventory key.
     pub id: String,
+    /// Name shown to the player.
     pub name: String,
+    /// Category of the item.
     pub item_type: ItemType,
     /// Weight per unit in kilograms.
     pub weight: f64,
     /// Gold value per unit.
     pub value: u64,
+    /// Whether several units share one slot.
     pub stackable: bool,
+    /// Most units one slot can hold.
     pub max_stack: u32,
 }
 
 // ─── INVENTORY SLOT ───────────────────────────────────────────────────────────
 
+/// An item held in an inventory and how many of it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InventorySlot {
+    /// The item.
     pub item: Item,
+    /// Units held.
     pub quantity: u32,
 }
 
 impl InventorySlot {
+    /// Weight of all units in the slot, in kilograms.
     pub fn total_weight(&self) -> f64 {
         self.item.weight * self.quantity as f64
     }
 
+    /// Gold value of all units in the slot (saturates instead of overflowing).
     pub fn total_value(&self) -> u64 {
         self.item.value.saturating_mul(self.quantity as u64)
     }
@@ -69,6 +100,7 @@ impl InventorySlot {
 
 // ─── INVENTORY ────────────────────────────────────────────────────────────────
 
+/// A weight-limited inventory keyed by item id.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Inventory {
     /// Slots keyed by item ID.
@@ -78,6 +110,7 @@ pub struct Inventory {
 }
 
 impl Inventory {
+    /// An empty inventory that can carry up to `max_weight` kilograms.
     pub fn new(max_weight: f64) -> Self {
         Self {
             slots: HashMap::new(),
