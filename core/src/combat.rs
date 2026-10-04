@@ -33,7 +33,7 @@ pub enum CombatAction {
 }
 
 impl CombatAction {
-    /// Menu label with its key, e.g. "[A] Attack".
+    /// Menu label with its key, e.g. `[A] Attack`.
     pub fn display_name(&self) -> String {
         match self {
             CombatAction::Attack => "[A] Attack".to_string(),

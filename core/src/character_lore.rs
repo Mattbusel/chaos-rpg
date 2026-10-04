@@ -1,6 +1,6 @@
 //! Player-authored character lore — stored per-character in the save file.
 //!
-//! Accessible from the Character Sheet via [L]. Appears in the graveyard,
+//! Accessible from the Character Sheet via \[L\]. Appears in the graveyard,
 //! run history, and auto-generated run narrative.
 
 use serde::{Deserialize, Serialize};

@@ -74,7 +74,7 @@ pub fn lcg_next(state: &mut u64) -> f64 {
 // Site generation
 // ---------------------------------------------------------------------------
 
-/// Generate `n` random sites inside the rectangle [0,width] × [0,height].
+/// Generate `n` random sites inside the rectangle \[0,width\] × \[0,height\].
 pub fn generate_sites(n: usize, width: f32, height: f32, seed: u64) -> Vec<(f32, f32)> {
     let mut state = seed;
     (0..n)

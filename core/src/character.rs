@@ -516,7 +516,7 @@ impl StatusEffect {
         }
     }
 
-    /// Short badge such as "[FIRE]" for compact status lines.
+    /// Short badge such as `[FIRE]` for compact status lines.
     pub fn badge(&self) -> &'static str {
         match self {
             StatusEffect::Burning(_) => "[FIRE]",

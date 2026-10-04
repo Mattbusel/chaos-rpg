@@ -37,7 +37,7 @@ impl AchievementRarity {
             Self::Omega    => "OMEGA",
         }
     }
-    /// Star badge shown next to the achievement, from "[*]" to "[OMEGA]".
+    /// Star badge shown next to the achievement, from `[*]` to `[OMEGA]`.
     pub fn stars(&self) -> &'static str {
         match self {
             Self::Common   => "[*]",
