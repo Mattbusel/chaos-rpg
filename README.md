@@ -1,5 +1,13 @@
 # CHAOS RPG
 
+<!-- outcome-block -->
+**A roguelike where every hit, heal and loot drop comes from real math (the Lorenz attractor, the Mandelbrot set, Collatz) instead of a random number. Free, one-line install on Windows, macOS and Linux.**
+
+**Why this over the alternatives:** Random-number roguelikes feel the same run to run; here every outcome is a traceable chain of real equations you can learn to read.
+
+**Guarantee:** if it doesn't do what this README says, [open an issue](https://github.com/Mattbusel/chaos-rpg/issues) and I'll fix it.
+<!-- outcome-block -->
+
 **A roguelike for anyone who likes dice games and maths: every hit, heal and loot drop is decided by chaining real math (the Lorenz attractor, the Mandelbrot set, the Collatz sequence) instead of a random number.**
 
 <p align="center">
